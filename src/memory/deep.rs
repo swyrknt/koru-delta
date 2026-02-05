@@ -188,8 +188,8 @@ impl DeepMemory {
             },
         };
         
-        // Store it
-        let id = format!("genome_{}", now.timestamp());
+        // Store it with nanosecond precision for uniqueness
+        let id = format!("genome_{}", now.timestamp_nanos_opt().unwrap_or(0));
         self.genome.insert(id, genome.clone());
         
         self.genomes_created.fetch_add(1, Ordering::Relaxed);

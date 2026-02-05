@@ -106,6 +106,8 @@ mod types;
 pub mod causal_graph;
 pub mod reference_graph;
 pub mod memory;
+pub mod processes;
+pub mod reconciliation;
 
 // Storage module (public for testing and cluster operations)
 pub mod storage;

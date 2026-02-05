@@ -215,8 +215,8 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 | Genome extraction/expression | 70% ✅ | Deep memory with genome support
 | Layered memory | 80% ✅ | Hot/Warm/Cold/Deep modules complete
 | Evolutionary processes | 60% ✅ | Consolidation, distillation, genome update processes
-| World reconciliation | 20% 📝 | Basic sync works, needs distinction exchange
-| **Overall** | **65%** |
+| World reconciliation | 80% ✅ | Merkle trees, Bloom filters, graph merging
+| **Overall** | **75%** |
 
 ### Production-Ready (Target)
 | Capability | Status |

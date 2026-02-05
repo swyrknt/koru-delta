@@ -21,7 +21,6 @@ use crate::causal_graph::CausalGraph;
 use crate::memory::{ColdMemory, DeepMemory};
 use crate::reference_graph::ReferenceGraph;
 use chrono::{DateTime, Duration, Utc};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Distillation configuration.

@@ -296,6 +296,13 @@ impl CausalGraph {
         self.parents.iter().map(|e| e.value().len()).sum()
     }
 
+    /// Get all nodes in the graph.
+    ///
+    /// Returns a vector of all distinction IDs.
+    pub fn all_nodes(&self) -> Vec<DistinctionId> {
+        self.nodes.iter().map(|n| n.key().clone()).collect()
+    }
+
     /// Increment the epoch (for garbage collection).
     pub fn increment_epoch(&self) -> u64 {
         self.epoch

@@ -6,10 +6,9 @@
 ///
 /// Like sleep consolidating memories from short-term to long-term.
 use crate::causal_graph::DistinctionId;
-use crate::memory::{ColdMemory, Evicted, HotMemory, WarmMemory};
+use crate::memory::{ColdMemory, HotMemory, WarmMemory};
 use crate::types::{FullKey, VersionedValue};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 /// Consolidation configuration.
 #[derive(Debug, Clone)]
@@ -19,6 +18,12 @@ pub struct ConsolidationConfig {
     
     /// Batch size for moving distinctions
     pub batch_size: usize,
+    
+    /// Idle threshold for demotion from Warm to Cold
+    pub demotion_idle_threshold: std::time::Duration,
+    
+    /// Ratio of distinctions to consolidate (0.0-1.0)
+    pub consolidation_ratio: f64,
 }
 
 impl Default for ConsolidationConfig {
@@ -26,6 +31,8 @@ impl Default for ConsolidationConfig {
         Self {
             interval_secs: 300, // 5 minutes
             batch_size: 100,
+            demotion_idle_threshold: std::time::Duration::from_secs(3600), // 1 hour
+            consolidation_ratio: 0.5,
         }
     }
 }
@@ -35,6 +42,7 @@ pub struct ConsolidationProcess {
     config: ConsolidationConfig,
     hot_to_warm: AtomicU64,
     warm_to_cold: AtomicU64,
+    cycle_count: AtomicU64,
 }
 
 impl ConsolidationProcess {
@@ -49,7 +57,13 @@ impl ConsolidationProcess {
             config,
             hot_to_warm: AtomicU64::new(0),
             warm_to_cold: AtomicU64::new(0),
+            cycle_count: AtomicU64::new(0),
         }
+    }
+    
+    /// Get the cycle count.
+    pub fn cycle_count(&self) -> u64 {
+        self.cycle_count.load(Ordering::Relaxed)
     }
     
     /// Handle eviction from Hot memory - move to Warm.
@@ -90,12 +104,13 @@ impl ConsolidationProcess {
                 let versioned = crate::types::VersionedValue::new(
                     std::sync::Arc::new(serde_json::json!({})),
                     chrono::Utc::now(),
-                    id.clone(),
+                    id.clone(), // write_id
+                    id.clone(), // distinction_id
                     None,
                 );
                 
                 // Consolidate to Cold
-                let distinctions = vec![(id, key, versioned, ref_count)];
+                let distinctions = vec![(id.clone(), key, versioned, ref_count)];
                 let result = cold.consolidate(distinctions);
                 
                 moved += result.kept;
@@ -127,7 +142,7 @@ impl ConsolidationProcess {
         epoch_num: usize,
         limit: usize,
     ) -> usize {
-        let candidates = warm.find_promotion_candidates(epoch_num, limit);
+        let candidates = warm.find_promotion_candidates(limit);
         
         let mut promoted = 0;
         for (key, id) in candidates {
@@ -135,7 +150,8 @@ impl ConsolidationProcess {
             let versioned = crate::types::VersionedValue::new(
                 std::sync::Arc::new(serde_json::json!({})),
                 chrono::Utc::now(),
-                id,
+                id.clone(), // write_id
+                id,         // distinction_id
                 None,
             );
             
@@ -191,7 +207,8 @@ mod tests {
         crate::types::VersionedValue::new(
             Arc::new(json!({"id": id})),
             chrono::Utc::now(),
-            id.to_string(),
+            id.to_string(), // write_id
+            id.to_string(), // distinction_id
             None,
         )
     }
@@ -230,6 +247,8 @@ mod tests {
         let config = ConsolidationConfig {
             interval_secs: 600,
             batch_size: 50,
+            demotion_idle_threshold: std::time::Duration::from_secs(600),
+            consolidation_ratio: 0.5,
         };
         let consolidation = ConsolidationProcess::with_config(config);
         

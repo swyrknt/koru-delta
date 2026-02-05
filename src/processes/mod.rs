@@ -85,6 +85,7 @@ mod tests {
         let config = ProcessRunner::with_config(
             ConsolidationConfig {
                 interval_secs: 3600,
+                batch_size: 100,
                 demotion_idle_threshold: std::time::Duration::from_secs(600),
                 consolidation_ratio: 0.5,
             },
