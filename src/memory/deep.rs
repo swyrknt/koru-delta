@@ -32,11 +32,10 @@
 /// A genome is ~1KB. A full database might be 1TB.
 /// But from the genome, you can regenerate the whole.
 use crate::causal_graph::{CausalGraph, DistinctionId};
-use crate::types::FullKey;
+// Note: FullKey used in potential future expansion
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Deep memory configuration.
@@ -247,6 +246,14 @@ impl DeepMemory {
         self.genome.len()
     }
     
+    /// Get genome DashMap (for process access).
+    ///
+    /// This is needed for cleanup operations from GenomeUpdateProcess.
+    /// Returns a reference to the internal genome storage.
+    pub fn genome(&self) -> &DashMap<String, Genome> {
+        &self.genome
+    }
+    
     /// Get archive count.
     pub fn archive_count(&self) -> usize {
         self.archive.len()
@@ -258,6 +265,11 @@ impl DeepMemory {
             .iter()
             .map(|e| e.compressed_size)
             .sum()
+    }
+    
+    /// Get configuration.
+    pub fn config(&self) -> &DeepConfig {
+        &self.config
     }
     
     /// Get statistics.
@@ -399,9 +411,9 @@ mod tests {
         causal_graph.add_node("root".to_string());
         
         // Extract multiple genomes
-        let g1 = deep.extract_genome(&causal_graph, 1, 100);
+        let _g1 = deep.extract_genome(&causal_graph, 1, 100);
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let g2 = deep.extract_genome(&causal_graph, 2, 200);
+        let _g2 = deep.extract_genome(&causal_graph, 2, 200);
         
         let latest = deep.latest_genome().unwrap();
         

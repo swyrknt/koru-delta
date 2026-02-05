@@ -82,27 +82,17 @@ impl CausalGraph {
     /// Add a causal edge: `parent` caused `child`.
     ///
     /// This establishes that one distinction causally precedes another.
-    /// Both nodes must already exist in the graph.
+    /// Nodes are auto-created if they don't exist (for persistence replay support).
     ///
     /// # Arguments
     ///
     /// * `parent` - The causing distinction
     /// * `child` - The caused distinction
-    ///
-    /// # Panics
-    ///
-    /// Panics if either node doesn't exist (in debug mode).
     pub fn add_edge(&self, parent: DistinctionId, child: DistinctionId) {
-        debug_assert!(
-            self.nodes.contains(&parent),
-            "Parent node {} must exist",
-            parent
-        );
-        debug_assert!(
-            self.nodes.contains(&child),
-            "Child node {} must exist",
-            child
-        );
+        // Auto-create nodes if they don't exist (needed for persistence replay
+        // where entries may not be in causal order)
+        self.nodes.insert(parent.clone());
+        self.nodes.insert(child.clone());
 
         // Add to parent's children list
         self.children

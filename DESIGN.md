@@ -115,17 +115,28 @@ pub enum DeltaError {
 
 ### Why Content-Addressed Versioning?
 
-Each version is identified by a SHA256 hash of its content. Benefits:
-- **Deduplication**: Identical values share the same version ID
+Each version has two identifiers:
+- **`distinction_id`**: SHA256 hash of content (content-addressed)
+- **`write_id`**: `{distinction_id}_{timestamp_nanos}` (write-addressed)
+
+Benefits:
+- **Deduplication**: Identical values share the same `distinction_id` (value store)
+- **Complete History**: Every write has unique `write_id` (version store)
 - **Integrity**: Corruption is detectable
 - **Distribution**: Natural merge semantics for sync
+- **Causal Chains**: `previous_version` links via `write_id` (not content hash)
 
 ### Why Immutable History?
 
-All history is append-only. Benefits:
-- **Audit**: Complete provenance of all changes
-- **Time travel**: Query any historical state
+All history is append-only with dual identification:
+- **Value Store**: Maps `distinction_id` → value (deduplication)
+- **Version Store**: Maps `write_id` → VersionedValue (complete history)
+
+Benefits:
+- **Audit**: Complete provenance of all changes (even rewrites of same value)
+- **Time travel**: Query any historical state via causal graph traversal
 - **Concurrency**: No locks needed for reads
+- **Deduplication**: Same content stored once, referenced many times
 
 ### Why DashMap?
 
@@ -141,6 +152,40 @@ JSON as the data format because:
 - Human-readable (easy debugging)
 - Flexible (no schema required)
 - Good enough performance for most use cases
+
+## Distinction-Driven Architecture
+
+KoruDelta is evolving toward a **distinction calculus system** that captures the emergent behavior of distinctions:
+
+### Core Insight
+
+The system doesn't just store data—it tracks the **becoming** of distinctions:
+- **Synthesis**: New distinctions emerge from prior ones (causal graph)
+- **Reference**: Distinctions point to other distinctions (reference graph)
+- **Memory**: Like a brain, distinctions flow through layers (Hot → Warm → Cold → Deep)
+- **Evolution**: Unfit distinctions are archived, essence is preserved (distillation)
+
+### Two IDs, Two Purposes
+
+```rust
+struct VersionedValue {
+    write_id: String,        // Unique per write: "{hash}_{timestamp_nanos}"
+    distinction_id: String,  // Content hash: SHA256(value)
+    previous_version: Option<String>, // Links via write_id
+    // ...
+}
+```
+
+- **`write_id`**: Enables complete history—even writing the same value 100 times creates 100 unique writes
+- **`distinction_id`**: Enables deduplication—identical values share storage
+
+### The Causal Graph
+
+The causal graph is the **source of truth** for history:
+- Nodes are `write_id`s (every write)
+- Edges represent causality (parent → child)
+- Traversal yields complete history
+- Time travel queries navigate this graph
 
 ## Development Phases
 

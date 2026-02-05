@@ -49,27 +49,31 @@ let value = db.get("users", "alice").await?;
 Manages versioned key-value storage with complete causal history.
 
 **Key Components:**
-- `CausalStorage` - Storage engine
-- `VersionedValue` - Value + metadata (timestamp, version ID, previous version)
-- History log (append-only, per key)
+- `CausalStorage` - Storage engine with causal graph
+- `VersionedValue` - Value + dual IDs (write_id, distinction_id)
+- `CausalGraph` - Tracks all writes and their causal relationships
 
 **Design Principles:**
 - Immutable history (append-only, never overwrite)
-- Content-addressed versioning via distinctions
+- **Dual identification**: `write_id` (unique per write) + `distinction_id` (content hash)
 - Thread-safe concurrent access via `DashMap`
-- Time-travel queries by traversing causal chains
+- Time-travel queries by traversing causal graph
 
 **Data Structures:**
 ```rust
-current_state: DashMap<FullKey, VersionedValue>  // Latest version per key
-history_log: DashMap<FullKey, Vec<VersionedValue>> // All versions chronologically
+current_state: DashMap<FullKey, VersionedValue>   // Latest version per key
+version_store: DashMap<WriteId, VersionedValue>   // All versions by write_id
+causal_graph: CausalGraph                         // Causal relationships
+value_store: DashMap<DistinctionId, Arc<Value>>   // Deduplicated values
 ```
 
 **Version Linking:**
 ```
-v1 ← v2 ← v3 ← v4 (current)
-     ↑
-     previous_version links
+write_1 ← write_2 ← write_3 ← write_4 (current)
+   ↑         ↑         ↑
+distinction_id: hash(content)
+write_id: hash + timestamp_nanos
+previous_version: links via write_id
 ```
 
 ### Layer 3: Document Mapping (`src/mapper.rs`)
@@ -114,16 +118,22 @@ FullKey {
 
 ### `VersionedValue` (`src/types.rs`)
 
-Every write creates a versioned entry:
+Every write creates a versioned entry with dual identification:
 
 ```rust
 VersionedValue {
-    value: JsonValue,           // The actual data
-    timestamp: DateTime<Utc>,   // When written
-    version_id: String,         // Content-addressed ID (distinction)
-    previous_version: Option<String>, // Causal link
+    value: JsonValue,               // The actual data (Arc-wrapped)
+    timestamp: DateTime<Utc>,       // When written (nanosecond precision)
+    write_id: String,               // Unique per write: "{hash}_{timestamp_nanos}"
+    distinction_id: String,         // Content hash (SHA256)
+    previous_version: Option<String>, // Causal link via write_id
 }
 ```
+
+**Dual ID Design:**
+- `write_id` enables **complete history**—writing the same value 100 times = 100 unique writes
+- `distinction_id` enables **deduplication**—same content shares storage in value_store
+- `version_id()` returns `distinction_id` for content-addressing compatibility
 
 ### `HistoryEntry` (`src/types.rs`)
 

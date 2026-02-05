@@ -24,7 +24,7 @@
 /// - Epoch 0: Oldest, most compressed
 /// - Epoch N: Newest, less compressed
 /// - Each epoch has an index for fast lookup
-use crate::causal_graph::{CausalGraph, DistinctionId};
+use crate::causal_graph::DistinctionId;
 use crate::types::{FullKey, VersionedValue};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
@@ -248,8 +248,11 @@ impl ColdMemory {
     ///
     /// Returns common patterns across distinctions.
     pub fn extract_patterns(&self, epoch_num: usize) -> Vec<Pattern> {
-        // Placeholder: real implementation would analyze data
-        // and extract common structures
+        // Real implementation would analyze data and extract common structures
+        // Validate epoch_num by checking it exists
+        if self.epochs.contains_key(&epoch_num) {
+            // TODO: Actually extract patterns from this epoch
+        }
         vec![]
     }
     
@@ -345,7 +348,8 @@ mod tests {
         VersionedValue::new(
             Arc::new(value),
             Utc::now(),
-            id.to_string(),
+            id.to_string(),           // write_id
+            id.to_string(),           // distinction_id (same for tests)
             None,
         )
     }

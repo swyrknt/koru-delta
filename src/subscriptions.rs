@@ -508,7 +508,13 @@ mod tests {
     use std::time::Duration;
 
     fn create_test_value(value: JsonValue) -> VersionedValue {
-        VersionedValue::from_json(value, Utc::now(), "test-version".to_string(), None)
+        VersionedValue::from_json(
+            value, 
+            Utc::now(), 
+            "test-version".to_string(), // write_id
+            "test-version".to_string(), // distinction_id
+            None
+        )
     }
 
     #[test]

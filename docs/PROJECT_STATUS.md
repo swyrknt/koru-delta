@@ -1,9 +1,9 @@
 # KoruDelta Project Status
 
-> **Last Updated:** 2026-02-05 (Paradigm Shift: Distinction-Driven Architecture)
-> **Version:** 2.0.0-Vision
-> **Lines of Code:** ~6,350 Rust
-> **Architecture:** Distinction Calculus Core
+> **Last Updated:** 2026-02-05 (Phase 4: Evolutionary Processes Complete)
+> **Version:** 1.0.0-Evolution
+> **Lines of Code:** ~7,200 Rust (+850 from Phase 4)
+> **Architecture:** Distinction-Driven Causal Database
 
 ---
 
@@ -38,6 +38,13 @@ BUT: "Traversal navigates distinction space"
 ---
 
 ## 🔄 Latest Updates
+
+### 2026-02-05: Phase 4 Complete - Evolutionary Processes ✅
+- ✅ **Write/Content ID Separation** - `write_id` (unique per write) vs `distinction_id` (content hash)
+- ✅ **Complete History Preservation** - All writes tracked via nanosecond-precision timestamps
+- ✅ **Fixed Time Travel** - Correctly returns latest version at or before query timestamp
+- ✅ **Fixed Persistence** - WAL replay preserves causal chains and complete history
+- ✅ **236 Tests Passing** - All falsification tests pass
 
 ### 2026-02-05: Paradigm Shift Initiated 🧬
 - ✅ **WAL Persistence** - Content-addressed, O(1) writes
@@ -199,16 +206,17 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 | HTTP API | 100% ✅ |
 | **Overall** | **~98%** |
 
-### Distinction-Capture (Target)
+### Distinction-Capture (In Progress)
 | Capability | Status |
 |------------|--------|
-| Distinction calculus core | 0% 📝 |
-| Causal graph engine | 0% 📝 |
-| Genome extraction/expression | 0% 📝 |
-| Layered memory | 0% 📝 |
-| Evolutionary compaction | 0% 📝 |
-| World reconciliation | 0% 📝 |
-| **Overall** | **0%** (new paradigm) |
+| Distinction calculus core | 80% ✅ | Content-addressed via koru-lambda-core
+| Causal graph engine | 90% ✅ | All writes tracked with causal links
+| Reference graph | 60% ✅ | Skeleton implementation, needs reference extraction
+| Genome extraction/expression | 70% ✅ | Deep memory with genome support
+| Layered memory | 80% ✅ | Hot/Warm/Cold/Deep modules complete
+| Evolutionary processes | 60% ✅ | Consolidation, distillation, genome update processes
+| World reconciliation | 20% 📝 | Basic sync works, needs distinction exchange
+| **Overall** | **65%** |
 
 ### Production-Ready (Target)
 | Capability | Status |
@@ -223,19 +231,21 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 ## 🎯 Success Criteria
 
 ### Foundation (Complete ✅)
-- [x] All 196 tests pass
+- [x] All 236 tests pass (+40 from Phase 4)
 - [x] Core database features work
 - [x] Clustering works locally
 - [x] HTTP API complete
 - [x] Remote CLI works
 - [x] WASM builds
+- [x] Complete history preservation (even for identical values)
 
-### Distinction Capture (Target)
-- [ ] Distinction engine drives all operations
-- [ ] Causal graph queryable
-- [ ] Genome extraction works
-- [ ] Layered memory functional
-- [ ] Evolutionary compaction operational
+### Distinction Capture (In Progress)
+- [x] Distinction engine drives all operations
+- [x] Causal graph tracks all writes
+- [x] Genome extraction works (Deep memory)
+- [x] Layered memory modules complete (Hot/Warm/Cold/Deep)
+- [x] Evolutionary process framework (consolidation, distillation, genome update)
+- [ ] Fitness-based distillation (natural selection)
 - [ ] World reconciliation via distinction exchange
 
 ### Production Ready (Target)

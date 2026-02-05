@@ -44,6 +44,12 @@ impl FullKey {
 ///
 /// The value is stored in an `Arc` to enable memory-efficient deduplication:
 /// identical values share the same underlying allocation.
+///
+/// # ID Fields
+///
+/// - `write_id`: Unique identifier for this specific write event (includes timestamp)
+/// - `distinction_id`: Content hash of the value (same content = same distinction_id)
+/// - `previous_version`: The write_id of the previous version of this key
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionedValue {
     /// The actual data stored (Arc-wrapped for deduplication)
@@ -54,8 +60,10 @@ pub struct VersionedValue {
     pub value: Arc<JsonValue>,
     /// When this version was created
     pub timestamp: DateTime<Utc>,
-    /// Content-addressed ID of this version (distinction ID)
-    pub version_id: String,
+    /// Unique write ID (includes timestamp to distinguish identical values written at different times)
+    pub write_id: String,
+    /// Content-addressed distinction ID (content hash for deduplication)
+    pub distinction_id: String,
     /// ID of the previous version (for causal chain)
     pub previous_version: Option<String>,
 }
@@ -82,13 +90,15 @@ impl VersionedValue {
     pub fn new(
         value: Arc<JsonValue>,
         timestamp: DateTime<Utc>,
-        version_id: String,
+        write_id: String,
+        distinction_id: String,
         previous_version: Option<String>,
     ) -> Self {
         Self {
             value,
             timestamp,
-            version_id,
+            write_id,
+            distinction_id,
             previous_version,
         }
     }
@@ -98,13 +108,15 @@ impl VersionedValue {
     pub fn from_json(
         value: JsonValue,
         timestamp: DateTime<Utc>,
-        version_id: String,
+        write_id: String,
+        distinction_id: String,
         previous_version: Option<String>,
     ) -> Self {
         Self {
             value: Arc::new(value),
             timestamp,
-            version_id,
+            write_id,
+            distinction_id,
             previous_version,
         }
     }
@@ -119,9 +131,22 @@ impl VersionedValue {
         self.timestamp
     }
 
-    /// Get the content-addressed version ID.
+    /// Get the unique write ID (includes timestamp).
+    /// This is unique per write, even for identical values.
+    pub fn write_id(&self) -> &str {
+        &self.write_id
+    }
+
+    /// Get the content-addressed distinction ID (content hash).
+    /// Same content = same distinction_id (for deduplication).
+    pub fn distinction_id(&self) -> &str {
+        &self.distinction_id
+    }
+
+    /// Get the version_id (returns distinction_id for content addressing).
+    /// Same value = same version_id (for content addressing/deduplication)
     pub fn version_id(&self) -> &str {
-        &self.version_id
+        &self.distinction_id
     }
 
     /// Get the previous version ID if this is not the first version.
@@ -160,7 +185,7 @@ impl From<&VersionedValue> for HistoryEntry {
         Self {
             value: (*versioned.value).clone(),
             timestamp: versioned.timestamp,
-            version_id: versioned.version_id.clone(),
+            version_id: versioned.distinction_id.clone(), // Use distinction_id (content hash)
         }
     }
 }
@@ -187,31 +212,41 @@ mod tests {
 
     #[test]
     fn test_versioned_value_accessors() {
+        use std::sync::Arc;
         let now = Utc::now();
         let value = serde_json::json!({"name": "Alice"});
         let versioned = VersionedValue::from_json(
             value.clone(),
             now,
-            "version1".to_string(),
-            Some("version0".to_string()),
+            "write_1".to_string(),  // write_id (unique per write)
+            "dist_abc".to_string(), // distinction_id (content hash)
+            Some("write_0".to_string()),
         );
 
         assert_eq!(versioned.value(), &value);
         assert_eq!(versioned.timestamp(), now);
-        assert_eq!(versioned.version_id(), "version1");
-        assert_eq!(versioned.previous_version(), Some("version0"));
+        assert_eq!(versioned.write_id(), "write_1");
+        assert_eq!(versioned.distinction_id(), "dist_abc");
+        assert_eq!(versioned.version_id(), "dist_abc"); // version_id returns distinction_id
+        assert_eq!(versioned.previous_version(), Some("write_0"));
     }
 
     #[test]
     fn test_history_entry_from_versioned_value() {
         let now = Utc::now();
         let value = serde_json::json!({"count": 42});
-        let versioned = VersionedValue::from_json(value.clone(), now, "v1".to_string(), None);
+        let versioned = VersionedValue::from_json(
+            value.clone(), 
+            now, 
+            "write_v1".to_string(), // write_id
+            "dist_xyz".to_string(), // distinction_id
+            None
+        );
 
         let entry: HistoryEntry = (&versioned).into();
 
         assert_eq!(entry.value, value);
         assert_eq!(entry.timestamp, now);
-        assert_eq!(entry.version_id, "v1");
+        assert_eq!(entry.version_id, "dist_xyz"); // History uses distinction_id
     }
 }

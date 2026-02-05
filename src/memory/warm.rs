@@ -137,7 +137,7 @@ impl WarmMemory {
     ///
     /// Writes to disk chronicle, updates index.
     pub fn put(&self, key: FullKey, versioned: VersionedValue) {
-        let id = versioned.version_id.clone();
+        let id = versioned.write_id().to_string();
         let timestamp = versioned.timestamp;
         
         // Update current mapping
@@ -348,7 +348,8 @@ mod tests {
         VersionedValue::new(
             Arc::new(value),
             Utc::now(),
-            id.to_string(),
+            id.to_string(),  // write_id
+            id.to_string(),  // distinction_id
             None,
         )
     }

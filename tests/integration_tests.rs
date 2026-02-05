@@ -73,13 +73,14 @@ async fn test_update_tracking() {
 
     // Update
     let v2 = db.put("counter", "value", json!(2)).await.unwrap();
-    assert_eq!(v2.previous_version(), Some(v1.version_id())); // Links to v1
+    // previous_version() returns write_id, not version_id (distinction_id)
+    assert_eq!(v2.previous_version(), Some(v1.write_id())); // Links to v1
 
     sleep(Duration::from_millis(10)).await;
 
     // Another update
     let v3 = db.put("counter", "value", json!(3)).await.unwrap();
-    assert_eq!(v3.previous_version(), Some(v2.version_id())); // Links to v2
+    assert_eq!(v3.previous_version(), Some(v2.write_id())); // Links to v2
 
     // Current value should be the latest
     let current = db.get("counter", "value").await.unwrap();
@@ -466,8 +467,10 @@ async fn test_versioned_value_metadata() {
 
     // Second version should link to first
     let versioned2 = db.put("data", "key", json!({"test": false})).await.unwrap();
-    assert_eq!(versioned2.previous_version(), Some(versioned.version_id()));
-    assert_ne!(versioned2.version_id(), versioned.version_id()); // Different IDs
+    // previous_version() returns write_id (unique per write), version_id() returns distinction_id (content hash)
+    assert_eq!(versioned2.previous_version(), Some(versioned.write_id()));
+    // Different content = different distinction_ids
+    assert_ne!(versioned2.version_id(), versioned.version_id());
 }
 
 #[tokio::test]

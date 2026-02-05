@@ -109,42 +109,92 @@ impl CausalStorage {
         let previous_version = self
             .current_state
             .get(&full_key)
-            .map(|v| v.version_id.clone());
+            .map(|v| v.write_id.clone());
 
         // Compute distinction via koru-lambda-core (unchanged, respected)
         let distinction = DocumentMapper::json_to_distinction(&value, &self.engine)?;
-        let version_id = DocumentMapper::store_distinction_id(&distinction);
+        let distinction_id = DocumentMapper::store_distinction_id(&distinction);
+
+        // Generate unique write ID for this specific write event
+        // Uses nanosecond precision to avoid collisions in rapid writes
+        let write_id = format!("{}_{}", distinction_id, timestamp.timestamp_nanos_opt().unwrap_or(0));
 
         // Capture in causal graph (NEW: emergent tracking)
-        self.causal_graph.add_node(version_id.clone());
+        self.causal_graph.add_node(write_id.clone());
         if let Some(ref parent_id) = previous_version {
-            self.causal_graph.add_edge(parent_id.clone(), version_id.clone());
+            self.causal_graph.add_edge(parent_id.clone(), write_id.clone());
         }
 
         // Capture in reference graph (NEW: emergent tracking)
-        self.reference_graph.add_node(version_id.clone());
+        self.reference_graph.add_node(write_id.clone());
         // TODO: Extract and track references from value
 
         // Get or create shared value from the value store (deduplication)
+        // Uses distinction_id (content hash) for sharing
         let shared_value = self
             .value_store
-            .entry(version_id.clone())
+            .entry(distinction_id.clone())
             .or_insert_with(|| Arc::new(value))
             .clone();
 
-        // Create new versioned value (clone version_id since we need it later)
-        let versioned = VersionedValue::new(shared_value, timestamp, version_id.clone(), previous_version);
+        // Create new versioned value with unique write_id
+        let versioned = VersionedValue::new(
+            shared_value, 
+            timestamp, 
+            write_id.clone(), // unique per write
+            distinction_id,   // content hash for deduplication
+            previous_version
+        );
 
         // Store in version store (for history and time travel)
+        // Uses unique write_id as key to preserve all writes
         self.version_store
-            .entry(version_id)
-            .or_insert_with(|| versioned.clone());
+            .insert(write_id.clone(), versioned.clone());
 
         // Update current state
         self.current_state
             .insert(full_key.clone(), versioned.clone());
 
         Ok(versioned)
+    }
+
+    /// Insert a versioned value directly (for persistence replay).
+    ///
+    /// This method preserves the original write_id and distinction_id from the WAL,
+    /// maintaining the history chain correctly during replay.
+    pub fn insert_direct(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        versioned: VersionedValue,
+    ) -> DeltaResult<()> {
+        let full_key = FullKey::new(namespace, key);
+        let write_id = versioned.write_id.clone();
+        let distinction_id = versioned.distinction_id.clone();
+        
+        // Add to causal graph (preserving original write_id)
+        self.causal_graph.add_node(write_id.clone());
+        if let Some(ref parent_id) = versioned.previous_version {
+            self.causal_graph.add_edge(parent_id.clone(), write_id.clone());
+        }
+
+        // Add to reference graph
+        self.reference_graph.add_node(write_id.clone());
+
+        // Store value in value store (content-addressed)
+        self.value_store
+            .entry(distinction_id)
+            .or_insert_with(|| versioned.value.clone());
+
+        // Store in version store (keyed by write_id)
+        self.version_store
+            .insert(write_id.clone(), versioned.clone());
+
+        // Update current state (this overwrites any existing entry for the key)
+        self.current_state
+            .insert(full_key.clone(), versioned);
+
+        Ok(())
     }
 
     /// Get the current (latest) value for a key.
@@ -185,10 +235,11 @@ impl CausalStorage {
                 key: full_key.key.clone(),
             })?;
 
-        let current_id = current.version_id.clone();
+        let current_id = current.write_id.clone();
 
         // Traverse ancestors via causal graph
-        let mut current_best: Option<VersionedValue> = None;
+        // Find the version with the latest timestamp that is <= query timestamp
+        let mut best_version: Option<VersionedValue> = None;
         let mut to_visit = vec![current_id];
         let mut visited = std::collections::HashSet::new();
 
@@ -200,12 +251,15 @@ impl CausalStorage {
             // Get the versioned value from version store
             if let Some(versioned) = self.version_store.get(&version_id) {
                 if versioned.timestamp <= timestamp {
-                    // Check this version belongs to the requested key
-                    if let Some(_current) = self.current_state.get(&full_key) {
-                        // Walk back from current to see if this version is in the chain
-                        // For now, simple approach: check if timestamps match our expectation
-                        // A more robust approach would track key in version_store
-                        current_best = Some(versioned.clone());
+                    // This version is at or before the query timestamp
+                    // Keep it if it's the best (latest) so far
+                    match &best_version {
+                        None => best_version = Some(versioned.clone()),
+                        Some(best) => {
+                            if versioned.timestamp > best.timestamp {
+                                best_version = Some(versioned.clone());
+                            }
+                        }
                     }
                 }
             }
@@ -219,7 +273,7 @@ impl CausalStorage {
             }
         }
 
-        current_best.ok_or_else(|| DeltaError::NoValueAtTimestamp {
+        best_version.ok_or_else(|| DeltaError::NoValueAtTimestamp {
             namespace: full_key.namespace,
             key: full_key.key,
             timestamp: timestamp.timestamp(),
@@ -248,7 +302,7 @@ impl CausalStorage {
         // Collect all versions via causal graph traversal
         let mut versions: Vec<VersionedValue> = Vec::new();
         let mut visited = std::collections::HashSet::new();
-        let mut to_visit = vec![current.version_id.clone()];
+        let mut to_visit = vec![current.write_id.clone()];
 
         while let Some(version_id) = to_visit.pop() {
             if !visited.insert(version_id.clone()) {
@@ -364,30 +418,39 @@ impl CausalStorage {
             .map(|entry| (entry.key().clone(), entry.value().clone()))
             .collect();
 
-        // Build history log from causal graph for backward compatibility
-        // TODO: Eventually remove this and use causal graph directly
+        // Build history log from causal graph - traverse and collect all versions
         let mut history_log: HashMap<FullKey, Vec<VersionedValue>> = HashMap::new();
         
-        // For now, reconstruct minimal history from current state
-        // (Full reconstruction would require storing all versions)
         for entry in self.current_state.iter() {
             let key = entry.key().clone();
             let current = entry.value().clone();
             
-            // Traverse back to build history
-            let history = vec![current.clone()];
-            let current_id = current.version_id.clone();
+            // Traverse causal graph to collect all versions
+            let mut history = Vec::new();
+            let mut visited = std::collections::HashSet::new();
+            let mut to_visit = vec![current.write_id.clone()];
             
-            loop {
-                let parents = self.causal_graph.ancestors(&current_id);
-                if parents.is_empty() {
-                    break;
+            while let Some(write_id) = to_visit.pop() {
+                if !visited.insert(write_id.clone()) {
+                    continue;
                 }
-                // For now, just add parent IDs as placeholders
-                // In full implementation, we'd store all versions
-                break; // Simplified for now
+                
+                // Get the version from version store
+                if let Some(versioned) = self.version_store.get(&write_id) {
+                    history.push(versioned.clone());
+                }
+                
+                // Add parents to visit
+                let parents = self.causal_graph.ancestors(&write_id);
+                for parent in parents {
+                    if !visited.contains(&parent) {
+                        to_visit.push(parent);
+                    }
+                }
             }
             
+            // Sort by timestamp (oldest first) for consistent ordering
+            history.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
             history_log.insert(key, history);
         }
 
@@ -405,14 +468,14 @@ impl CausalStorage {
 
         // Restore current state and version store
         for (key, versioned) in current_state {
-            // Add to value store for deduplication
+            // Add to value store for deduplication (uses distinction_id)
             storage.value_store
-                .entry(versioned.version_id.clone())
+                .entry(versioned.distinction_id().to_string())
                 .or_insert_with(|| versioned.value.clone());
             
-            // Add to version store
+            // Add to version store (uses write_id)
             storage.version_store
-                .entry(versioned.version_id.clone())
+                .entry(versioned.write_id().to_string())
                 .or_insert_with(|| versioned.clone());
             
             storage.current_state.insert(key, versioned);
@@ -422,7 +485,7 @@ impl CausalStorage {
         for (_key, history) in history_log {
             let mut prev_id: Option<String> = None;
             for versioned in history {
-                let id = versioned.version_id.clone();
+                let id = versioned.write_id().to_string();
                 
                 // Add to value store
                 storage.value_store
@@ -488,16 +551,19 @@ mod tests {
         thread::sleep(Duration::from_millis(10));
         let v2 = storage.put("users", "alice", json!({"age": 31})).unwrap();
 
-        // Version 2 should link to version 1
-        assert_eq!(v2.previous_version(), Some(v1.version_id()));
+        // Version 2's previous_version is v1's write_id (unique per write)
+        assert_eq!(v2.previous_version(), Some(v1.write_id()));
 
         // Current value should be v2
         let current = storage.get("users", "alice").unwrap();
         assert_eq!(current.version_id(), v2.version_id());
+        
+        // Values with different content have different version_ids (distinction_ids)
+        assert_ne!(v1.version_id(), v2.version_id());
 
-        // Causal graph should have both nodes
-        assert!(storage.causal_graph.contains(&v1.version_id()));
-        assert!(storage.causal_graph.contains(&v2.version_id()));
+        // Causal graph is keyed by write_id (unique per write)
+        assert!(storage.causal_graph.contains(&v1.write_id()));
+        assert!(storage.causal_graph.contains(&v2.write_id()));
     }
 
     #[test]
@@ -508,20 +574,20 @@ mod tests {
         let v2 = storage.put("test", "key", json!(2)).unwrap();
         let v3 = storage.put("test", "key", json!(3)).unwrap();
 
-        // Check causal graph structure
-        assert!(storage.causal_graph.contains(&v1.version_id()));
-        assert!(storage.causal_graph.contains(&v2.version_id()));
-        assert!(storage.causal_graph.contains(&v3.version_id()));
+        // Check causal graph structure (keyed by write_id)
+        assert!(storage.causal_graph.contains(&v1.write_id()));
+        assert!(storage.causal_graph.contains(&v2.write_id()));
+        assert!(storage.causal_graph.contains(&v3.write_id()));
 
-        // Check edges (v1 -> v2 -> v3)
-        let v2_id = v2.version_id();
+        // Check edges (v1 -> v2 -> v3) using write_ids
+        let v2_id = v2.write_id();
         let ancestors_v2 = storage.causal_graph.ancestors(&v2_id);
-        assert!(ancestors_v2.contains(&v1.version_id().to_string()));
+        assert!(ancestors_v2.contains(&v1.write_id().to_string()));
 
-        let v3_id = v3.version_id();
+        let v3_id = v3.write_id();
         let ancestors_v3 = storage.causal_graph.ancestors(&v3_id);
-        assert!(ancestors_v3.contains(&v2.version_id().to_string()));
-        assert!(ancestors_v3.contains(&v1.version_id().to_string()));
+        assert!(ancestors_v3.contains(&v2.write_id().to_string()));
+        assert!(ancestors_v3.contains(&v1.write_id().to_string()));
     }
 
     #[test]
@@ -566,10 +632,10 @@ mod tests {
         let v3 = storage.put("users", "bob", json!({"v": 3})).unwrap();
         assert_eq!(storage.total_version_count(), 3);
 
-        // Verify all are in causal graph
-        assert!(storage.causal_graph.contains(&v1.version_id().to_string()));
-        assert!(storage.causal_graph.contains(&v2.version_id().to_string()));
-        assert!(storage.causal_graph.contains(&v3.version_id().to_string()));
+        // Verify all are in causal graph (keyed by write_id)
+        assert!(storage.causal_graph.contains(&v1.write_id().to_string()));
+        assert!(storage.causal_graph.contains(&v2.write_id().to_string()));
+        assert!(storage.causal_graph.contains(&v3.write_id().to_string()));
     }
 
     #[test]

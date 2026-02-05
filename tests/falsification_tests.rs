@@ -35,7 +35,7 @@ use tokio::time::sleep;
 #[tokio::test]
 async fn falsify_causal_chain_rapid_sequential_writes() {
     let db = KoruDelta::start().await.unwrap();
-    let mut version_ids: Vec<String> = Vec::new();
+    let mut write_ids: Vec<String> = Vec::new();  // Store write_ids for chain verification
     let mut prev_versions: Vec<Option<String>> = Vec::new();
 
     // Rapid fire 100 writes
@@ -44,7 +44,8 @@ async fn falsify_causal_chain_rapid_sequential_writes() {
             .put("chain", "key", json!({"seq": i}))
             .await
             .unwrap();
-        version_ids.push(v.version_id().to_string());
+        // previous_version() returns write_id (unique per write with timestamp)
+        write_ids.push(v.write_id().to_string());
         prev_versions.push(v.previous_version().map(|s| s.to_string()));
     }
 
@@ -53,8 +54,9 @@ async fn falsify_causal_chain_rapid_sequential_writes() {
     assert_eq!(history.len(), 100, "Missing versions in history");
 
     // Each version (except first) must link to its predecessor
+    // previous_version() returns write_id, so compare with previous write_id
     for i in 1..100 {
-        let expected_prev = &version_ids[i - 1];
+        let expected_prev = &write_ids[i - 1];
         assert_eq!(
             prev_versions[i].as_ref(),
             Some(expected_prev),
@@ -138,7 +140,8 @@ async fn falsify_causal_chain_repeated_values() {
 
     // Write A -> B -> A -> B -> A (alternating values)
     let values = ["A", "B", "A", "B", "A"];
-    let mut version_ids = Vec::new();
+    let mut version_ids = Vec::new();  // distinction_ids (content hashes)
+    let mut write_ids = Vec::new();    // write_ids (unique per write)
     let mut prev_versions = Vec::new();
 
     for (i, val) in values.iter().enumerate() {
@@ -147,14 +150,20 @@ async fn falsify_causal_chain_repeated_values() {
             .put("cycle", "test", json!({"value": val}))
             .await
             .unwrap();
-        version_ids.push(v.version_id().to_string());
+        version_ids.push(v.version_id().to_string());  // content hash
+        write_ids.push(v.write_id().to_string());      // unique write id
         prev_versions.push(v.previous_version().map(|s| s.to_string()));
 
-        // Content-addressed: same value = same version_id
+        // Content-addressed: same value = same version_id (distinction_id)
         if i >= 2 && values[i] == values[i - 2] {
             assert_eq!(
                 version_ids[i], version_ids[i - 2],
                 "Content addressing broken: same value should produce same version_id"
+            );
+            // But write_ids should be different (unique per write)
+            assert_ne!(
+                write_ids[i], write_ids[i - 2],
+                "Write IDs should be unique even for same content"
             );
         }
     }
@@ -176,11 +185,12 @@ async fn falsify_causal_chain_repeated_values() {
     // First entry has no predecessor
     assert!(prev_versions[0].is_none(), "First write should have no predecessor");
 
-    // Each subsequent entry should link to the previous
+    // Each subsequent entry should link to the previous via write_id
+    // (previous_version returns write_id, not version_id)
     for i in 1..prev_versions.len() {
         assert_eq!(
             prev_versions[i].as_ref(),
-            Some(&version_ids[i - 1]),
+            Some(&write_ids[i - 1]),
             "previous_version chain broken at index {}", i
         );
     }

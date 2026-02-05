@@ -136,7 +136,7 @@ impl HotMemory {
     /// If at capacity, evicts least-recently-used item to make room.
     /// Updates current state mapping.
     pub fn put(&self, key: FullKey, versioned: VersionedValue) -> Option<Evicted> {
-        let id = versioned.version_id.clone();
+        let id = versioned.write_id().to_string();
         
         // Check if we're updating an existing key with a new version
         if let Some(old_id) = self.current_state.get(&key) {
@@ -337,7 +337,8 @@ mod tests {
         VersionedValue::new(
             Arc::new(value),
             Utc::now(),
-            id.to_string(),
+            id.to_string(),  // write_id
+            id.to_string(),  // distinction_id
             None,
         )
     }
@@ -351,7 +352,7 @@ mod tests {
         hot.put(key.clone(), versioned.clone());
         
         let retrieved = hot.get(&key).unwrap();
-        assert_eq!(retrieved.version_id, "v1");
+        assert_eq!(retrieved.write_id(), "v1");
     }
 
     #[test]
@@ -420,7 +421,7 @@ mod tests {
         hot.put(key.clone(), v2); // Update
         
         let current = hot.get(&key).unwrap();
-        assert_eq!(current.version_id, "v2");
+        assert_eq!(current.write_id(), "v2");
         assert_eq!(hot.len(), 1); // Still just 1 entry
     }
 

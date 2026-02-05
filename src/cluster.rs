@@ -538,7 +538,7 @@ fn handle_message(
             Ok(Some(Message::WriteAck {
                 node_id: node_id.clone(),
                 key,
-                version_id: value.version_id,
+                version_id: value.version_id().to_string(),
             }))
         }
 
@@ -554,10 +554,12 @@ fn handle_message(
                             .skip_while(|entry| entry.version_id != version_id)
                             .skip(1) // Skip the known version.
                             .map(|entry| {
+                                // For sync: write_id = version_id from history, distinction_id same as write_id for now
                                 VersionedValue::from_json(
                                     entry.value,
                                     entry.timestamp,
-                                    entry.version_id,
+                                    entry.version_id.clone(), // write_id
+                                    entry.version_id,        // distinction_id
                                     None,
                                 )
                             })
@@ -568,7 +570,8 @@ fn handle_message(
                                 VersionedValue::from_json(
                                     entry.value,
                                     entry.timestamp,
-                                    entry.version_id,
+                                    entry.version_id.clone(), // write_id
+                                    entry.version_id,        // distinction_id
                                     None,
                                 )
                             })

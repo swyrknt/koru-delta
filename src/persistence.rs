@@ -359,15 +359,18 @@ async fn replay_segment(
             // Load value from content store
             if let Some(value) = load_value(values_dir, &entry.value_hash).await? {
                 // Reconstruct versioned value
+                // For replay: write_id = value_hash + timestamp_nanos to match original
+                let write_id = format!("{}_{}", entry.value_hash, entry.timestamp.timestamp_nanos_opt().unwrap_or(0));
                 let versioned = VersionedValue::new(
                     Arc::new(value),
                     entry.timestamp,
-                    entry.value_hash.clone(),
-                    entry.prev_hash.clone(),
+                    write_id,                      // unique write_id for replay
+                    entry.value_hash.clone(),      // distinction_id = content hash
+                    entry.prev_hash.clone(),       // previous version
                 );
 
-                // Store in storage (ignoring errors for replay)
-                let _ = storage.put(&entry.ns, &entry.key, versioned.value().clone());
+                // Store in storage using direct insert to preserve original IDs
+                let _ = storage.insert_direct(&entry.ns, &entry.key, versioned);
             } else {
                 eprintln!(
                     "Warning: Value not found for hash {}",
@@ -566,7 +569,8 @@ mod tests {
         let versioned = VersionedValue::new(
             Arc::new(json!({"test": "value"})),
             Utc::now(),
-            "hash123".to_string(),
+            "hash123".to_string(),  // write_id
+            "hash123".to_string(),  // distinction_id (same for test)
             None,
         );
 
