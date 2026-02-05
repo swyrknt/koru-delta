@@ -114,23 +114,23 @@ KoruDelta is a **causal, versioned database** with Git-like history and zero-con
 
 ### Critical (Blocks Production)
 
-| Feature | Why It Matters | Effort |
-|---------|----------------|--------|
-| **HTTP API / REST interface** | Web apps can't use TCP protocol directly | Medium |
-| **Remote CLI client** | Can't administer remote nodes | Low-Medium |
-| **Incremental persistence** | Currently rewrites entire DB on every write | Medium |
-| **Compaction/retention** | History grows unbounded | Medium |
-| **Authentication/authorization** | No security model for multi-tenant | High |
+| Feature | Why It Matters | Effort | Status |
+|---------|----------------|--------|--------|
+| **HTTP API / REST interface** | Web apps can't use TCP protocol directly | Medium | ✅ Done |
+| **Remote CLI client** | Can't administer remote nodes | Low-Medium | ✅ Done |
+| **Incremental persistence** | Currently rewrites entire DB on every write | Medium | ⏭️ Phase B |
+| **Compaction/retention** | History grows unbounded | Medium | ⏭️ Phase B |
+| **Authentication/authorization** | No security model for multi-tenant | High | ⏭️ Phase B |
 
 ### Important (Quality of Life)
 
-| Feature | Why It Matters | Effort |
-|---------|----------------|--------|
-| **WASM build fix** | `getrandom` compilation error | Low |
-| **Time travel in CLI** | `kdelta get --at <timestamp>` | Low |
-| **Streaming queries** | Large result sets load all into memory | Medium |
-| **Metrics/monitoring** | No Prometheus/OpenTelemetry integration | Medium |
-| **Backup/restore** | Manual file copy only | Low |
+| Feature | Why It Matters | Effort | Status |
+|---------|----------------|--------|--------|
+| **WASM build fix** | `getrandom` compilation error | Low | ✅ Done |
+| **Time travel in CLI** | `kdelta get --at <timestamp>` | Low | ✅ Done |
+| **Streaming queries** | Large result sets load all into memory | Medium | ⏭️ Phase B |
+| **Metrics/monitoring** | No Prometheus/OpenTelemetry integration | Medium | ⏭️ Phase B |
+| **Backup/restore** | Manual file copy only | Low | ⏭️ Phase B |
 
 ### Nice-to-Have (Future)
 
@@ -331,10 +331,20 @@ kdelta view create adults users --filter 'age > 18'
 kdelta view query adults
 ```
 
+✅ **HTTP API & Remote CLI**
+```bash
+# Terminal 1 - Start HTTP server
+kdelta serve --port 8080
+
+# Terminal 2 - Use remote CLI
+kdelta --url http://localhost:8080 set users/alice '{"name": "Alice"}'
+kdelta --url http://localhost:8080 get users/alice
+kdelta --url http://localhost:8080 get users/alice --at "2026-02-05T12:00:00Z"
+```
+
 ### What You Should NOT Demo Yet
 
-❌ Remote client operations (HTTP API doesn't exist)
-❌ Browser demo (WASM build broken)
+❌ Browser demo (WASM works but no full demo page)
 ❌ Cloud deployment (no K8s support)
 ❌ Multi-user scenarios (no auth)
 
