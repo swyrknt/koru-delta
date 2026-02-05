@@ -187,16 +187,24 @@ pub struct CausalStorage {
 ### The Logic
 Users should never think about memory. The system should just work at any scale.
 
-### Week 3a: HotMemory (Working Memory)
-- [ ] Create `src/memory/hot.rs`
-- [ ] Implement `HotMemory` with LRU cache:
-  - [ ] `cache: LruCache<DistinctionId, Distinction>`
-  - [ ] `current_state: DashMap<Context, DistinctionId>`
-- [ ] Implement `get()` - access distinction
-- [ ] Implement `put()` - add to hot
-- [ ] Implement `evict()` - move to warm
-- [ ] Write tests
+### Week 3a: HotMemory (Working Memory) ✅ COMPLETE
+- [x] Create `src/memory/hot.rs`
+- [x] Implement `HotMemory` with LRU cache:
+  - [x] `cache: DashMap<DistinctionId, VersionedValue>`
+  - [x] `current_state: DashMap<FullKey, DistinctionId>`
+  - [x] `access_order: VecDeque<DistinctionId>` for LRU
+- [x] Implement `get()` - access with LRU update
+- [x] Implement `put()` - add with eviction
+- [x] Implement `evict_lru()` - evict to warm
+- [x] Write tests (7 tests, all passing)
 - **User Benefit:** Fast access to recent data, bounded RAM
+
+**HotMemory Features:**
+- LRU (Least Recently Used) eviction policy
+- Configurable capacity (default: 1000 items)
+- Statistics tracking (hits, misses, hit rate)
+- Handles updates (replaces old version)
+- Clear operation (evict all to warm)
 
 ### Week 3b: WarmMemory (Recent Chronicle)
 - [ ] Create `src/memory/warm.rs`

@@ -105,6 +105,7 @@ mod types;
 // v2.0: Distinction-driven modules
 pub mod causal_graph;
 pub mod reference_graph;
+pub mod memory;
 
 // Storage module (public for testing and cluster operations)
 pub mod storage;
