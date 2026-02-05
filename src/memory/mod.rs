@@ -32,7 +32,9 @@
 pub mod hot;
 pub mod warm;
 pub mod cold;
+pub mod deep;
 
 pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
 pub use warm::{WarmConfig, WarmMemory, WarmStats};
 pub use cold::{ColdConfig, ColdMemory, ColdStats, ConsolidationResult, Pattern};
+pub use deep::{DeepConfig, DeepMemory, DeepStats, ExpressionResult, Genome};
