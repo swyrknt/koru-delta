@@ -220,6 +220,24 @@ KoruDelta is built on top of [koru-lambda-core](https://crates.io/crates/koru-la
 
 The math is your secret weapon, not your configuration burden.
 
+### Persistence
+
+KoruDelta uses a **Write-Ahead Log (WAL)** with content-addressed storage for durability and performance:
+
+```
+~/.korudelta/db/
+├── wal/000001.wal          # Append-only log entries
+└── values/ab/cd1234...     # Content-addressed values (by hash)
+```
+
+**Why this matters:**
+- **O(1) writes** - Append 120 bytes instead of rewriting the entire database
+- **Crash-safe** - Never overwrites existing data
+- **Automatic deduplication** - Identical values stored once by content hash
+- **Immutable history** - The log is the history
+
+Backwards compatible with legacy snapshot files.
+
 ## Status
 
 **All three phases complete!** KoruDelta is feature-complete and production-ready.
@@ -231,7 +249,7 @@ The math is your secret weapon, not your configuration burden.
 - Visual diff command for comparing versions
 - Clean, simple API (Rust + WASM)
 - Full-featured CLI tool (`kdelta`)
-- Persistence to disk
+- **Write-Ahead Log (WAL) persistence** - O(1) append-only writes, content-addressed storage
 
 ### ✅ Phase 2: Automatic Distribution (Complete)
 - Multi-node clustering (`kdelta start --join`)

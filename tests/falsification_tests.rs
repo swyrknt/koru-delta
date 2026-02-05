@@ -1626,7 +1626,7 @@ mod persistence_tests {
     #[tokio::test]
     async fn falsify_persistence_roundtrip() {
         let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
+        let db_path = dir.path().join("db");  // Directory for WAL format
 
         // Create and populate database
         {
@@ -1684,7 +1684,7 @@ mod persistence_tests {
     #[tokio::test]
     async fn falsify_persistence_deduplication() {
         let dir = tempdir().unwrap();
-        let db_path = dir.path().join("dedup.db");
+        let db_path = dir.path().join("dedup_db");  // Directory for WAL format
 
         let shared_value = json!({"status": "active"});
         let mut original_version_id = String::new();
@@ -1732,7 +1732,7 @@ mod persistence_tests {
     #[tokio::test]
     async fn falsify_persistence_empty() {
         let dir = tempdir().unwrap();
-        let db_path = dir.path().join("empty.db");
+        let db_path = dir.path().join("empty_db");  // Directory for WAL format
 
         {
             let db = KoruDelta::start().await.unwrap();
