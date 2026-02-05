@@ -1,10 +1,38 @@
-# KoruDelta v2.0 Implementation TODO
+# KoruDelta Distinction Extension Implementation
 
-> **Status:** Committed to full v2.0 distinction-driven architecture
-> **Goal:** Revolutionary simplicity through principled design
+> **Status:** Refactoring to capture emergent behavior
+> **Goal:** Clean integration of causal/reference tracking
+> **Approach:** Evolve existing code, remove unused patterns
 > **Timeline:** 8 weeks to complete
 
-## The User Experience Vision
+## The Clean Integration Approach
+
+### What We're Doing
+
+**NOT:** Building v2 alongside v1  
+**NOT:** Keeping deprecated code  
+**YES:** Evolving the existing codebase  
+**YES:** Removing patterns that don't serve the distinction model  
+**YES:** Clean, unified architecture
+
+### Code Changes
+
+**Remove:**
+- Unused abstraction layers
+- Redundant storage patterns  
+- Ad-hoc compaction (replace with distillation)
+- Manual retention policies (replace with natural selection)
+
+**Evolve:**
+- `CausalStorage` → integrates causal graph
+- `put()` → becomes synthesis capture
+- `sync()` → becomes set reconciliation
+- `auth()` → becomes capability traversal
+
+**Keep (Respected):**
+- `koru_lambda_core::DistinctionEngine` (unchanged)
+- Public API surface (`put`, `get`, `query`)
+- All existing tests (must pass)
 
 ### What Users Will Feel
 
@@ -33,7 +61,11 @@
 
 ---
 
-## Phase 1: Foundation ✅ COMPLETE
+## Phase 1: Foundation Modules ✅ COMPLETE
+
+New modules (not replacements, additions):
+- `causal_graph.rs` - tracks how distinctions cause each other
+- `reference_graph.rs` - tracks what points to what
 
 ### Week 1: CausalGraph Core ✅
 - [x] Create `src/causal_graph.rs` module
@@ -66,7 +98,42 @@
 
 ---
 
-## Phase 2: Distinction Engine Integration 🎯 IN PROGRESS
+## Phase 2: Clean Integration 🎯 IN PROGRESS
+
+### Refactor CausalStorage
+
+**Current pattern (to evolve):**
+```rust
+pub struct CausalStorage {
+    engine: Arc<DistinctionEngine>,
+    current_state: DashMap<...>,  // Keep
+    history_log: DashMap<...>,    // Evolve to use causal graph
+    value_store: DashMap<...>,    // Keep
+}
+```
+
+**Evolved pattern:**
+```rust
+pub struct CausalStorage {
+    engine: Arc<DistinctionEngine>,           // Respect core
+    causal_graph: CausalGraph,                // NEW: capture causality
+    reference_graph: ReferenceGraph,          // NEW: capture references
+    current_state: DashMap<...>,              // Keep
+    // history_log: REMOVED - use causal graph instead
+    value_store: DashMap<...>,                // Keep
+}
+```
+
+**Why remove history_log?**  
+The causal graph IS the history. More powerful, unified.
+
+### Tasks
+- [ ] Refactor `CausalStorage` to use causal graph for history
+- [ ] Remove `history_log` field (redundant with causal graph)
+- [ ] Update `put()` to populate causal graph
+- [ ] Update `history()` to traverse causal graph
+- [ ] Update `get_at()` to use causal traversal
+- [ ] All existing tests must still pass
 
 ### Week 2: Extended Engine
 - [ ] Extend `DistinctionEngine` with:
@@ -87,7 +154,35 @@
 
 ---
 
-## Phase 3: Layered Memory 🎯
+## Phase 3: Memory Architecture Evolution 🎯
+
+### Current Pattern (Simplify)
+
+**Current:** All data in RAM (`current_state`, `history_log`)
+
+**Problem:** Doesn't scale, unbounded RAM
+
+**Evolution:** Tiered memory (not new v2, evolution of storage)
+
+### Hot Layer (Evolve current_state)
+- Keep frequently accessed in RAM
+- Use reference_graph to identify "hot" distinctions
+- Move cold to disk automatically
+
+### Chronicle Layer (Evolve persistence)
+- Current WAL is good
+- Keep it (don't replace, enhance)
+- Add index for fast causal traversal
+
+### Remove These Patterns:
+- [ ] Unbounded in-memory history
+- [ ] Full database snapshots (replace with genome)
+- [ ] Manual compaction triggers
+
+### Add These Capabilities:
+- [ ] Automatic hot/cold separation
+- [ ] Reference-counted GC
+- [ ] Causal frontier tracking
 
 ### The Logic
 Users should never think about memory. The system should just work at any scale.

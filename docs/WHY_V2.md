@@ -1,71 +1,69 @@
-# Why KoruDelta v2.0?
+# Why Evolve KoruDelta?
 
-> **The Short Answer:** v2.0 isn't just a better database. It's a different *kind* of thing—a living system that understands its own information.
+> **The Short Answer:** We're capturing what emerges from koru-lambda-core to unlock capabilities that ad-hoc patterns can't achieve.
 
 ---
 
-## The User Experience Revolution
+## The User Experience
 
-### The Paradox
+### The Goal
 
-v2.0 is **more complex internally** but **simpler for users**.
+**More capable internally** → **simpler for users**
 
 How? By building the complexity that *belongs* in the system so users don't have to deal with it.
 
-### Before (v1.0 + Traditional)
+### Current Limitations (To Address)
 
 ```bash
 # Database growing forever?
 $ du -sh ~/.korudelta/
-10G    # Oh no
+10G    # Needs automatic distillation
 
-# Manual compaction needed
+# Compaction?
 $ kdelta compact --retain 30d
-# (Hope you didn't need that old data)
+# (Should happen automatically, intelligently)
 
-# Setting up auth
-$ kdelta auth init --jwt-secret $(openssl rand -base64 32)
-$ kdelta auth create-user alice --password-hash $HASH
-# (Now manage password resets, token refresh, sessions...)
+# Auth?
+# (Needs capability-based, not bolted-on)
 
-# Sync between nodes
+# Sync?
 $ kdelta sync --target node2
-# (Sending 10GB... waiting...)
+# (Should only send what's needed)
 
-# Running on Raspberry Pi
+# Raspberry Pi?
 $ kdelta start
-# Killed: Out of memory
+# (Should manage memory automatically)
 ```
 
-### After (v2.0)
+### After (Evolved)
 
 ```bash
 # Database size?
 $ du -sh ~/.korudelta/
-500M   # Automatically managed
+500M   # Automatic distillation
 
 # Compaction?
-# (Happens automatically, intelligently)
+# (Natural selection of distinctions)
 
 # Auth?
 $ kdelta auth init
 $ kdelta auth add-user alice
-# (Done. No passwords, no tokens to manage)
+# (Capability graph, zero config)
 
 # Sync?
 $ kdelta start --join node2
-# (Instant. Only sends what's needed.)
+# (Set reconciliation, instant)
 
 # Raspberry Pi?
 $ kdelta start
-# (Works. Memory auto-managed.)
+# (Tiered memory, runs anywhere)
 ```
 
 ---
 
-## The Five Principles
+## The Five Principles (Emerging from Use)
 
-### 1. Everything is a Distinction
+### 1. Everything is a Distinction (Captured)
 
 **What it means:** Every piece of information—data, user, capability, configuration—is a "distinction" with identity, causality, and relationships.
 
