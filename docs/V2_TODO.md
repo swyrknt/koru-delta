@@ -98,42 +98,42 @@ New modules (not replacements, additions):
 
 ---
 
-## Phase 2: Clean Integration 🎯 IN PROGRESS
+## Phase 2: Clean Integration ✅ COMPLETE
 
-### Refactor CausalStorage
+### Refactor CausalStorage ✅
 
-**Current pattern (to evolve):**
-```rust
-pub struct CausalStorage {
-    engine: Arc<DistinctionEngine>,
-    current_state: DashMap<...>,  // Keep
-    history_log: DashMap<...>,    // Evolve to use causal graph
-    value_store: DashMap<...>,    // Keep
-}
-```
-
-**Evolved pattern:**
+**Evolved pattern (implemented):**
 ```rust
 pub struct CausalStorage {
     engine: Arc<DistinctionEngine>,           // Respect core
     causal_graph: CausalGraph,                // NEW: capture causality
     reference_graph: ReferenceGraph,          // NEW: capture references
     current_state: DashMap<...>,              // Keep
-    // history_log: REMOVED - use causal graph instead
+    version_store: DashMap<...>,              // NEW: content-addressed versions
     value_store: DashMap<...>,                // Keep
 }
 ```
 
-**Why remove history_log?**  
-The causal graph IS the history. More powerful, unified.
+**Removed:** `history_log` - The causal graph + version_store IS the history.
 
-### Tasks
-- [ ] Refactor `CausalStorage` to use causal graph for history
-- [ ] Remove `history_log` field (redundant with causal graph)
-- [ ] Update `put()` to populate causal graph
-- [ ] Update `history()` to traverse causal graph
-- [ ] Update `get_at()` to use causal traversal
-- [ ] All existing tests must still pass
+### Completed Tasks ✅
+- [x] Refactor `CausalStorage` to use causal graph for history
+- [x] Add `causal_graph` field (tracks how distinctions cause each other)
+- [x] Add `reference_graph` field (for GC and hot memory tracking)
+- [x] Add `version_store` (content-addressed version storage)
+- [x] Update `put()` to populate causal graph on each write
+- [x] Update `history()` to use version_store + causal graph
+- [x] Update `get_at()` to traverse causal graph for time travel
+- [x] Update `from_snapshot()` to rebuild causal graph
+- [x] Update tests for content-addressing behavior
+- [x] All 99 lib tests passing
+
+### Architecture Benefits
+- **Unified history**: Causal graph provides history + causality
+- **Deduplication**: version_store is content-addressed
+- **Emergence captured**: Every put() adds to causal graph
+- **Respects core**: koru-lambda-core unchanged
+- **Clean code**: Removed redundant history_log pattern
 
 ### Week 2: Extended Engine
 - [ ] Extend `DistinctionEngine` with:
