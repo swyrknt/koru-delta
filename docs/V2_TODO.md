@@ -1,9 +1,9 @@
 # KoruDelta Distinction Extension Implementation
 
-> **Status:** Refactoring to capture emergent behavior
+> **Status:** Phase 4 Complete - 236 tests passing
 > **Goal:** Clean integration of causal/reference tracking
 > **Approach:** Evolve existing code, remove unused patterns
-> **Timeline:** 8 weeks to complete
+> **Timeline:** Phase 5 (World Reconciliation) in progress
 
 ## The Clean Integration Approach
 
@@ -126,7 +126,7 @@ pub struct CausalStorage {
 - [x] Update `get_at()` to traverse causal graph for time travel
 - [x] Update `from_snapshot()` to rebuild causal graph
 - [x] Update tests for content-addressing behavior
-- [x] All 99 lib tests passing
+- [x] All 236 tests passing (includes Phase 3 and 4)
 
 ### Architecture Benefits
 - **Unified history**: Causal graph provides history + causality
@@ -265,39 +265,47 @@ Users should never think about memory. The system should just work at any scale.
 
 ---
 
-## Phase 4: Evolutionary Processes 🎯
+## Phase 4: Evolutionary Processes ✅ COMPLETE
 
 ### The Logic
 The system should manage itself. Users shouldn't think about compaction or retention.
 
-### Week 5a: ConsolidationProcess (Sleep Cycle)
-- [ ] Create `src/processes/consolidation.rs`
-- [ ] Implement `ConsolidationProcess`:
-  - [ ] Move hot → warm
-  - [ ] Move warm → cold
-  - [ ] Update indices
-- [ ] Implement rhythm (timer-based, configurable)
-- [ ] Write tests
+### Week 5a: ConsolidationProcess (Sleep Cycle) ✅
+- [x] Create `src/processes/consolidation.rs`
+- [x] Implement `ConsolidationProcess`:
+  - [x] Move hot → warm
+  - [x] Move warm → cold
+  - [x] Update indices
+- [x] Implement rhythm (timer-based, configurable)
+- [x] Write tests (8 tests, all passing)
 - **User Benefit:** Automatic memory management
 
-### Week 5b: DistillationProcess (Natural Selection)
-- [ ] Create `src/processes/distillation.rs`
-- [ ] Implement `DistillationProcess`:
-  - [ ] `fitness()` - score distinctions
-  - [ ] `classify()` - fit vs unfit
-  - [ ] `distill()` - keep fit, archive unfit
-- [ ] Implement natural selection logic
-- [ ] Write tests
+### Week 5b: DistillationProcess (Natural Selection) ✅
+- [x] Create `src/processes/distillation.rs`
+- [x] Implement `DistillationProcess`:
+  - [x] `fitness()` - score distinctions
+  - [x] `classify()` - fit vs unfit
+  - [x] `distill()` - keep fit, archive unfit
+- [x] Implement natural selection logic
+- [x] Write tests (8 tests, all passing)
 - **User Benefit:** Database never grows unbounded
 
-### Week 5c: GenomeUpdateProcess (DNA Update)
-- [ ] Create `src/processes/genome_update.rs`
-- [ ] Implement `GenomeUpdateProcess`:
-  - [ ] Extract essential structure
-  - [ ] Update genome
-  - [ ] Store in deep memory
-- [ ] Write tests
+### Week 5c: GenomeUpdateProcess (DNA Update) ✅
+- [x] Create `src/processes/genome_update.rs`
+- [x] Implement `GenomeUpdateProcess`:
+  - [x] Extract essential structure
+  - [x] Update genome
+  - [x] Store in deep memory
+- [x] Write tests (6 tests, all passing)
 - **User Benefit:** Always have minimal backup
+
+### Critical Fixes in Phase 4 ✅
+- [x] **Dual ID System**: `write_id` (unique per write) vs `distinction_id` (content hash)
+- [x] **Nanosecond Timestamps**: Prevent collisions in rapid writes (100 writes in loop)
+- [x] **Complete History**: All writes preserved in version_store, even identical values
+- [x] **Fixed Time Travel**: `get_at()` correctly returns latest version ≤ timestamp
+- [x] **Fixed Persistence**: WAL replay preserves causal chains and history
+- [x] **All 236 tests passing** (+40 from this phase)
 
 ---
 
