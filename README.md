@@ -68,6 +68,29 @@ kdelta start --join 192.168.1.100:7878
 # Now you have a distributed cluster!
 ```
 
+### 🔌 HTTP API
+
+Access KoruDelta over HTTP for remote operations and web integration:
+
+```bash
+# Start HTTP server
+kdelta start --port 8080
+
+# From anywhere, use remote CLI
+kdelta --url http://localhost:8080 get users/alice
+kdelta --url http://localhost:8080 set users/bob '{"name": "Bob"}'
+
+# Time travel via HTTP
+kdelta --url http://localhost:8080 get users/alice --at "2026-02-04T12:00:00Z"
+```
+
+REST endpoints:
+- `GET /api/v1/:namespace/:key` - Get value
+- `PUT /api/v1/:namespace/:key` - Store value
+- `GET /api/v1/:namespace/:key/history` - Get history
+- `GET /api/v1/:namespace/:key/at/:timestamp` - Time travel
+- `POST /api/v1/:namespace/query` - Execute queries
+
 ### 🔍 Powerful Queries
 
 Filter, sort, and aggregate your data with a fluent query API:
@@ -133,6 +156,8 @@ while let Ok(event) = rx.recv().await {
 - **Content-addressed** - Built on koru-lambda-core's distinction calculus
 - **Thread-safe** - Concurrent operations with no data races
 - **WASM-ready** - Run in browsers, Node.js, and edge environments
+- **HTTP API** - RESTful endpoints for remote access
+- **Remote CLI** - Connect to any KoruDelta instance over HTTP
 - **CLI included** - Full-featured command-line tool for interactive use
 - **High performance** - ~340ns reads, 27K+ writes/sec
 - **Query engine** - Filter, sort, project, and aggregate data
@@ -145,11 +170,18 @@ while let Ok(event) = rx.recv().await {
 # Basic Operations
 kdelta set users/alice '{"name": "Alice", "age": 30}'
 kdelta get users/alice
+kdelta get users/alice --at "2026-02-04T12:00:00Z"  # Time travel
 kdelta log users/alice              # Show history
 kdelta diff users/alice             # Compare versions
 
+# Remote Operations (via HTTP)
+kdelta --url http://localhost:8080 get users/alice
+kdelta --url http://localhost:8080 set users/bob '{"name": "Bob"}'
+kdelta --url http://localhost:8080 query users --filter 'age > 30'
+
 # Cluster Operations
 kdelta start                        # Start a node
+kdelta start --port 8080            # Start with HTTP API
 kdelta start --join 192.168.1.100   # Join existing cluster
 kdelta peers                        # Show cluster peers
 kdelta status                       # Show database stats
@@ -212,8 +244,8 @@ The math is your secret weapon, not your configuration burden.
 - History queries across versions
 
 ### Project Stats
-- **7,095 lines** of Rust code
-- **146 tests** (all passing)
+- **~6,350 lines** of Rust code
+- **198 tests** (all passing)
 - **~340ns** read latency
 - **~27K** writes/sec throughput
 - Cross-platform (Linux, macOS, Windows, WASM)

@@ -29,6 +29,173 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 
+// ============================================================================
+// HTTP Client for Remote Operations
+// ============================================================================
+
+/// HTTP client for remote KoruDelta operations.
+struct HttpClient {
+    base_url: String,
+    client: reqwest::Client,
+}
+
+impl HttpClient {
+    /// Create a new HTTP client.
+    fn new(base_url: String) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            client: reqwest::Client::new(),
+        }
+    }
+
+    /// Get a value from the remote server.
+    async fn get(&self, namespace: &str, key: &str) -> Result<serde_json::Value> {
+        let url = format!("{}/api/v1/{}/{}", self.base_url, namespace, key);
+        let response = self.client.get(&url).send().await?;
+        
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!("Key not found: {}/{}", namespace, key);
+        }
+        
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data.get("value").cloned().unwrap_or(serde_json::Value::Null))
+    }
+
+    /// Store a value on the remote server.
+    async fn put(&self, namespace: &str, key: &str, value: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!("{}/api/v1/{}/{}", self.base_url, namespace, key);
+        let body = serde_json::json!({ "value": value });
+        let response = self.client.put(&url).json(&body).send().await?;
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data)
+    }
+
+    /// Get history from the remote server.
+    async fn history(&self, namespace: &str, key: &str) -> Result<Vec<serde_json::Value>> {
+        let url = format!("{}/api/v1/{}/{}/history", self.base_url, namespace, key);
+        let response = self.client.get(&url).send().await?;
+        
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!("Key not found: {}/{}", namespace, key);
+        }
+        
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data.get("versions")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    /// Get value at a specific timestamp.
+    async fn get_at(&self, namespace: &str, key: &str, timestamp: &str) -> Result<serde_json::Value> {
+        let url = format!("{}/api/v1/{}/{}/at/{}", self.base_url, namespace, key, timestamp);
+        let response = self.client.get(&url).send().await?;
+        
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!("Key not found at timestamp: {}/{}", namespace, key);
+        }
+        
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data)
+    }
+
+    /// Query the remote server.
+    async fn query(&self, namespace: &str, query: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!("{}/api/v1/{}/query", self.base_url, namespace);
+        let response = self.client.post(&url).json(&query).send().await?;
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data)
+    }
+
+    /// List namespaces from the remote server.
+    async fn list_namespaces(&self) -> Result<Vec<String>> {
+        let url = format!("{}/api/v1/namespaces", self.base_url);
+        let response = self.client.get(&url).send().await?;
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data.get("namespaces")
+            .and_then(|n| n.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default())
+    }
+
+    /// List keys from the remote server.
+    async fn list_keys(&self, namespace: &str) -> Result<Vec<String>> {
+        let url = format!("{}/api/v1/{}/keys", self.base_url, namespace);
+        let response = self.client.get(&url).send().await?;
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data.get("keys")
+            .and_then(|k| k.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default())
+    }
+
+    /// Get status from the remote server.
+    async fn status(&self) -> Result<serde_json::Value> {
+        let url = format!("{}/api/v1/status", self.base_url);
+        let response = self.client.get(&url).send().await?;
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data)
+    }
+
+    /// List views from the remote server.
+    async fn list_views(&self) -> Result<Vec<serde_json::Value>> {
+        let url = format!("{}/api/v1/views", self.base_url);
+        let response = self.client.get(&url).send().await?;
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data.get("views")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    /// Create a view on the remote server.
+    async fn create_view(&self, view_def: serde_json::Value) -> Result<()> {
+        let url = format!("{}/api/v1/views", self.base_url);
+        let response = self.client.post(&url).json(&view_def).send().await?;
+        response.error_for_status()?;
+        Ok(())
+    }
+
+    /// Query a view on the remote server.
+    async fn query_view(&self, name: &str) -> Result<serde_json::Value> {
+        let url = format!("{}/api/v1/views/{}", self.base_url, name);
+        let response = self.client.get(&url).send().await?;
+        
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!("View not found: {}", name);
+        }
+        
+        let data: serde_json::Value = response.error_for_status()?.json().await?;
+        Ok(data)
+    }
+
+    /// Refresh a view on the remote server.
+    async fn refresh_view(&self, name: &str) -> Result<()> {
+        let url = format!("{}/api/v1/views/{}/refresh", self.base_url, name);
+        let response = self.client.post(&url).send().await?;
+        
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!("View not found: {}", name);
+        }
+        
+        response.error_for_status()?;
+        Ok(())
+    }
+
+    /// Delete a view on the remote server.
+    async fn delete_view(&self, name: &str) -> Result<()> {
+        let url = format!("{}/api/v1/views/{}", self.base_url, name);
+        let response = self.client.delete(&url).send().await?;
+        
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!("View not found: {}", name);
+        }
+        
+        response.error_for_status()?;
+        Ok(())
+    }
+}
+
 /// KoruDelta - The Invisible Database
 ///
 /// A causal, consistent database with Git-like history and Redis-like simplicity.
@@ -39,6 +206,10 @@ struct Cli {
     /// Database file path (default: ~/.korudelta/db)
     #[arg(short, long, global = true)]
     db_path: Option<PathBuf>,
+
+    /// Server URL for remote operations (e.g., http://localhost:8080)
+    #[arg(short, long, global = true)]
+    url: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -69,6 +240,7 @@ enum Commands {
     /// Examples:
     ///   kdelta get users/alice
     ///   kdelta get counters/visits
+    ///   kdelta get users/alice --at "2026-02-04T12:00:00Z"
     Get {
         /// Key in format: namespace/key
         key: String,
@@ -76,6 +248,10 @@ enum Commands {
         /// Show metadata (timestamp, version ID)
         #[arg(short, long)]
         verbose: bool,
+
+        /// Get value at specific timestamp (ISO 8601 format)
+        #[arg(short, long)]
+        at: Option<String>,
     },
 
     /// Show the history of changes for a key
@@ -440,9 +616,301 @@ fn format_peer_status(status: PeerStatus) -> ColoredString {
     }
 }
 
+/// Handle remote commands via HTTP
+async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
+    let client = HttpClient::new(url.to_string());
+
+    match command {
+        Commands::Set { key, value } => {
+            let (namespace, key_name) = parse_key(key)?;
+            let json_value: JsonValue = serde_json::from_str(value)
+                .with_context(|| format!("Invalid JSON value: {}", value))?;
+
+            let result = client.put(&namespace, &key_name, json_value).await?;
+            
+            println!("{}", "OK".green().bold());
+            println!("  Stored: {}/{}", namespace.cyan(), key_name.cyan());
+            println!("  Version: {}", result.get("versionId").and_then(|v| v.as_str()).unwrap_or("unknown").bright_black());
+            if let Some(ts) = result.get("timestamp").and_then(|v| v.as_str()) {
+                println!("  Timestamp: {}", ts);
+            }
+            Ok(())
+        }
+
+        Commands::Get { key, verbose: _, at } => {
+            let (namespace, key_name) = parse_key(key)?;
+            
+            if let Some(timestamp_str) = at {
+                // Time travel query via HTTP
+                let value = client.get_at(&namespace, &key_name, timestamp_str).await?;
+                println!("{}", format_json(&value));
+                println!();
+                println!("{}", format!("(value at {})", timestamp_str).bright_black());
+            } else {
+                let value = client.get(&namespace, &key_name).await?;
+                println!("{}", format_json(&value));
+            }
+            Ok(())
+        }
+
+        Commands::Log { key, limit } => {
+            let (namespace, key_name) = parse_key(key)?;
+            let history = client.history(&namespace, &key_name).await?;
+            
+            let entries: Vec<_> = if let Some(lim) = limit {
+                history.iter().rev().take(*lim).cloned().collect()
+            } else {
+                history.iter().rev().cloned().collect()
+            };
+
+            if entries.is_empty() {
+                println!("{}", "No history found".yellow());
+                return Ok(());
+            }
+
+            println!("{}", "History:".bold());
+            println!();
+
+            for entry in entries {
+                if let Some(ts) = entry.get("timestamp").and_then(|v| v.as_str()) {
+                    println!("  {} {}", "*".cyan(), ts.bright_black());
+                }
+                if let Some(value) = entry.get("value") {
+                    println!("    {}", format_json(value).bright_white());
+                }
+                if let Some(vid) = entry.get("versionId").and_then(|v| v.as_str()) {
+                    println!("    Version: {}", vid.bright_black());
+                }
+                println!();
+            }
+
+            println!("  {} {} total", history.len(), if history.len() == 1 { "version" } else { "versions" });
+            Ok(())
+        }
+
+        Commands::Status => {
+            let status = client.status().await?;
+            println!("{}", "Database Status".bold().cyan());
+            println!();
+            println!("  {} {}", "Keys:".bright_white(), status.get("keyCount").and_then(|v| v.as_u64()).unwrap_or(0));
+            println!("  {} {}", "Versions:".bright_white(), status.get("totalVersions").and_then(|v| v.as_u64()).unwrap_or(0));
+            println!("  {} {}", "Namespaces:".bright_white(), status.get("namespaceCount").and_then(|v| v.as_u64()).unwrap_or(0));
+            println!();
+
+            if let Some(namespaces) = status.get("namespaces").and_then(|v| v.as_array()) {
+                if !namespaces.is_empty() {
+                    println!("{}", "Namespaces:".bright_white());
+                    for ns in namespaces {
+                        if let Some(name) = ns.as_str() {
+                            println!("  {} {}", "*".cyan(), name);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        Commands::List { namespace } => {
+            match namespace {
+                Some(ns) => {
+                    let keys = client.list_keys(ns).await?;
+                    if keys.is_empty() {
+                        println!("{}", format!("No keys in namespace '{}'", ns).yellow());
+                    } else {
+                        println!("{}", format!("Keys in '{}':", ns).bold());
+                        println!();
+                        for key in keys {
+                            println!("  {} {}/{}", "*".cyan(), ns.bright_black(), key);
+                        }
+                    }
+                }
+                None => {
+                    let namespaces = client.list_namespaces().await?;
+                    if namespaces.is_empty() {
+                        println!("{}", "No namespaces found".yellow());
+                    } else {
+                        println!("{}", "Namespaces:".bold());
+                        println!();
+                        for ns in namespaces {
+                            println!("  {} {}", "*".cyan(), ns);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        Commands::Query { namespace, filter, sort, desc, limit, count: _count, sum: _sum, avg: _avg } => {
+            let mut query = serde_json::json!({});
+            
+            if let Some(f) = filter {
+                // Parse simple filter expressions like "age > 30"
+                query["filter"] = serde_json::json!({
+                    "field": f.split_whitespace().next().unwrap_or(""),
+                    "op": "eq",
+                    "value": f
+                });
+            }
+            
+            if let Some(s) = sort {
+                query["sort"] = serde_json::json!({
+                    "field": s,
+                    "descending": *desc
+                });
+            }
+            
+            if let Some(l) = limit {
+                query["limit"] = serde_json::json!(l);
+            }
+
+            let result = client.query(namespace, query).await?;
+            
+            if let Some(records) = result.get("results").and_then(|v| v.as_array()) {
+                println!("{} ({} records)", "Query results:".bold(), records.len());
+                println!();
+                
+                for record in records {
+                    if let Some(key) = record.get("key").and_then(|v| v.as_str()) {
+                        println!("  {} {}", "*".cyan(), key.bright_white());
+                    }
+                    if let Some(value) = record.get("value") {
+                        println!("    {}", format_json(value).bright_black());
+                    }
+                }
+            }
+            
+            Ok(())
+        }
+
+        Commands::View(view_cmd) => match view_cmd {
+            ViewCommands::Create { name, source, filter, description, auto_refresh } => {
+                let mut view_def = serde_json::json!({
+                    "name": name,
+                    "source": source,
+                    "auto_refresh": *auto_refresh
+                });
+                
+                if let Some(desc) = description {
+                    view_def["description"] = serde_json::json!(desc);
+                }
+                
+                if let Some(f) = filter {
+                    view_def["filter"] = serde_json::json!({
+                        "field": f.split_whitespace().next().unwrap_or(""),
+                        "op": "eq",
+                        "value": f
+                    });
+                }
+
+                client.create_view(view_def).await?;
+                println!("{}", format!("View '{}' created.", name).green().bold());
+                Ok(())
+            }
+
+            ViewCommands::List => {
+                let views = client.list_views().await?;
+                if views.is_empty() {
+                    println!("{}", "No views found".yellow());
+                } else {
+                    println!("{}", "Materialized views:".bold());
+                    println!();
+                    for view in views {
+                        if let Some(name) = view.get("name").and_then(|v| v.as_str()) {
+                            println!("  {} {}", "*".cyan(), name.bright_white());
+                        }
+                    }
+                }
+                Ok(())
+            }
+
+            ViewCommands::Refresh { name } => {
+                client.refresh_view(name).await?;
+                println!("{}", format!("View '{}' refreshed.", name).green());
+                Ok(())
+            }
+
+            ViewCommands::Query { name, limit } => {
+                let result = client.query_view(name).await?;
+                
+                if let Some(records) = result.get("results").and_then(|v| v.as_array()) {
+                    let records: Vec<_> = if let Some(l) = limit {
+                        records.iter().take(*l).cloned().collect()
+                    } else {
+                        records.clone()
+                    };
+                    
+                    println!("{} ({} records)", format!("View '{}' results:", name).bold(), records.len());
+                    println!();
+                    
+                    for record in records {
+                        if let Some(key) = record.get("key").and_then(|v| v.as_str()) {
+                            println!("  {} {}", "*".cyan(), key.bright_white());
+                        }
+                        if let Some(value) = record.get("value") {
+                            println!("    {}", format_json(value).bright_black());
+                        }
+                    }
+                }
+                Ok(())
+            }
+
+            ViewCommands::Delete { name } => {
+                client.delete_view(name).await?;
+                println!("{}", format!("View '{}' deleted.", name).green());
+                Ok(())
+            }
+        },
+
+        Commands::Diff { key, at: _at, from, to } => {
+            let (namespace, key_name) = parse_key(key)?;
+            let history = client.history(&namespace, &key_name).await?;
+
+            if history.len() < 2 {
+                println!("{}", "Need at least 2 versions to compare".yellow());
+                return Ok(());
+            }
+
+            // For now, just compare first and last
+            let old_idx = from.unwrap_or(0);
+            let new_idx = to.unwrap_or(history.len() - 1);
+
+            if old_idx >= history.len() || new_idx >= history.len() {
+                anyhow::bail!("Invalid version indices");
+            }
+
+            let old_val = history[old_idx].get("value").cloned().unwrap_or(serde_json::Value::Null);
+            let new_val = history[new_idx].get("value").cloned().unwrap_or(serde_json::Value::Null);
+
+            show_diff(&old_val, &new_val, &format!("Version {}", old_idx), &format!("Version {}", new_idx));
+            Ok(())
+        }
+
+        Commands::Start { .. } => {
+            println!("{}", "Cannot start server with --url flag".red());
+            println!("  Remove --url to start a local server.");
+            std::process::exit(1);
+        }
+
+        Commands::Peers => {
+            println!("{}", "Peers command not available via HTTP API yet".yellow());
+            Ok(())
+        }
+
+        Commands::Watch { .. } => {
+            println!("{}", "Watch command not available via HTTP API (use websockets for streaming)".yellow());
+            Ok(())
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Handle remote operations via HTTP
+    if let Some(url) = &cli.url {
+        return handle_remote_command(&cli.command, url).await;
+    }
 
     // Determine database path
     let db_path = cli.db_path.unwrap_or_else(default_db_path);
@@ -486,35 +954,62 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Commands::Get { key, verbose } => {
+        Commands::Get { key, verbose, at } => {
             let (namespace, key_name) = parse_key(&key)?;
 
-            match db.get_versioned(&namespace, &key_name).await {
-                Ok(versioned) => {
-                    // Pretty print the value
-                    println!("{}", format_json(versioned.value()));
+            // Handle time travel query
+            if let Some(timestamp_str) = at {
+                let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
+                    .with_context(|| format!("Invalid timestamp format: {}", timestamp_str))?
+                    .with_timezone(&Utc);
 
-                    if verbose {
+                match db.get_at(&namespace, &key_name, timestamp).await {
+                    Ok(value) => {
+                        println!("{}", format_json(&value));
                         println!();
-                        println!("{}", "Metadata:".bright_black());
-                        println!("  Version: {}", versioned.version_id().bright_black());
-                        println!(
-                            "  Timestamp: {}",
-                            format_timestamp(&versioned.timestamp()).bright_black()
-                        );
-                        if let Some(prev) = versioned.previous_version() {
-                            println!("  Previous: {}", prev.bright_black());
-                        }
+                        println!("{}", format!("(value at {})", timestamp_str).bright_black());
+                        Ok(())
                     }
+                    Err(DeltaError::KeyNotFound { .. }) => {
+                        eprintln!("{}", "Error".red().bold());
+                        eprintln!("  Key not found: {}/{}", namespace, key_name);
+                        std::process::exit(1);
+                    }
+                    Err(DeltaError::NoValueAtTimestamp { .. }) => {
+                        eprintln!("{}", "Error".red().bold());
+                        eprintln!("  No value at timestamp: {}", timestamp_str);
+                        std::process::exit(1);
+                    }
+                    Err(e) => Err(e.into()),
+                }
+            } else {
+                match db.get_versioned(&namespace, &key_name).await {
+                    Ok(versioned) => {
+                        // Pretty print the value
+                        println!("{}", format_json(versioned.value()));
 
-                    Ok(())
+                        if verbose {
+                            println!();
+                            println!("{}", "Metadata:".bright_black());
+                            println!("  Version: {}", versioned.version_id().bright_black());
+                            println!(
+                                "  Timestamp: {}",
+                                format_timestamp(&versioned.timestamp()).bright_black()
+                            );
+                            if let Some(prev) = versioned.previous_version() {
+                                println!("  Previous: {}", prev.bright_black());
+                            }
+                        }
+
+                        Ok(())
+                    }
+                    Err(DeltaError::KeyNotFound { .. }) => {
+                        eprintln!("{}", "Error".red().bold());
+                        eprintln!("  Key not found: {}/{}", namespace, key_name);
+                        std::process::exit(1);
+                    }
+                    Err(e) => Err(e.into()),
                 }
-                Err(DeltaError::KeyNotFound { .. }) => {
-                    eprintln!("{}", "Error".red().bold());
-                    eprintln!("  Key not found: {}/{}", namespace, key_name);
-                    std::process::exit(1);
-                }
-                Err(e) => Err(e.into()),
             }
         }
 

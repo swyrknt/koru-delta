@@ -42,11 +42,16 @@ dirs = "5.0"
 similar = "2.6"  # For text diffing
 
 # Networking (for distributed mode, non-WASM only)
-uuid = { version = "1.11", features = ["v4", "serde"] }
+uuid = { version = "1.11", features = ["v4", "serde", "js"] }
 rand = "0.8"
 
 # Query engine
 regex = "1.10"
+
+# HTTP API (non-WASM only)
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+reqwest = { version = "0.12", features = ["json"], optional = true }
 
 # Optional WASM support
 wasm-bindgen = { version = "0.2", optional = true }
@@ -54,6 +59,7 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 js-sys = { version = "0.3", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
+getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [dev-dependencies]
 # Testing
@@ -66,8 +72,9 @@ predicates = "3.1"
 criterion = { version = "0.5", features = ["async_tokio"] }
 
 [features]
-default = []
-wasm = ["wasm-bindgen", "wasm-bindgen-futures", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook"]
+default = ["http"]
+wasm = ["wasm-bindgen", "wasm-bindgen-futures", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook", "getrandom"]
+http = ["axum", "tower", "reqwest"]
 
 # Platform-specific dependencies for non-WASM targets
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

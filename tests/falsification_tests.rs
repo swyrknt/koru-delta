@@ -13,7 +13,6 @@
 /// - Persistence and recovery scenarios
 ///
 /// Philosophy: If we can't break it, we gain confidence it's correct.
-
 use chrono::{Duration, Utc};
 use koru_delta::prelude::*;
 use koru_delta::query::{Aggregation, Filter, HistoryQuery, Query};
@@ -499,7 +498,7 @@ async fn falsify_query_null_handling() {
         .unwrap();
     // This tests the semantic: does "status != active" include records where status is missing?
     assert!(
-        result.records.len() >= 1,
+        !result.records.is_empty(),
         "Ne filter behavior with missing fields"
     );
 }
@@ -1456,11 +1455,8 @@ async fn falsify_subscription_rapid_writes() {
 
     // Collect all events with timeout
     let mut received = 0;
-    loop {
-        match tokio::time::timeout(StdDuration::from_millis(100), rx.recv()).await {
-            Ok(Ok(_)) => received += 1,
-            _ => break,
-        }
+    while let Ok(Ok(_)) = tokio::time::timeout(StdDuration::from_millis(100), rx.recv()).await {
+        received += 1;
     }
 
     // Should receive all 50 events (unless channel overflowed)
@@ -1923,7 +1919,7 @@ async fn falsify_history_query_time_bounds() {
     assert_eq!(results.len(), 4);
     for entry in &results {
         let seq = entry.value["seq"].as_i64().unwrap();
-        assert!(seq >= 3 && seq <= 6);
+        assert!((3..=6).contains(&seq));
     }
 }
 

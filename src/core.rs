@@ -13,6 +13,7 @@
 use crate::error::{DeltaError, DeltaResult};
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
 use crate::storage::CausalStorage;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionId, SubscriptionManager};
 use crate::types::{HistoryEntry, VersionedValue};
 use crate::views::{ViewDefinition, ViewInfo, ViewManager};
@@ -21,6 +22,7 @@ use koru_lambda_core::DistinctionEngine;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::sync::broadcast;
 
 /// The main KoruDelta database instance.
@@ -70,7 +72,8 @@ pub struct KoruDelta {
     engine: Arc<DistinctionEngine>,
     /// View manager for materialized views
     views: Arc<ViewManager>,
-    /// Subscription manager for change notifications
+    /// Subscription manager for change notifications (not available in WASM)
+    #[cfg(not(target_arch = "wasm32"))]
     subscriptions: Arc<SubscriptionManager>,
 }
 
@@ -98,12 +101,15 @@ impl KoruDelta {
         let engine = Arc::new(DistinctionEngine::new());
         let storage = Arc::new(CausalStorage::new(Arc::clone(&engine)));
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
+        
+        #[cfg(not(target_arch = "wasm32"))]
         let subscriptions = Arc::new(SubscriptionManager::new());
 
         Ok(Self {
             storage,
             engine,
             views,
+            #[cfg(not(target_arch = "wasm32"))]
             subscriptions,
         })
     }
@@ -115,12 +121,15 @@ impl KoruDelta {
     pub async fn start_with_engine(engine: Arc<DistinctionEngine>) -> DeltaResult<Self> {
         let storage = Arc::new(CausalStorage::new(Arc::clone(&engine)));
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
+        
+        #[cfg(not(target_arch = "wasm32"))]
         let subscriptions = Arc::new(SubscriptionManager::new());
 
         Ok(Self {
             storage,
             engine,
             views,
+            #[cfg(not(target_arch = "wasm32"))]
             subscriptions,
         })
     }
@@ -138,12 +147,15 @@ impl KoruDelta {
     /// ```
     pub fn from_storage(storage: Arc<CausalStorage>, engine: Arc<DistinctionEngine>) -> Self {
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
+        
+        #[cfg(not(target_arch = "wasm32"))]
         let subscriptions = Arc::new(SubscriptionManager::new());
 
         Self {
             storage,
             engine,
             views,
+            #[cfg(not(target_arch = "wasm32"))]
             subscriptions,
         }
     }
@@ -471,10 +483,11 @@ impl KoruDelta {
     }
 
     // =========================================================================
-    // Subscriptions API (Phase 3)
+    // Subscriptions API (Phase 3) - Non-WASM only
     // =========================================================================
 
     /// Subscribe to changes.
+    #[cfg(not(target_arch = "wasm32"))]
     ///
     /// Returns a subscription ID and a receiver for change events.
     ///
@@ -490,6 +503,7 @@ impl KoruDelta {
     ///     println!("Change: {:?}", event);
     /// }
     /// ```
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn subscribe(
         &self,
         subscription: Subscription,
@@ -498,21 +512,27 @@ impl KoruDelta {
     }
 
     /// Unsubscribe from changes.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn unsubscribe(&self, id: SubscriptionId) -> DeltaResult<()> {
         self.subscriptions.unsubscribe(id)
     }
 
     /// List all active subscriptions.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn list_subscriptions(&self) -> Vec<crate::subscriptions::SubscriptionInfo> {
         self.subscriptions.list_subscriptions()
     }
 
     /// Get access to the subscription manager.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn subscription_manager(&self) -> &Arc<SubscriptionManager> {
         &self.subscriptions
     }
 
     /// Store a value and notify subscribers.
+    /// 
+    /// Note: On WASM, this behaves the same as `put()` since subscriptions
+    /// are not available in browser environments.
     ///
     /// This is like `put()` but also triggers subscription notifications.
     ///
@@ -543,11 +563,14 @@ impl KoruDelta {
         // Perform the write.
         let result = self.put(namespace, key, value).await?;
 
-        // Notify subscribers.
-        if let Some(prev) = previous {
-            self.subscriptions.notify_update(&ns, &k, &result, &prev);
-        } else {
-            self.subscriptions.notify_insert(&ns, &k, &result);
+        // Notify subscribers (non-WASM only).
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(ref prev) = previous {
+                self.subscriptions.notify_update(&ns, &k, &result, prev);
+            } else {
+                self.subscriptions.notify_insert(&ns, &k, &result);
+            }
         }
 
         // Notify views that may need auto-refresh.

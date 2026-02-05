@@ -112,6 +112,7 @@ pub mod query;
 pub mod views;
 
 // Subscriptions module
+#[cfg(not(target_arch = "wasm32"))]
 pub mod subscriptions;
 
 // Public modules (not available on WASM - no filesystem/networking)
@@ -123,6 +124,10 @@ pub mod network;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cluster;
+
+// HTTP API (requires http feature, not WASM)
+#[cfg(all(not(target_arch = "wasm32"), feature = "http"))]
+pub mod http;
 
 // WASM bindings (only when wasm feature is enabled)
 #[cfg(feature = "wasm")]
@@ -142,7 +147,8 @@ pub use query::{
 // Views exports
 pub use views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
 
-// Subscriptions exports
+// Subscriptions exports (non-WASM only)
+#[cfg(not(target_arch = "wasm32"))]
 pub use subscriptions::{
     ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionId, SubscriptionInfo,
     SubscriptionManager,
@@ -184,7 +190,8 @@ pub mod prelude {
     // Views types
     pub use crate::views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
 
-    // Subscriptions types
+    // Subscriptions types (non-WASM only)
+    #[cfg(not(target_arch = "wasm32"))]
     pub use crate::subscriptions::{
         ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionId,
         SubscriptionInfo, SubscriptionManager,
