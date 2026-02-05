@@ -34,6 +34,8 @@ koru-delta/
 │   ├── lib.rs            # Public API exports, crate root
 │   ├── core.rs           # KoruDelta main database implementation
 │   ├── storage.rs        # CausalStorage - versioned key-value storage
+│   ├── causal_graph.rs   # Causal graph tracking (v2)
+│   ├── reference_graph.rs # Reference tracking (v2)
 │   ├── mapper.rs         # DocumentMapper - JSON to distinction mapping
 │   ├── types.rs          # Core data types (FullKey, VersionedValue, etc.)
 │   ├── error.rs          # DeltaError and DeltaResult types
@@ -45,12 +47,27 @@ koru-delta/
 │   ├── persistence.rs    # Disk persistence (JSON format)
 │   ├── http.rs           # HTTP API server
 │   ├── wasm.rs           # WebAssembly bindings
+│   ├── memory/           # Memory tiering (v2)
+│   │   ├── hot.rs        # Hot memory (LRU cache)
+│   │   ├── warm.rs       # Warm memory (chronicle)
+│   │   ├── cold.rs       # Cold memory (epochs)
+│   │   └── deep.rs       # Deep memory (genomic)
+│   ├── processes/        # Evolutionary processes (v2)
+│   │   ├── consolidation.rs
+│   │   ├── distillation.rs
+│   │   └── genome_update.rs
+│   ├── reconciliation/   # Set reconciliation (v2)
+│   │   ├── mod.rs        # ReconciliationManager
+│   │   ├── merkle.rs     # Merkle trees
+│   │   ├── bloom.rs      # Bloom filters
+│   │   └── world.rs      # World reconciliation
 │   └── bin/kdelta.rs     # CLI binary implementation
 ├── tests/                # Integration tests
 │   ├── integration_tests.rs
 │   ├── cluster_tests.rs
 │   ├── phase3_tests.rs
-│   └── falsification_tests.rs
+│   ├── falsification_tests.rs
+│   └── phase5_tests.rs   # Set reconciliation tests
 ├── examples/             # Runnable demos
 │   ├── ecommerce_demo.rs
 │   └── cluster_demo.rs

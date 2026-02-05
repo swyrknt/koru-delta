@@ -8,15 +8,24 @@ KoruDelta is a zero-configuration causal database built on top of [koru-lambda-c
 
 ## Architecture Layers
 
-KoruDelta is architected in three clean layers:
+KoruDelta is architected in layers that enable distinction-driven operations:
 
 ```
 ┌─────────────────────────────────────────┐
 │         KoruDelta Public API            │  ← Simple, async interface
 │    (put, get, history, get_at)          │
 ├─────────────────────────────────────────┤
+│      Reconciliation Layer (v2)          │  ← Distributed sync
+│  (MerkleTree, BloomFilter, WorldRec)    │
+├─────────────────────────────────────────┤
+│      Evolutionary Processes (v2)        │  ← Automated management
+│  (Consolidation, Distillation, Genome)  │
+├─────────────────────────────────────────┤
+│       Memory Tiering (v2)               │  ← Hot/Warm/Cold/Deep
+│  (LRU cache, chronicle, epochs, DNA)    │
+├─────────────────────────────────────────┤
 │        Causal Storage Layer             │  ← Versioning & history
-│  (VersionedValue, causal chains)        │
+│  (CausalGraph, ReferenceGraph)          │
 ├─────────────────────────────────────────┤
 │      Distinction Engine (core)          │  ← Mathematical foundation
 │  (DistinctionEngine, synthesis)         │
@@ -92,6 +101,54 @@ Bridge between JSON data and distinction structures.
 - Same JSON → same distinction ID (content-addressed)
 - Deterministic (order-independent for objects, order-dependent for arrays)
 - Efficient via koru-lambda-core's byte caching
+
+### Layer 4: Memory Tiering (`src/memory/`)
+
+Brain-like memory hierarchy for efficient resource usage.
+
+**Components:**
+- `HotMemory` - LRU cache for frequently accessed distinctions
+- `WarmMemory` - Recent chronicle with idle detection
+- `ColdMemory` - Consolidated epochs with fitness filtering
+- `DeepMemory` - Genomic storage for 1KB portable backups
+
+**Flow:**
+```
+Hot ←→ Warm ←→ Cold ←→ Deep
+ │       │       │       │
+ │    (idle)  (epoch) (archive)
+ │       │       │       │
+promote  │       │       │
+←←←←←←←←←
+```
+
+### Layer 5: Evolutionary Processes (`src/processes/`)
+
+Automated memory management through natural selection.
+
+**Components:**
+- `ConsolidationProcess` - Rhythmic movement between memory layers
+- `DistillationProcess` - Fitness-based natural selection
+- `GenomeUpdateProcess` - DNA maintenance and disaster recovery
+
+**Analogy:** Like sleep consolidating memories—unfit distinctions are archived, essence is preserved.
+
+### Layer 6: Reconciliation (`src/reconciliation/`)
+
+Efficient distributed sync via set reconciliation.
+
+**Components:**
+- `MerkleTree` - Hash tree for O(log n) set comparison
+- `BloomFilter` - Probabilistic membership testing
+- `WorldReconciliation` - Protocol for merging causal graphs
+
+**Protocol:**
+```
+1. Exchange Merkle roots
+2. If different, drill down to find differences
+3. Send only missing distinctions
+4. Merge causal graphs (conflicts become branches)
+```
 
 ### Foundation: Distinction Engine
 
@@ -232,12 +289,28 @@ pub fn function_name() { }
 
 ```
 src/
-├── lib.rs          # Public API exports, crate docs
-├── core.rs         # KoruDelta main implementation
-├── storage.rs      # CausalStorage implementation
-├── mapper.rs       # DocumentMapper implementation
-├── types.rs        # Shared data structures
-└── error.rs        # Error types
+├── lib.rs              # Public API exports, crate docs
+├── core.rs             # KoruDelta main implementation
+├── storage.rs          # CausalStorage implementation
+├── causal_graph.rs     # Causal graph tracking
+├── reference_graph.rs  # Reference tracking for GC
+├── mapper.rs           # DocumentMapper implementation
+├── types.rs            # Shared data structures
+├── error.rs            # Error types
+├── memory/             # Memory tiering (v2)
+│   ├── hot.rs          # Hot memory (LRU cache)
+│   ├── warm.rs         # Warm memory (chronicle)
+│   ├── cold.rs         # Cold memory (epochs)
+│   └── deep.rs         # Deep memory (genomic)
+├── processes/          # Evolutionary processes (v2)
+│   ├── consolidation.rs
+│   ├── distillation.rs
+│   └── genome_update.rs
+└── reconciliation/     # Set reconciliation (v2)
+    ├── mod.rs          # ReconciliationManager
+    ├── merkle.rs       # Merkle trees
+    ├── bloom.rs        # Bloom filters
+    └── world.rs        # World reconciliation
 ```
 
 ### Testing Strategy
@@ -276,21 +349,33 @@ fn test_<feature>_<scenario>() {
 |-----------|-----------|-------|
 | `put()` | O(n) | n = bytes in value (JSON serialization + mapping) |
 | `get()` | O(1) | HashMap lookup |
-| `get_at()` | O(h) | h = history size (linear scan backward) |
-| `history()` | O(h) | h = history size (copy all versions) |
+| `get_at()` | O(h) | h = history size (causal graph traversal) |
+| `history()` | O(h) | h = history size |
 | `contains()` | O(1) | HashMap lookup |
+| **Reconciliation** |||
+| `MerkleTree::diff()` | O(log n) | n = distinctions (best case) |
+| `BloomFilter::might_contain()` | O(1) | k hash functions |
+| `WorldReconciliation::reconcile()` | O(d) | d = differences |
+| **Memory Tiering** |||
+| `HotMemory::get()` | O(1) | LRU cache |
+| `WarmMemory::get()` | O(1) | HashMap + disk |
+| `ColdMemory::consolidate()` | O(n) | n = distinctions to consolidate |
 
 ### Space Complexity
 
 - **Per key**: O(h) where h = number of versions
 - **Total**: O(k × h̄) where k = keys, h̄ = average history size
+- **Bloom filter**: O(-n·ln(p)/ln²(2)) bits for n items at FP rate p
+- **Merkle tree**: O(n) nodes for n distinctions
 
-### Optimization Opportunities
+### Sync Efficiency
 
-Future optimizations (not yet implemented):
-- **History indexing**: Binary search for time-travel queries → O(log h)
-- **Compaction**: Merge old versions to reduce history size
-- **Lazy loading**: Stream history instead of loading all versions
+| Scenario | Data Transferred | Efficiency |
+|----------|-----------------|------------|
+| Identical sets | 32 bytes (root hash) | 100% |
+| 1% difference | ~1% of data + tree overhead | 99% |
+| 50% difference | ~50% of data | 50% |
+| Bloom filter (1% FP) | ~1KB for 10K items | ~99% |
 
 ## Phase 2: Distribution (Complete)
 
