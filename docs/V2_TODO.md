@@ -225,16 +225,24 @@ Users should never think about memory. The system should just work at any scale.
 - Promotion tracking based on recent window
 - Statistics: hits, misses, promotions, demotions
 
-### Week 4a: ColdMemory (Consolidated Epochs)
-- [ ] Create `src/memory/cold.rs`
-- [ ] Implement `ColdMemory`:
-  - [ ] `epochs: Vec<Epoch>`
-  - [ ] `patterns: PatternIndex`
-- [ ] Implement `consolidate()` - compress warm into cold
-- [ ] Implement `extract_patterns()` - find common patterns
-- [ ] Implement `compress()` - write compressed epoch
-- [ ] Write tests
+### Week 4a: ColdMemory (Consolidated Epochs) ✅ COMPLETE
+- [x] Create `src/memory/cold.rs`
+- [x] Implement `ColdMemory`:
+  - [x] `epochs: DashMap<usize, Epoch>` - epoch storage
+  - [x] `current_epoch: AtomicU64` - epoch counter
+  - [x] Configurable epoch count (default: 7)
+- [x] Implement `consolidate()` - natural selection from Warm
+- [x] Implement `rotate_epoch()` - rotate to new epoch
+- [x] Implement fitness-based filtering
+- [x] Write tests (7 tests, all passing)
 - **User Benefit:** Database stays small, old data compressed
+
+**ColdMemory Features:**
+- 7 epochs by default (configurable)
+- Daily epoch rotation
+- Fitness threshold: 2+ references (keep), below (archive)
+- Automatic compression when epoch too large
+- Pattern extraction for Deep memory
 
 ### Week 4b: DeepMemory (Genomic Storage)
 - [ ] Create `src/memory/deep.rs`

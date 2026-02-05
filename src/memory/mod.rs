@@ -31,6 +31,8 @@
 
 pub mod hot;
 pub mod warm;
+pub mod cold;
 
 pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
 pub use warm::{WarmConfig, WarmMemory, WarmStats};
+pub use cold::{ColdConfig, ColdMemory, ColdStats, ConsolidationResult, Pattern};
