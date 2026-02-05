@@ -36,13 +36,13 @@
 
 ### What Users Will Feel
 
-**Before (v1.0):**
+**Before (Current):**
 - "My database file is 10GB and growing"
 - "Sync is slow, sends everything"
 - "Why is auth so complicated?"
 - "I ran out of memory"
 
-**After (v2.0):**
+**After (Evolved):**
 - "It just... stays small?" (distillation)
 - "Sync is instant" (set reconciliation)
 - "Auth just works" (capability graph)
@@ -350,7 +350,7 @@ Auth should be simple. No JWT, no sessions table, no complexity.
 - [ ] Document auth system
 - [ ] Write migration guide
 - [ ] Update CLI guide
-- [ ] Create "Why v2.0" explainer
+- [ ] Create "Why Evolve" explainer
 
 ---
 
@@ -364,7 +364,7 @@ Auth should be simple. No JWT, no sessions table, no complexity.
 
 ### Success Metrics
 
-By v2.0 completion:
+By completion:
 - [ ] Database size stays bounded under load
 - [ ] Sync is 10x faster (set reconciliation)
 - [ ] Auth setup is 1 command

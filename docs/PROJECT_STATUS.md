@@ -57,10 +57,10 @@ BUT: "Traversal navigates distinction space"
 
 ## Executive Summary
 
-### Current State (v1.0)
+### Current State (Pre-Evolution)
 KoruDelta is a **causal, versioned database** at ~92% feature complete for production. The core engine works, is well-tested (196 tests), and ready for edge/IoT deployments.
 
-### Future State (v2.0-Vision)
+### Future State (Post-Evolution)
 KoruDelta becomes a **distinction calculus system**—a living organism that:
 - Breathes (rhythm of synthesis/consolidation)
 - Remembers (layered memory like a brain)
@@ -70,7 +70,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 
 ---
 
-## ✅ Phase 1: Current Reality (v1.0 - Complete)
+## ✅ Phase 1: Current Reality (Complete)
 
 ### Core Database Engine (100%)
 
@@ -118,7 +118,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 
 ## 🧬 Phase 2: Distinction-Driven Transformation
 
-### The Genome Layer (v2.0 Core)
+### The Genome Layer (Evolution Core)
 
 | Feature | Status | Effort | Notes |
 |---------|--------|--------|-------|
@@ -187,7 +187,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 
 ## 📊 Feature Completeness Matrix
 
-### v1.0 (Current)
+### Current (Pre-Evolution)
 | Capability | Status |
 |------------|--------|
 | Core database | 100% ✅ |
@@ -199,7 +199,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 | HTTP API | 100% ✅ |
 | **Overall** | **~98%** |
 
-### v2.0-Distinction (Target)
+### Distinction-Capture (Target)
 | Capability | Status |
 |------------|--------|
 | Distinction calculus core | 0% 📝 |
@@ -210,7 +210,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 | World reconciliation | 0% 📝 |
 | **Overall** | **0%** (new paradigm) |
 
-### v2.0-Production (Target)
+### Production-Ready (Target)
 | Capability | Status |
 |------------|--------|
 | Security | 0% 📝 |
@@ -222,7 +222,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 
 ## 🎯 Success Criteria
 
-### v1.0 (Complete ✅)
+### Foundation (Complete ✅)
 - [x] All 196 tests pass
 - [x] Core database features work
 - [x] Clustering works locally
@@ -230,7 +230,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 - [x] Remote CLI works
 - [x] WASM builds
 
-### v2.0-Distinction (Target)
+### Distinction Capture (Target)
 - [ ] Distinction engine drives all operations
 - [ ] Causal graph queryable
 - [ ] Genome extraction works
@@ -238,7 +238,7 @@ KoruDelta becomes a **distinction calculus system**—a living organism that:
 - [ ] Evolutionary compaction operational
 - [ ] World reconciliation via distinction exchange
 
-### v2.0-Production (Target)
+### Production Ready (Target)
 - [ ] Auth for HTTP and cluster
 - [ ] Metrics and observability
 - [ ] Backup/restore tools

@@ -212,7 +212,7 @@ let old = db.get_at("users", "alice", yesterday).await?;  // Time travel
 
 ## The Comparison
 
-| Feature | Traditional DB | KoruDelta v1.0 | KoruDelta v2.0 |
+| Feature | Traditional DB | KoruDelta (Current) | KoruDelta (Evolved) |
 |---------|---------------|----------------|----------------|
 | **Setup** | Complex | Simple | Zero config |
 | **Time Travel** | No | Yes | Yes + causal trace |
@@ -227,7 +227,7 @@ let old = db.get_at("users", "alice", yesterday).await?;  // Time travel
 
 ## The Bottom Line
 
-**v2.0 is worth it because:**
+**The evolution is worth it because:**
 
 1. **Users never think about:**
    - Compaction
@@ -251,16 +251,16 @@ let old = db.get_at("users", "alice", yesterday).await?;  // Time travel
 
 ## FAQ
 
-### Q: Why not just add these features to v1.0?
-**A:** v1.0's architecture can't support intelligent compaction, optimal sync, or unified auth. The distinction calculus provides the foundation.
+### Q: Why evolve rather than patch?
+**A:** The current architecture can't support intelligent compaction, optimal sync, or unified auth without the causal and reference tracking. The distinction calculus provides the foundation.
 
-### Q: Is v2.0 backward compatible?
-**A:** Yes. v1.0 WAL files can be imported. The API remains the same.
+### Q: Is this backward compatible?
+**A:** Yes. Existing WAL files can be imported. The API remains the same.
 
-### Q: How long until v2.0 is ready?
+### Q: How long until completion?
 **A:** ~8 weeks. The foundation (causal graph, reference graph) is already done and tested.
 
-### Q: Will v2.0 be slower?
+### Q: Will this be slower?
 **A:** No. Hot memory ensures recent data is fast. Benchmarks show comparable or better performance.
 
 ### Q: Is this just academic?
