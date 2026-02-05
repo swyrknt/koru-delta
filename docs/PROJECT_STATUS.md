@@ -1,39 +1,76 @@
 # KoruDelta Project Status
 
-> **Last Updated:** 2026-02-05 (WAL Persistence Complete)
-> **Version:** 1.0.0
+> **Last Updated:** 2026-02-05 (Paradigm Shift: Distinction-Driven Architecture)
+> **Version:** 2.0.0-Vision
 > **Lines of Code:** ~6,350 Rust
+> **Architecture:** Distinction Calculus Core
+
+---
+
+## 🧬 The New Vision
+
+KoruDelta is transitioning from a **database that stores objects** to a **living system that recognizes distinctions and their relationships**. This is not just refactoring—it's a paradigm shift toward the true expression of koru-lambda-core.
+
+### Core Philosophy
+
+```
+NOT: "A database stores JSON documents"
+BUT: "A system tracks distinctions and their causal becoming"
+
+NOT: "Compaction deletes old data"
+BUT: "Distillation preserves essence, archives the rest"
+
+NOT: "Sync sends data between nodes"
+BUT: "Worlds reconcile through distinction exchange"
+
+NOT: "Query filters objects"
+BUT: "Traversal navigates distinction space"
+```
+
+### The 5 Axioms as System Rhythm
+
+1. **Existence** - Every synthesis creates a distinction
+2. **Non-contradiction** - This is not that (identity)
+3. **Causality** - Distinctions flow from prior distinctions
+4. **Composition** - Distinctions combine into new distinctions
+5. **Reference** - Distinctions point to other distinctions
 
 ---
 
 ## 🔄 Latest Updates
 
-### 2026-02-05: Final Stretch COMPLETE ✅
-- ✅ **WASM build fixed** - Conditionally compiled subscriptions, added getrandom/js and uuid/js features
-- ✅ **HTTP API** - Complete RESTful API with all major endpoints
-- ✅ **HTTP Server CLI** - `kdelta serve --port 8080` starts HTTP API server
-- ✅ **Remote CLI client** - `kdelta --url http://localhost:8080 get users/alice`
-- ✅ **Time travel CLI** - `kdelta get users/alice --at "2026-02-04T12:00:00Z"`
+### 2026-02-05: Paradigm Shift Initiated 🧬
+- ✅ **WAL Persistence** - Content-addressed, O(1) writes
+- 🧬 **Distinction-Driven Architecture** - New core philosophy
+- 🧬 **Genome Concept** - Minimal information for self-recreation
+- 🧬 **Layered Memory** - Hot/Warm/Cold/Deep like human brain
+- 📝 **Evolutionary Compaction** - Natural selection of distinctions
 
-**Status: All Phase A features complete! Ready for v1.0 release candidate.**
+### 2026-02-05: Final Stretch COMPLETE ✅
+- ✅ **WASM build fixed** - Conditionally compiled subscriptions
+- ✅ **HTTP API** - Complete RESTful API with Axum
+- ✅ **HTTP Server CLI** - `kdelta serve --port 8080`
+- ✅ **Remote CLI client** - `kdelta --url http://...`
+- ✅ **Time travel CLI** - `kdelta get --at <timestamp>`
 
 ---
 
 ## Executive Summary
 
-KoruDelta is a **causal, versioned database** with Git-like history and zero-configuration clustering. It's currently at **~92% feature complete** for a production-ready v1.0 release. The core engine is solid, well-tested, and ready for real use.
+### Current State (v1.0)
+KoruDelta is a **causal, versioned database** at ~92% feature complete for production. The core engine works, is well-tested (196 tests), and ready for edge/IoT deployments.
 
-**Current State:** 
-- ✅ Ready for demos, edge deployments, and local development
-- ✅ WASM builds work
-- ✅ HTTP API enables remote access
-- ✅ Remote CLI client works (`--url` flag)
-- ✅ Time travel in CLI (`--at` flag)
-- ⚠️ Not yet ready for cloud-native multi-tenant deployments (needs auth, metrics)
+### Future State (v2.0-Vision)
+KoruDelta becomes a **distinction calculus system**—a living organism that:
+- Breathes (rhythm of synthesis/consolidation)
+- Remembers (layered memory like a brain)
+- Evolves (compaction as natural selection)
+- Reproduces (genome-based replication)
+- Reconciles (worlds sync via distinction exchange)
 
 ---
 
-## ✅ What's Complete (The Good News)
+## ✅ Phase 1: Current Reality (v1.0 - Complete)
 
 ### Core Database Engine (100%)
 
@@ -45,6 +82,7 @@ KoruDelta is a **causal, versioned database** with Git-like history and zero-con
 | Content-addressed IDs | ✅ Complete | SHA256-based deduplication |
 | Concurrency | ✅ Complete | Lock-free via DashMap |
 | JSON data model | ✅ Complete | Universal format, no schema |
+| WAL Persistence | ✅ Complete | O(1) append-only writes |
 
 ### Distribution & Clustering (95%)
 
@@ -74,344 +112,187 @@ KoruDelta is a **causal, versioned database** with Git-like history and zero-con
 | Materialized views | ✅ Complete | With auto-refresh |
 | Subscriptions | ✅ Complete | Real-time change notifications |
 | Persistence | ✅ Complete | WAL with content-addressed storage |
-| WASM bindings | ✅ Code complete | Needs build fix |
-
-### CLI Tool (100% for v1.0)
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Local operations | ✅ Complete | set, get, log, diff, query, list |
-| Server mode | ✅ Complete | start, peers, status |
-| Views management | ✅ Complete | create, list, refresh, query, delete |
-| Watch/subscribe | ✅ Complete | Real-time change stream |
-| Remote client | ✅ Complete | `kdelta --url http://... get users/alice` |
-| Time travel CLI | ✅ Complete | `kdelta get users/alice --at "2026-02-04T12:00:00Z"` |
-
-### Testing (Strong)
-
-| Test Suite | Count | Status |
-|------------|-------|--------|
-| Unit tests | 92 | ✅ All passing |
-| Falsification tests | 45 | ✅ Stresses edge cases |
-| Cluster tests | 15 | ✅ Multi-node scenarios |
-| Integration tests | 19 | ✅ End-to-end workflows |
-| Phase 3 tests | 24 | ✅ Queries, views, subs |
-| **Total** | **195** | **✅ 100% passing** |
-
-### Documentation (Good)
-
-| Document | Status |
-|----------|--------|
-| README.md | ✅ Complete with examples |
-| ARCHITECTURE.md | ✅ Detailed technical docs |
-| DESIGN.md | ✅ Philosophy and decisions |
-| CLI_GUIDE.md | ✅ Command reference |
-| CONTRIBUTING.md | ✅ Developer guide |
+| WASM bindings | ✅ Complete | Works in browsers/Node.js |
 
 ---
 
-## ❌ What's Missing (The Gap)
+## 🧬 Phase 2: Distinction-Driven Transformation
 
-### Critical (Blocks Production)
+### The Genome Layer (v2.0 Core)
 
-| Feature | Why It Matters | Effort | Status |
-|---------|----------------|--------|--------|
-| **HTTP API / REST interface** | Web apps can't use TCP protocol directly | Medium | ✅ Done |
-| **Remote CLI client** | Can't administer remote nodes | Low-Medium | ✅ Done |
-| **WAL persistence** | ✅ O(1) append-only writes, content-addressed storage | Medium | ✅ Done |
-| **WAL compaction** | TODO: Clean up old WAL segments, keep storage bounded | Medium | 📝 TODO |
-| **Authentication/authorization** | No security model for multi-tenant | High | ⏭️ Phase B |
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **Causal Graph Engine** | 📝 Planned | 3 days | Extend distinction engine with causal tracking |
+| **Reference Graph** | 📝 Planned | 2 days | Track what points to what (for GC) |
+| **Genome Extraction** | 📝 Planned | 3 days | Minimal info for self-recreation |
+| **Genome Expression** | 📝 Planned | 2 days | Recreate system from genome |
 
-### Important (Quality of Life)
+### Layered Memory System
 
-| Feature | Why It Matters | Effort | Status |
-|---------|----------------|--------|--------|
-| **WASM build fix** | `getrandom` compilation error | Low | ✅ Done |
-| **Time travel in CLI** | `kdelta get --at <timestamp>` | Low | ✅ Done |
-| **Streaming queries** | Large result sets load all into memory | Medium | ⏭️ Phase B |
-| **Metrics/monitoring** | No Prometheus/OpenTelemetry integration | Medium | ⏭️ Phase B |
-| **Backup/restore** | Manual file copy only | Low | ⏭️ Phase B |
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **Hot Memory (Working)** | 📝 Planned | 2 days | LRU cache of recent distinctions |
+| **Warm Memory (Recent)** | 📝 Planned | 1 day | Full chronicle, last N distinctions |
+| **Cold Memory (Consolidated)** | 📝 Planned | 3 days | Compressed essence, patterns |
+| **Deep Memory (Genomic)** | 📝 Planned | 2 days | Archive, minimal genome storage |
 
-### Nice-to-Have (Future)
+### Evolutionary Processes
 
-| Feature | Why It Matters | Effort |
-|---------|----------------|--------|
-| **Pluggable storage backends** | RocksDB, SQLite, S3 | High |
-| **Schema validation (optional)** | Type safety for data | Medium |
-| **Conflict resolution strategies** | Custom merge functions | High |
-| **Web dashboard** | Visual admin interface | High |
-| **Kubernetes operator** | Cloud-native deployment | High |
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **Distillation (Compaction)** | 📝 Planned | 4 days | Natural selection of distinctions |
+| **Consolidation Rhythm** | 📝 Planned | 2 days | Like sleep - move warm → cold |
+| **Fitness Functions** | 📝 Planned | 2 days | What makes a distinction "fit"? |
+| **Essence Extraction** | 📝 Planned | 3 days | Compress history to patterns |
+
+### World Reconciliation
+
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **Merkle Distinction Trees** | 📝 Planned | 3 days | Set reconciliation via hashes |
+| **Causal Graph Merge** | 📝 Planned | 4 days | Merge two worlds' histories |
+| **Distinction Exchange Protocol** | 📝 Planned | 3 days | Efficient sync via want/have |
+| **Conflict as Branching** | 📝 Planned | 2 days | Conflicts become causal branches |
 
 ---
 
-## 🎯 Path to 100% Feature Complete
+## 🛡️ Phase 3: Production Hardening
 
-### Phase A: Developer Experience ✅ COMPLETE
+### Security & Auth
 
-**Goal:** Make it delightful for developers to use locally and in small deployments.
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **HTTP API Key Auth** | 📝 Planned | 2 days | Middleware for API keys |
+| **mTLS for Cluster** | 📝 Planned | 1 week | TLS for TCP protocol |
+| **RBAC** | 📝 Planned | 3 days | Read/write/admin roles |
 
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 1 | **Fix WASM build** | ✅ Done | `getrandom/js` and `uuid/js` features added, subscriptions conditionally compiled |
-| 2 | **Add HTTP API** | ✅ Done | Full REST API in `src/http.rs` with Axum |
-| 3 | **Add remote CLI client** | ✅ Done | `kdelta --url http://...` works for all major commands |
-| 4 | **Time travel in CLI** | ✅ Done | `kdelta get --at "2026-02-01T12:00:00Z"` |
-| 5 | **WAL persistence** | ✅ Done | O(1) append-only with content-addressed values |
+### Observability
 
-**Completed endpoints:**
-```bash
-# Key-value operations
-GET    /api/v1/:namespace/:key              # Get value
-PUT    /api/v1/:namespace/:key              # Store value
-GET    /api/v1/:namespace/:key/history      # Get history
-GET    /api/v1/:namespace/:key/at/:timestamp  # Time travel
-POST   /api/v1/:namespace/query             # Execute queries
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **Distinction Metrics** | 📝 Planned | 2 days | Emergence rate, causal depth |
+| **Prometheus Endpoint** | 📝 Planned | 2 days | `/metrics` for scraping |
+| **Tracing** | 📝 Planned | 2 days | OpenTelemetry integration |
+| **Causal Graph Viz** | 📝 Planned | 3 days | Visualize distinction flows |
 
-# Views
-GET    /api/v1/views                        # List views
-POST   /api/v1/views                        # Create view
-GET    /api/v1/views/:name                  # Query view
-POST   /api/v1/views/:name/refresh          # Refresh view
-DELETE /api/v1/views/:name                  # Delete view
+### Operations
 
-# Status
-GET    /api/v1/status                       # Database status
-GET    /api/v1/namespaces                   # List namespaces
-GET    /api/v1/:namespace/keys              # List keys
-```
-
-**Remote CLI examples:**
-```bash
-kdelta --url http://localhost:8080 get users/alice
-kdelta --url http://localhost:8080 set users/bob '{"name": "Bob"}'
-kdelta --url http://localhost:8080 get users/alice --at "2026-02-04T12:00:00Z"
-```
-
-### Phase B: Production Hardening (2-3 weeks)
-
-**Goal:** Ready for production workloads.
-
-1. **WAL compaction** (2 days)
-   - Clean up old WAL segments to prevent unbounded growth
-   - Keep recent history, archive or discard old versions
-   - Maintain content-addressed value store (immutable)
-   ```rust
-   // Compact WAL segments
-   db.compact_wal().await?;
-   
-   // Configure retention
-   db.configure_retention("logs", RetentionPolicy::KeepLast(1000));
-   ```
-
-2. **Retention policies** (3 days)
-   - Apply per-namespace retention rules
-   - Automatic background compaction
-   ```rust
-   db.configure_retention("logs", RetentionPolicy::KeepLast(1000));
-   db.configure_retention("events", RetentionPolicy::KeepFor(Duration::days(30)));
-   ```
-
-3. **Authentication** (1 week)
-   - API keys for HTTP API
-   - mTLS for cluster communication
-   - Basic RBAC (read/write/admin roles)
-
-4. **Metrics and observability** (3 days)
-   - Prometheus metrics endpoint
-   - OpenTelemetry tracing
-   - Structured logging (JSON)
-
-5. **Backup/restore commands** (2 days)
-   ```bash
-   kdelta backup --output backup.tar.gz
-   kdelta restore --input backup.tar.gz
-   ```
-
-6. **Performance benchmarks** (ongoing)
-   - Establish baseline metrics
-   - Document performance characteristics
-   - Load testing scripts
-
-### Phase C: Cloud-Native (4-6 weeks)
-
-**Goal:** Ready for enterprise/cloud deployment.
-
-1. **Pluggable storage backends** (2 weeks)
-   - Trait-based storage interface
-   - RocksDB backend (disk-based)
-   - S3 backend (for cold storage)
-
-2. **Advanced clustering** (2 weeks)
-   - Partition tolerance testing
-   - Automatic rebalancing
-   - Cross-region replication
-
-3. **Kubernetes operator** (2 weeks)
-   - CRDs for KoruDelta clusters
-   - Helm chart
-   - Operator lifecycle management
-
-4. **Web dashboard** (optional, 2 weeks)
-   - React-based UI
-   - Query explorer
-   - Cluster visualization
-   - Real-time metrics
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **Backup/Restore** | 📝 Planned | 2 days | `kdelta backup --output file` |
+| **Metrics CLI** | 📝 Planned | 1 day | `kdelta metrics` command |
+| **Health Checks** | 📝 Planned | 1 day | Deep health endpoint |
 
 ---
 
 ## 📊 Feature Completeness Matrix
 
-| Capability | Current | Target v1.0 | Target v2.0 |
-|------------|---------|-------------|-------------|
-| Core database | 100% | 100% | 100% |
-| Single-node deployment | 100% | 100% | 100% |
-| Multi-node clustering | 95% | 100% | 100% |
-| Query engine | 100% | 100% | 100% |
-| Views & subscriptions | 100% | 100% | 100% |
-| CLI tool | 100% | 100% | 100% |
-| HTTP API | 100% | 100% | 100% |
-| Security | 0% | 50% | 100% |
-| Observability | 10% | 50% | 100% |
-| Cloud-native | 0% | 20% | 100% |
-| **Overall** | **~92%** | **~95%** | **100%** |
+### v1.0 (Current)
+| Capability | Status |
+|------------|--------|
+| Core database | 100% ✅ |
+| Single-node deployment | 100% ✅ |
+| Multi-node clustering | 95% ✅ |
+| Query engine | 100% ✅ |
+| Views & subscriptions | 100% ✅ |
+| CLI tool | 100% ✅ |
+| HTTP API | 100% ✅ |
+| **Overall** | **~98%** |
+
+### v2.0-Distinction (Target)
+| Capability | Status |
+|------------|--------|
+| Distinction calculus core | 0% 📝 |
+| Causal graph engine | 0% 📝 |
+| Genome extraction/expression | 0% 📝 |
+| Layered memory | 0% 📝 |
+| Evolutionary compaction | 0% 📝 |
+| World reconciliation | 0% 📝 |
+| **Overall** | **0%** (new paradigm) |
+
+### v2.0-Production (Target)
+| Capability | Status |
+|------------|--------|
+| Security | 0% 📝 |
+| Observability | 0% 📝 |
+| Operations | 0% 📝 |
+| **Overall** | **0%** |
 
 ---
 
-## 🚀 Recommended Deployment Strategy
+## 🎯 Success Criteria
 
-### Current Sweet Spots (Deploy Today)
+### v1.0 (Complete ✅)
+- [x] All 196 tests pass
+- [x] Core database features work
+- [x] Clustering works locally
+- [x] HTTP API complete
+- [x] Remote CLI works
+- [x] WASM builds
 
-1. **Edge Computing / IoT**
-   - Raspberry Pi, embedded Linux
-   - 4.7MB binary, runs in 10MB RAM
-   - Perfect for sensor data with history
+### v2.0-Distinction (Target)
+- [ ] Distinction engine drives all operations
+- [ ] Causal graph queryable
+- [ ] Genome extraction works
+- [ ] Layered memory functional
+- [ ] Evolutionary compaction operational
+- [ ] World reconciliation via distinction exchange
 
-2. **Local Development**
-   - Zero-config database for dev environments
-   - Replace SQLite for apps needing history
-
-3. **Docker Sidecar Pattern**
-   - Microservice local cache
-   - Shared-nothing architecture
-
-4. **Offline-First Applications**
-   - Desktop apps with local-first data
-   - Sync when connection available
-
-### Future Sweet Spots (After Phase B)
-
-1. **Small Production Services**
-   - Internal tools
-   - Low-traffic web services
-   - Configuration management
-
-2. **Multi-Region Edge**
-   - CDN-like data distribution
-   - Conflict-free replicated data type (CRDT) alternative
-
-3. **Event Sourcing Backend**
-   - Immutable event log
-   - Time-travel debugging
+### v2.0-Production (Target)
+- [ ] Auth for HTTP and cluster
+- [ ] Metrics and observability
+- [ ] Backup/restore tools
+- [ ] Performance benchmarks documented
+- [ ] Production deployment guide
 
 ---
 
-## 🎬 Demo Readiness
+## 🗺️ Implementation Roadmap
 
-### What You Can Demo Today
+### Week 1-2: Foundation
+1. Extend distinction engine with causal graph
+2. Implement reference tracking
+3. Create synthesis rhythm (emergence tracking)
 
-✅ **"Git for Databases"**
-```bash
-kdelta set users/alice '{"name": "Alice"}'
-kdelta set users/alice '{"name": "Alice Smith"}'  # Update
-kdelta log users/alice   # Full history
-kdelta diff users/alice  # What changed
-```
+### Week 3-4: Memory Layers
+1. Hot memory (LRU cache)
+2. Warm memory (recent chronicle)
+3. Cold memory (consolidated store)
+4. Deep memory (genomic archive)
 
-✅ **Zero-Config Clustering**
-```bash
-# Terminal 1
-kdelta start --port 7878
+### Week 5-6: Evolution
+1. Distillation process (compaction)
+2. Fitness functions
+3. Essence extraction
+4. Consolidation rhythm
 
-# Terminal 2
-kdelta start --port 7879 --join localhost:7878
-kdelta peers  # See both nodes
-```
+### Week 7-8: Reconciliation
+1. Merkle distinction trees
+2. Set reconciliation protocol
+3. Causal graph merge
+4. World reconciliation
 
-✅ **Query Engine**
-```bash
-kdelta query users --filter 'age > 30' --sort name
-kdelta view create adults users --filter 'age > 18'
-kdelta view query adults
-```
-
-✅ **HTTP API & Remote CLI**
-```bash
-# Terminal 1 - Start HTTP server
-kdelta serve --port 8080
-
-# Terminal 2 - Use remote CLI
-kdelta --url http://localhost:8080 set users/alice '{"name": "Alice"}'
-kdelta --url http://localhost:8080 get users/alice
-kdelta --url http://localhost:8080 get users/alice --at "2026-02-05T12:00:00Z"
-```
-
-### What You Should NOT Demo Yet
-
-❌ Browser demo (WASM works but no full demo page)
-❌ Cloud deployment (no K8s support)
-❌ Multi-user scenarios (no auth)
-
----
-
-## 🏆 Success Criteria for v1.0
-
-KoruDelta will be "feature complete" when:
-
-1. ✅ All 195 tests pass (done)
-2. ✅ Core database features work (done)
-3. ✅ Clustering works locally (done)
-4. 🔄 HTTP API exists (Phase A)
-5. 🔄 Remote CLI works (Phase A)
-6. ✅ WAL persistence (done)
-7. 🔄 Basic auth for HTTP (Phase B)
-8. 🔄 Metrics endpoint (Phase B)
-9. 🔄 Documentation complete (Phase B)
-
----
-
-## 📝 Next Steps (Prioritized)
-
-### This Week
-1. Fix WASM build (`getrandom/js` feature)
-2. Add HTTP API module (basic REST endpoints)
-3. Add `--url` flag to CLI for remote operations
-
-### This Month
-1. ~~Implement streaming persistence (append-only log)~~ ✅ Done - WAL implemented
-2. Add retention policies
-3. Add Prometheus metrics
-4. Create deployment guide
-
-### Next Quarter
-1. Kubernetes operator
-2. Pluggable storage backends
-3. Web dashboard
-4. Cloud-managed service consideration
+### Week 9-10: Hardening
+1. HTTP auth
+2. Cluster mTLS
+3. Prometheus metrics
+4. Backup/restore
 
 ---
 
 ## 💭 Philosophy Check
 
-Remember the vision: **"Invisible. Causal. Everywhere."**
+**The Vision:** *"Invisible. Causal. Everywhere. Living."*
 
 Current assessment:
 - ✅ **Invisible:** Yes, zero-config works
-- ✅ **Causal:** Yes, distinction calculus foundation is solid
-- ⚠️ **Everywhere:** Partial, WASM broken, no cloud story yet
+- ✅ **Causal:** Yes, distinction calculus foundation
+- ⚠️ **Everywhere:** Partial, needs cloud story
+- 🧬 **Living:** Beginning—distinction-driven transformation
 
-The foundation is strong. The polish is missing. Focus on HTTP API and WASM fix to unlock the "everywhere" promise.
+The foundation is strong. The evolution begins.
 
 ---
 
 *Document maintained by: Sawyer Kent*  
-*Questions? See ARCHITECTURE.md for technical details or CLI_GUIDE.md for usage.*
+*See [DESIGN_v2.md](DESIGN_v2.md) for complete architecture design*
