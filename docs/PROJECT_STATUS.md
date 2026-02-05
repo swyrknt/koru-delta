@@ -1,6 +1,6 @@
 # KoruDelta Project Status
 
-> **Last Updated:** 2026-02-05 (Complete & Tested)
+> **Last Updated:** 2026-02-05 (WAL Persistence Complete)
 > **Version:** 1.0.0
 > **Lines of Code:** ~6,350 Rust
 
@@ -73,7 +73,7 @@ KoruDelta is a **causal, versioned database** with Git-like history and zero-con
 |---------|--------|-------|
 | Materialized views | ✅ Complete | With auto-refresh |
 | Subscriptions | ✅ Complete | Real-time change notifications |
-| Persistence | ✅ Complete | Save/load entire DB state |
+| Persistence | ✅ Complete | WAL with content-addressed storage |
 | WASM bindings | ✅ Code complete | Needs build fix |
 
 ### CLI Tool (100% for v1.0)
@@ -118,8 +118,8 @@ KoruDelta is a **causal, versioned database** with Git-like history and zero-con
 |---------|----------------|--------|--------|
 | **HTTP API / REST interface** | Web apps can't use TCP protocol directly | Medium | ✅ Done |
 | **Remote CLI client** | Can't administer remote nodes | Low-Medium | ✅ Done |
-| **Incremental persistence** | Currently rewrites entire DB on every write | Medium | ⏭️ Phase B |
-| **Compaction/retention** | History grows unbounded | Medium | ⏭️ Phase B |
+| **WAL persistence** | ✅ O(1) append-only writes, content-addressed storage | Medium | ✅ Done |
+| **WAL compaction** | TODO: Clean up old WAL segments, keep storage bounded | Medium | 📝 TODO |
 | **Authentication/authorization** | No security model for multi-tenant | High | ⏭️ Phase B |
 
 ### Important (Quality of Life)
@@ -156,7 +156,7 @@ KoruDelta is a **causal, versioned database** with Git-like history and zero-con
 | 2 | **Add HTTP API** | ✅ Done | Full REST API in `src/http.rs` with Axum |
 | 3 | **Add remote CLI client** | ✅ Done | `kdelta --url http://...` works for all major commands |
 | 4 | **Time travel in CLI** | ✅ Done | `kdelta get --at "2026-02-01T12:00:00Z"` |
-| 5 | **Streaming persistence** | ⏭️ Phase B | Moved to production hardening |
+| 5 | **WAL persistence** | ✅ Done | O(1) append-only with content-addressed values |
 
 **Completed endpoints:**
 ```bash
@@ -191,30 +191,43 @@ kdelta --url http://localhost:8080 get users/alice --at "2026-02-04T12:00:00Z"
 
 **Goal:** Ready for production workloads.
 
-1. **Retention policies** (3 days)
+1. **WAL compaction** (2 days)
+   - Clean up old WAL segments to prevent unbounded growth
+   - Keep recent history, archive or discard old versions
+   - Maintain content-addressed value store (immutable)
    ```rust
-   // Configurable per-namespace
+   // Compact WAL segments
+   db.compact_wal().await?;
+   
+   // Configure retention
+   db.configure_retention("logs", RetentionPolicy::KeepLast(1000));
+   ```
+
+2. **Retention policies** (3 days)
+   - Apply per-namespace retention rules
+   - Automatic background compaction
+   ```rust
    db.configure_retention("logs", RetentionPolicy::KeepLast(1000));
    db.configure_retention("events", RetentionPolicy::KeepFor(Duration::days(30)));
    ```
 
-2. **Authentication** (1 week)
+3. **Authentication** (1 week)
    - API keys for HTTP API
    - mTLS for cluster communication
    - Basic RBAC (read/write/admin roles)
 
-3. **Metrics and observability** (3 days)
+4. **Metrics and observability** (3 days)
    - Prometheus metrics endpoint
    - OpenTelemetry tracing
    - Structured logging (JSON)
 
-4. **Backup/restore commands** (2 days)
+5. **Backup/restore commands** (2 days)
    ```bash
    kdelta backup --output backup.tar.gz
    kdelta restore --input backup.tar.gz
    ```
 
-5. **Performance benchmarks** (ongoing)
+6. **Performance benchmarks** (ongoing)
    - Establish baseline metrics
    - Document performance characteristics
    - Load testing scripts
@@ -359,7 +372,7 @@ KoruDelta will be "feature complete" when:
 3. ✅ Clustering works locally (done)
 4. 🔄 HTTP API exists (Phase A)
 5. 🔄 Remote CLI works (Phase A)
-6. 🔄 Streaming persistence (Phase A)
+6. ✅ WAL persistence (done)
 7. 🔄 Basic auth for HTTP (Phase B)
 8. 🔄 Metrics endpoint (Phase B)
 9. 🔄 Documentation complete (Phase B)
@@ -374,7 +387,7 @@ KoruDelta will be "feature complete" when:
 3. Add `--url` flag to CLI for remote operations
 
 ### This Month
-1. Implement streaming persistence (append-only log)
+1. ~~Implement streaming persistence (append-only log)~~ ✅ Done - WAL implemented
 2. Add retention policies
 3. Add Prometheus metrics
 4. Create deployment guide
