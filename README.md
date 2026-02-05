@@ -74,7 +74,7 @@ Access KoruDelta over HTTP for remote operations and web integration:
 
 ```bash
 # Start HTTP server
-kdelta start --port 8080
+kdelta serve --port 8080
 
 # From anywhere, use remote CLI
 kdelta --url http://localhost:8080 get users/alice
@@ -180,10 +180,13 @@ kdelta --url http://localhost:8080 set users/bob '{"name": "Bob"}'
 kdelta --url http://localhost:8080 query users --filter 'age > 30'
 
 # Cluster Operations
-kdelta start                        # Start a node
-kdelta start --port 8080            # Start with HTTP API
+kdelta start                        # Start a cluster node
 kdelta start --join 192.168.1.100   # Join existing cluster
 kdelta peers                        # Show cluster peers
+
+# HTTP API Server
+kdelta serve                        # Start HTTP server on port 8080
+kdelta serve --port 3000            # Start on custom port
 kdelta status                       # Show database stats
 
 # Query Operations

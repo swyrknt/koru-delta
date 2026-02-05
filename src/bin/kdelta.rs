@@ -332,6 +332,26 @@ enum Commands {
         bind: String,
     },
 
+    /// Start an HTTP API server
+    ///
+    /// This starts an HTTP server that exposes the KoruDelta API over REST.
+    /// Unlike 'start' which starts a cluster node, this provides an HTTP interface
+    /// for remote clients to interact with the database.
+    ///
+    /// Examples:
+    ///   kdelta serve                        # Start HTTP server on default port 8080
+    ///   kdelta serve --port 3000            # Start on port 3000
+    ///   kdelta serve --bind 127.0.0.1       # Bind to localhost only
+    Serve {
+        /// Port to listen on (default: 8080)
+        #[arg(short, long, default_value_t = 8080)]
+        port: u16,
+
+        /// Bind to a specific address (default: 0.0.0.0)
+        #[arg(short, long, default_value = "0.0.0.0")]
+        bind: String,
+    },
+
     /// Show cluster peers
     ///
     /// Lists all known peer nodes in the cluster.
@@ -886,7 +906,13 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
         }
 
         Commands::Start { .. } => {
-            println!("{}", "Cannot start server with --url flag".red());
+            println!("{}", "Cannot start cluster node with --url flag".red());
+            println!("  Remove --url to start a local server.");
+            std::process::exit(1);
+        }
+
+        Commands::Serve { .. } => {
+            println!("{}", "Cannot start HTTP server with --url flag".red());
             println!("  Remove --url to start a local server.");
             std::process::exit(1);
         }
@@ -915,9 +941,14 @@ async fn main() -> Result<()> {
     // Determine database path
     let db_path = cli.db_path.unwrap_or_else(default_db_path);
 
-    // Handle start command specially (server mode)
+    // Handle start command specially (cluster node mode)
     if let Commands::Start { port, join, bind } = &cli.command {
         return run_server(&db_path, bind, *port, join.as_deref()).await;
+    }
+
+    // Handle serve command specially (HTTP API mode)
+    if let Commands::Serve { port, bind } = &cli.command {
+        return run_http_server(&db_path, bind, *port).await;
     }
 
     // Load database for other commands
@@ -1521,8 +1552,9 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        // Start is handled above
+        // Start and Serve are handled above
         Commands::Start { .. } => unreachable!(),
+        Commands::Serve { .. } => unreachable!(),
     };
 
     result
@@ -1631,5 +1663,61 @@ async fn run_server(
 
     println!("{}", "Node stopped.".green());
 
+    Ok(())
+}
+
+/// Run the HTTP API server
+async fn run_http_server(
+    db_path: &std::path::Path,
+    bind: &str,
+    port: u16,
+) -> Result<()> {
+    use koru_delta::http::HttpServer;
+
+    // Parse bind address
+    let bind_addr = format!("{}:{}", bind, port);
+
+    // Load or create database
+    let db = load_database(db_path)
+        .await
+        .context("Failed to initialize database")?;
+
+    println!("{}", "Starting KoruDelta HTTP server...".bold().cyan());
+    println!();
+    println!("  {} {}", "Bind:".bright_white(), bind_addr);
+    println!();
+    println!("  {}", "Endpoints:".bright_black());
+    println!("    GET    /api/v1/:namespace/:key              - Get value");
+    println!("    PUT    /api/v1/:namespace/:key              - Store value");
+    println!("    GET    /api/v1/:namespace/:key/history      - Get history");
+    println!("    GET    /api/v1/:namespace/:key/at/:timestamp - Time travel");
+    println!("    POST   /api/v1/:namespace/query             - Execute query");
+    println!("    GET    /api/v1/views                        - List views");
+    println!("    POST   /api/v1/views                        - Create view");
+    println!("    GET    /api/v1/status                       - Database status");
+    println!();
+    println!("{}", "Server is running. Press Ctrl+C to stop.".green());
+    println!();
+
+    // Create and start HTTP server
+    let server = HttpServer::new(db);
+    
+    // Handle Ctrl+C for graceful shutdown
+    let shutdown = async {
+        signal::ctrl_c().await.ok();
+        println!();
+        println!("{}", "Shutting down...".yellow());
+    };
+
+    tokio::select! {
+        result = server.bind(&bind_addr) => {
+            if let Err(e) = result {
+                eprintln!("{} {}", "Server error:".red(), e);
+            }
+        }
+        _ = shutdown => {}
+    }
+
+    println!("{}", "Server stopped.".green());
     Ok(())
 }
