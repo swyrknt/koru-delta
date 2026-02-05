@@ -137,18 +137,8 @@ impl CausalGraph {
     }
 
     /// Get all ancestors of a distinction (causal history).
-    ///
-    /// Returns all distinctions that causally precede this one,
-    /// in breadth-first order (closest ancestors first).
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - The distinction to find ancestors for
-    ///
-    /// # Returns
-    ///
-    /// A vector of ancestor distinction IDs, or empty if none.
-    pub fn ancestors(&self, id: &DistinctionId) -> Vec<DistinctionId> {
+    pub fn ancestors(&self, id: impl AsRef<str>) -> Vec<DistinctionId> {
+        let id = id.as_ref();
         if !self.nodes.contains(id) {
             return Vec::new();
         }
@@ -183,14 +173,8 @@ impl CausalGraph {
     }
 
     /// Get all descendants of a distinction (causal future).
-    ///
-    /// Returns all distinctions that causally follow from this one,
-    /// in breadth-first order (closest descendants first).
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - The distinction to find descendants for
-    pub fn descendants(&self, id: &DistinctionId) -> Vec<DistinctionId> {
+    pub fn descendants(&self, id: impl AsRef<str>) -> Vec<DistinctionId> {
+        let id = id.as_ref();
         if !self.nodes.contains(id) {
             return Vec::new();
         }
@@ -225,28 +209,9 @@ impl CausalGraph {
     }
 
     /// Find the least common ancestor (LCA) of two distinctions.
-    ///
-    /// The LCA is the most recent distinction that is an ancestor of both.
-    /// This is crucial for merging causal graphs (conflict resolution).
-    ///
-    /// # Arguments
-    ///
-    /// * `a` - First distinction
-    /// * `b` - Second distinction
-    ///
-    /// # Returns
-    ///
-    /// `Some(DistinctionId)` if a common ancestor exists, `None` otherwise.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // If C has parents A and B
-    /// // lca(C, A) = A
-    /// // lca(C, B) = B  
-    /// // lca(A, B) = root (if they share one)
-    /// ```
-    pub fn lca(&self, a: &DistinctionId, b: &DistinctionId) -> Option<DistinctionId> {
+    pub fn lca(&self, a: impl AsRef<str>, b: impl AsRef<str>) -> Option<DistinctionId> {
+        let a = a.as_ref();
+        let b = b.as_ref();
         if !self.nodes.contains(a) || !self.nodes.contains(b) {
             return None;
         }
@@ -255,11 +220,14 @@ impl CausalGraph {
         let ancestors_a: HashSet<_> = self.ancestors(a).into_iter().collect();
         let ancestors_b: HashSet<_> = self.ancestors(b).into_iter().collect();
 
-        if ancestors_b.contains(a) {
-            return Some(a.clone());
+        let a_string = a.to_string();
+        let b_string = b.to_string();
+
+        if ancestors_b.contains(&a_string) {
+            return Some(a_string);
         }
-        if ancestors_a.contains(b) {
-            return Some(b.clone());
+        if ancestors_a.contains(&b_string) {
+            return Some(b_string);
         }
 
         // Find common ancestors
@@ -324,8 +292,8 @@ impl CausalGraph {
     }
 
     /// Check if a node exists in the graph.
-    pub fn contains(&self, id: &DistinctionId) -> bool {
-        self.nodes.contains(id)
+    pub fn contains(&self, id: impl AsRef<str>) -> bool {
+        self.nodes.contains(id.as_ref())
     }
 
     /// Get the number of nodes in the graph.

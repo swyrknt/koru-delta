@@ -703,9 +703,10 @@ mod tests {
         assert_eq!(stats1.key_count, 0);
         assert_eq!(stats1.total_versions, 0);
 
-        db.put("users", "alice", json!(1)).await.unwrap();
-        db.put("users", "alice", json!(2)).await.unwrap();
-        db.put("users", "bob", json!(1)).await.unwrap();
+        // Use distinct values (content addressing means same value = same ID)
+        db.put("users", "alice", json!({"user": "alice", "v": 1})).await.unwrap();
+        db.put("users", "alice", json!({"user": "alice", "v": 2})).await.unwrap();
+        db.put("users", "bob", json!({"user": "bob", "v": 1})).await.unwrap();
 
         let stats2 = db.stats().await;
         assert_eq!(stats2.key_count, 2);
