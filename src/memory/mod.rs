@@ -30,5 +30,7 @@
 /// - Runs on devices from Raspberry Pi to datacenter
 
 pub mod hot;
+pub mod warm;
 
 pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
+pub use warm::{WarmConfig, WarmMemory, WarmStats};

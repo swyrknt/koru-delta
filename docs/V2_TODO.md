@@ -206,17 +206,24 @@ Users should never think about memory. The system should just work at any scale.
 - Handles updates (replaces old version)
 - Clear operation (evict all to warm)
 
-### Week 3b: WarmMemory (Recent Chronicle)
-- [ ] Create `src/memory/warm.rs`
-- [ ] Implement `WarmMemory`:
-  - [ ] `chronicle: ProcessChronicle` (disk-based)
-  - [ ] `index: DashMap<DistinctionId, FileOffset>`
-  - [ ] `recent_window: VecDeque<DistinctionId>`
-- [ ] Implement `append()` - add distinction
-- [ ] Implement `get()` - fetch from disk
-- [ ] Implement `should_distill()` - check if needs consolidation
-- [ ] Write tests
+### Week 3b: WarmMemory (Recent Chronicle) ✅ COMPLETE
+- [x] Create `src/memory/warm.rs`
+- [x] Implement `WarmMemory`:
+  - [x] `index: DashMap<DistinctionId, IndexEntry>` - in-memory index
+  - [x] `recent_window: VecDeque` - for promotion candidates
+  - [x] `current_mappings: DashMap<FullKey, DistinctionId>`
+- [x] Implement `put()` - add to warm (from Hot eviction)
+- [x] Implement `get()` - fetch with access tracking
+- [x] Implement `find_promotion_candidates()` - for Hot promotion
+- [x] Implement `find_demotion_candidates()` - for Cold demotion
+- [x] Write tests (8 tests, all passing)
 - **User Benefit:** Full history available, but not in RAM
+
+**WarmMemory Features:**
+- Index capacity: 10K distinctions (configurable)
+- Idle threshold: 1 hour (Cold demotion candidate)
+- Promotion tracking based on recent window
+- Statistics: hits, misses, promotions, demotions
 
 ### Week 4a: ColdMemory (Consolidated Epochs)
 - [ ] Create `src/memory/cold.rs`

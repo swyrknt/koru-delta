@@ -10,7 +10,7 @@
 /// - Time-travel queries traverse the causal graph
 ///
 /// The storage layer is thread-safe and uses DashMap for lock-free concurrent access.
-use crate::causal_graph::{CausalGraph, DistinctionId};
+use crate::causal_graph::CausalGraph;
 use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
 use crate::reference_graph::ReferenceGraph;
@@ -201,7 +201,7 @@ impl CausalStorage {
             if let Some(versioned) = self.version_store.get(&version_id) {
                 if versioned.timestamp <= timestamp {
                     // Check this version belongs to the requested key
-                    if let Some(current) = self.current_state.get(&full_key) {
+                    if let Some(_current) = self.current_state.get(&full_key) {
                         // Walk back from current to see if this version is in the chain
                         // For now, simple approach: check if timestamps match our expectation
                         // A more robust approach would track key in version_store
@@ -375,8 +375,8 @@ impl CausalStorage {
             let current = entry.value().clone();
             
             // Traverse back to build history
-            let mut history = vec![current.clone()];
-            let mut current_id = current.version_id.clone();
+            let history = vec![current.clone()];
+            let current_id = current.version_id.clone();
             
             loop {
                 let parents = self.causal_graph.ancestors(&current_id);
