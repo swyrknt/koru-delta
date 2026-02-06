@@ -112,6 +112,9 @@ pub mod reconciliation;
 // Self-sovereign authentication via distinctions
 pub mod auth;
 
+// Unified Core v2 (integrates all layers)
+pub mod core_v2;
+
 // Storage module (public for testing and cluster operations)
 pub mod storage;
 

@@ -408,18 +408,39 @@ GET  /api/v1/auth/capabilities       - List capabilities
 
 ---
 
-## Phase 7: Integration 🎯
+## Phase 7: Integration ✅ IN PROGRESS
 
-### Week 8: KoruDelta v2 Integration
-- [ ] Create `src/v2/mod.rs`
-- [ ] Integrate all layers:
-  - [ ] Hot → Warm → Cold → Deep (automatic flow)
-  - [ ] Causal graph for all operations
-  - [ ] Reference graph for GC
-- [ ] Implement `KoruDeltaV2` struct
-- [ ] Port existing API to v2
-- [ ] Maintain backward compatibility (v1 mode)
-- [ ] Write comprehensive tests
+### Unified Core Implementation
+
+Phase 7 wires all layers into a cohesive `KoruDeltaCore`:
+
+```rust
+pub struct KoruDeltaCore {
+    storage: Arc<CausalStorage>,      // Layer 2
+    hot: Arc<RwLock<HotMemory>>,      // Layer 3
+    warm: Arc<RwLock<WarmMemory>>,    // Layer 3
+    cold: Arc<RwLock<ColdMemory>>,    // Layer 3
+    deep: Arc<RwLock<DeepMemory>>,    // Layer 3
+    process_runner: Option<...>,      // Layer 4
+    reconciliation: Arc<RwLock<...>>, // Layer 5
+    auth: Arc<AuthManager>,           // Layer 6
+}
+```
+
+### Completed ✅
+- [x] Create `src/core_v2.rs`
+- [x] Implement `KoruDeltaCore` struct
+- [x] Integrate storage + hot memory
+- [x] Implement unified `put()` with tiering
+- [x] Implement unified `get()` with promotion
+- [x] Port query, history, time-travel APIs
+- [x] Add comprehensive tests (7 tests)
+
+### Remaining 🎯
+- [ ] Wire warm/cold/deep memory promotion
+- [ ] Start background processes
+- [ ] Integrate reconciliation
+- [ ] HTTP server with auth middleware
 - **User Benefit:** Seamless upgrade, same API, better everything
 
 ---
