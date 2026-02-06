@@ -1,9 +1,9 @@
 # KoruDelta Distinction Extension Implementation
 
-> **Status:** Phase 6 Complete - 221 tests passing
-> **Goal:** Self-sovereign auth via distinctions
-> **Approach:** Evolve existing code, auth as distinctions
-> **Timeline:** Phase 7 (Query Engine v2) next
+> **Status:** Phase 7 Complete - 321 tests passing, 0 warnings
+> **Goal:** Unified core with memory tiering
+> **Approach:** Production hardening - zero gaps
+> **Timeline:** Phase 8 (Production Hardening) in progress
 
 ## The Clean Integration Approach
 
@@ -445,36 +445,122 @@ pub struct KoruDeltaCore {
 
 ---
 
-## Phase 8: Polish & Documentation 🎯
+## Phase 8: Production Hardening & Validation 🎯
 
-### Week 9-10: Final Integration
-- [ ] End-to-end tests
-- [ ] Performance benchmarks
-- [ ] Memory usage validation
-- [ ] Compaction correctness tests
-- [ ] Sync correctness tests
-- [ ] Auth security tests
+**Goal:** Zero gaps. It just works. Every feature validated through real usage.
 
-### Documentation
-- [ ] Update ARCHITECTURE.md
-- [ ] Document causal graph operations
-- [ ] Document memory tiering
-- [ ] Document auth system
-- [ ] Write migration guide
-- [ ] Update CLI guide
-- [ ] Create "Why Evolve" explainer
+### 8.1 Crash Recovery & Durability
+- [ ] Write-ahead logging (WAL) for persistence
+- [ ] Crash recovery on startup (detect unclean shutdown, replay WAL)
+- [ ] Corruption detection (checksums on all writes)
+- [ ] Graceful degradation (if genome is corrupt, reconstruct from cold)
+- [ ] Atomic operations (all-or-nothing for multi-key writes)
+
+### 8.2 Resource Limits & Safety
+- [ ] Memory cap enforcement (configurable max RAM, default 512MB)
+- [ ] Disk usage limits (configurable max size, auto-distillation when nearing)
+- [ ] Open file descriptor limits (bounded file handles)
+- [ ] Network timeout handling (peer unresponsive? drop and retry)
+- [ ] Backpressure (slow consumer? buffer or drop gracefully)
+
+### 8.3 Error Handling Hardening
+- [ ] All error paths tested (100% error coverage)
+- [ ] Descriptive error messages (users know what went wrong)
+- [ ] Recovery suggestions ("disk full: run compaction or increase limit")
+- [ ] Panic safety (no panics in production, only graceful errors)
+- [ ] Log levels (DEBUG, INFO, WARN, ERROR with structured logging)
+
+### 8.4 Local Installation & Real Usage
+- [ ] `cargo install --path .` works without issues
+- [ ] First-run experience (empty DB, first put/get works)
+- [ ] CLI smoke tests (every command tested manually):
+  - `kdelta start` → server starts, responds to HTTP
+  - `kdelta set ns/key '{"test": true}'` → data stored
+  - `kdelta get ns/key` → correct value returned
+  - `kdelta history ns/key` → shows version history
+  - `kdelta delete ns/key` → tombstone created
+  - `kdelta query --filter "namespace=users"` → results correct
+  - `kdelta sync --peer localhost:7879` → sync works
+- [ ] Data survives restart (put data, stop, start, get returns data)
+- [ ] Large dataset handling (10k keys, 1M keys)
+- [ ] Concurrent access (10 clients writing simultaneously)
+
+### 8.5 Multi-Node Cluster Validation
+- [ ] Two-node cluster setup (node A, node B join A)
+- [ ] Data replication (write to A, read from B)
+- [ ] Conflict resolution (concurrent writes to same key)
+- [ ] Node failure handling (B goes down, A continues, B rejoins)
+- [ ] Partition recovery (split brain, then heal)
+
+### 8.6 Performance Validation
+- [ ] Benchmark: 10k writes/sec sustained
+- [ ] Benchmark: 50k reads/sec from hot memory
+- [ ] Benchmark: Startup time < 1s for 100k keys
+- [ ] Benchmark: Sync time < 100ms for 1k diff
+- [ ] Memory: < 100MB RSS for 10k active keys
+- [ ] Disk: Bounded growth (distillation keeps size stable)
+
+### 8.7 Security Hardening
+- [ ] Auth works end-to-end (create identity, capability, authorize)
+- [ ] HTTP API auth protection (no auth = rejected)
+- [ ] Capability expiration enforced
+- [ ] Revocation works immediately
+- [ ] Replay attack prevention (nonce/challenge)
+
+### 8.8 Platform Testing
+- [ ] macOS: native build, install, run
+- [ ] Linux: native build, install, run
+- [ ] Windows: native build, install, run
+- [ ] WASM: builds, runs in browser (basic functionality)
+
+### 8.9 Documentation Completeness
+- [ ] README quickstart (new user can be running in 5 minutes)
+- [ ] API reference (every public function documented)
+- [ ] CLI guide (every command with examples)
+- [ ] Architecture deep-dive (for contributors)
+- [ ] Troubleshooting guide (common issues + solutions)
+- [ ] Migration guide (v1 to v2 if applicable)
+
+### 8.10 Final Validation Checklist
+- [ ] Zero compiler warnings
+- [ ] Zero clippy warnings
+- [ ] All tests passing (unit + integration + cluster + e2e)
+- [ ] Test coverage > 80%
+- [ ] No TODO/FIXME comments in code
+- [ ] No unwrap() in production paths
+- [ ] CHANGELOG.md updated
+- [ ] Version bumped to 2.0.0
+- [ ] Git tag v2.0.0 created
+
+### Success Criteria
+**"It just works" means:**
+1. Install with one command
+2. Start with zero config
+3. Put/get work immediately
+4. Survives crashes without data loss
+5. Memory stays bounded
+6. Sync just works between nodes
+7. Auth is optional but works when enabled
+8. Performance is predictable
+9. Errors are clear and actionable
+10. Documentation answers all questions
+
+**Phase 8 is DONE when:**
+- [ ] I've used it locally for a full day without issues
+- [ ] All success criteria validated
+- [ ] Ready to show users with confidence
 
 ---
 
 ## Progress Log
 
-### 2026-02-05 - Auth Complete
-- ✅ Auth module: 48 tests passing
-- ✅ HTTP layer with axum integration
-- ✅ Self-sovereign identity with proof-of-work
-- ✅ Capability-based authorization
-- ✅ 221 total tests, all green
-- 🎯 Next: Phase 7 (Query Engine v2)
+### 2026-02-06 - Phase 7 Complete
+- ✅ Unified core with Hot/Warm/Cold/Deep memory tiers
+- ✅ Background processes: Consolidation, Distillation, GenomeUpdate
+- ✅ Tiered GET cascade with automatic promotion
+- ✅ Zero compiler warnings, zero clippy warnings
+- ✅ 321 tests passing (217 unit + 15 cluster + 42 falsification + 48 integration)
+- 🎯 Next: Phase 8 (Production Hardening)
 
 ### Success Metrics
 
