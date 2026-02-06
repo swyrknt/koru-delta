@@ -48,6 +48,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use koru_lambda_core::DistinctionEngine;
 use serde::Serialize;
+use tracing::{debug, error, info, trace, warn};
 
 use tokio::sync::RwLock;
 
@@ -223,7 +224,10 @@ impl KoruDelta {
     ///
     /// This is the zero-configuration entry point (in-memory only).
     pub async fn start() -> DeltaResult<Self> {
-        Self::new(CoreConfig::default()).await
+        info!("Starting KoruDelta in-memory instance");
+        let db = Self::new(CoreConfig::default()).await?;
+        info!("KoruDelta in-memory instance started");
+        Ok(db)
     }
 
     /// Start a new KoruDelta instance with persistence at the given path.
@@ -241,19 +245,29 @@ impl KoruDelta {
         use crate::persistence;
         
         let path = path.into();
+        let path_display = path.display().to_string();
+        info!(db_path = %path_display, "Starting KoruDelta with persistence");
+        
         let config = CoreConfig::default();
         
         // Acquire lock and check for unclean shutdown
         let lock_state = persistence::acquire_lock(&path).await?;
         if lock_state == persistence::LockState::Unclean {
-            eprintln!("Warning: Unclean shutdown detected. Running recovery...");
+            warn!("Unclean shutdown detected, running recovery");
+        } else {
+            debug!("Lock acquired successfully");
         }
         
         // Load from WAL if exists
         let storage = if persistence::exists(&path).await {
+            info!("Loading existing database from WAL");
             let engine = Arc::new(DistinctionEngine::new());
-            persistence::load_from_wal(&path, engine).await?
+            let storage = persistence::load_from_wal(&path, engine).await?;
+            let key_count = storage.key_count();
+            info!(keys = key_count, "Database loaded from WAL");
+            storage
         } else {
+            info!("Creating new database");
             CausalStorage::new(Arc::new(DistinctionEngine::new()))
         };
         
@@ -613,17 +627,24 @@ impl KoruDelta {
     ) -> DeltaResult<VersionedValue> {
         let namespace = namespace.into();
         let key = key.into();
+        trace!("Serializing value");
         let json_value = serde_json::to_value(value)?;
 
         // Store in storage (source of truth)
+        trace!("Storing in CausalStorage");
         let versioned = self.storage.put(&namespace, &key, json_value)?;
+        let version_id = versioned.version_id().to_string();
+        debug!(version = %version_id, "Value stored");
 
         // Persist to WAL if db_path is set
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(ref db_path) = self.db_path {
             use crate::persistence;
+            trace!("Persisting to WAL");
             if let Err(e) = persistence::append_write(db_path, &namespace, &key, &versioned).await {
-                eprintln!("Warning: Failed to persist write: {}", e);
+                error!(error = %e, "Failed to persist write to WAL");
+            } else {
+                trace!("Write persisted to WAL");
             }
         }
 
@@ -632,6 +653,7 @@ impl KoruDelta {
             let full_key = FullKey::new(&namespace, &key);
             let hot = self.hot.write().await;
             hot.put(full_key, versioned.clone());
+            trace!("Value promoted to hot memory");
         }
 
         // Auto-refresh views (fire and forget)
@@ -640,6 +662,7 @@ impl KoruDelta {
             let _ = views.refresh_stale(chrono::Duration::seconds(0));
         });
 
+        info!(version = %version_id, "Put operation completed");
         Ok(versioned)
     }
 
@@ -655,14 +678,17 @@ impl KoruDelta {
         let namespace = namespace.into();
         let key = key.into();
         let full_key = FullKey::new(&namespace, &key);
+        trace!("Starting tiered memory lookup");
 
         // Tier 1: Hot memory (fastest)
         {
             let hot = self.hot.read().await;
             if let Some(v) = hot.get(&full_key) {
+                trace!("Hot memory hit");
                 return Ok(v.clone());
             }
         }
+        trace!("Hot memory miss");
 
         // Tier 2: Warm memory (recently evicted from hot)
         // First check if key has a mapping in warm
@@ -1015,18 +1041,24 @@ impl KoruDelta {
 
     /// Shutdown the database.
     pub async fn shutdown(self) -> DeltaResult<()> {
+        info!("Shutting down KoruDelta");
+        
         let _ = self.shutdown_tx.send(true);
+        trace!("Shutdown signal sent to background processes");
         
         // Release database lock
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(ref db_path) = self.db_path {
             use crate::persistence;
             if let Err(e) = persistence::release_lock(db_path).await {
-                eprintln!("Warning: Failed to release database lock: {}", e);
+                error!(error = %e, "Failed to release database lock");
+            } else {
+                trace!("Database lock released");
             }
         }
         
         // TODO: Wait for background processes to complete
+        info!("KoruDelta shutdown complete");
         Ok(())
     }
 }

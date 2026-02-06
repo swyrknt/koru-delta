@@ -214,3 +214,58 @@ pub mod prelude {
     #[cfg(not(target_arch = "wasm32"))]
     pub use crate::network::{NodeId, PeerInfo, PeerStatus};
 }
+
+// ============================================================================
+// Logging and Observability
+// ============================================================================
+
+/// Initialize the logging system.
+///
+/// This should be called once at application startup. It configures
+/// the tracing subscriber with an environment filter.
+///
+/// # Example
+///
+/// ```ignore
+/// #[tokio::main]
+/// async fn main() {
+///     koru_delta::init_logging();
+///     // ... rest of application
+/// }
+/// ```
+///
+/// The log level can be controlled via the `KORU_LOG` environment variable:
+/// - `KORU_LOG=error` - Only errors
+/// - `KORU_LOG=warn` - Errors and warnings
+/// - `KORU_LOG=info` - General information (default)
+/// - `KORU_LOG=debug` - Debug information
+/// - `KORU_LOG=trace` - Verbose tracing
+#[cfg(not(target_arch = "wasm32"))]
+pub fn init_logging() {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::EnvFilter;
+
+    let filter = EnvFilter::try_from_env("KORU_LOG")
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().with_target(false))
+        .init();
+}
+
+/// Initialize logging with a specific level.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn init_logging_with_level(level: &str) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::EnvFilter;
+
+    let filter = EnvFilter::new(level);
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().with_target(false))
+        .init();
+}

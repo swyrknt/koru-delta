@@ -54,6 +54,10 @@ rand = "0.8"
 # Query engine
 regex = "1.10"
 
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
 # HTTP API (non-WASM only)
 axum = { version = "0.7", optional = true }
 tower = { version = "0.4", optional = true }
