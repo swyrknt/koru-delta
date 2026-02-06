@@ -531,21 +531,21 @@ pub async fn create_snapshot(
     let current: Vec<_> = current_state
         .into_iter()
         .map(|(k, v)| {
-            let bytes = serde_json::to_vec(&v).unwrap();
-            (k, bytes)
+            let bytes = serde_json::to_vec(&v)?;
+            Ok((k, bytes))
         })
-        .collect();
+        .collect::<DeltaResult<Vec<_>>>()?;
 
     let history: Vec<_> = history_log
         .into_iter()
         .map(|(k, versions)| {
             let bytes: Vec<_> = versions
                 .into_iter()
-                .map(|v| serde_json::to_vec(&v).unwrap())
-                .collect();
-            (k, bytes)
+                .map(|v| serde_json::to_vec(&v))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok((k, bytes))
         })
-        .collect();
+        .collect::<DeltaResult<Vec<_>>>()?;
 
     let snapshot = Snapshot {
         version: 1,
@@ -628,33 +628,34 @@ pub async fn load(path: &Path, engine: Arc<DistinctionEngine>) -> DeltaResult<Ca
     }
     
     // Check if it's a legacy snapshot file
-    let metadata = fs::metadata(path).await;
-    if metadata.is_ok() && metadata.unwrap().is_file() {
-        // Fall back to legacy snapshot format
-        let bytes = fs::read(path).await
-            .map_err(|e| DeltaError::StorageError(format!("Failed to read database file: {}", e)))?;
+    if let Ok(metadata) = fs::metadata(path).await {
+        if metadata.is_file() {
+            // Fall back to legacy snapshot format
+            let bytes = fs::read(path).await
+                .map_err(|e| DeltaError::StorageError(format!("Failed to read database file: {}", e)))?;
 
-        #[derive(Deserialize)]
-        struct LegacySnapshot {
-            #[allow(dead_code)]
-            version: u32,
-            current_state: Vec<(FullKey, VersionedValue)>,
-            #[allow(dead_code)]
-            history_log: Vec<(FullKey, Vec<VersionedValue>)>,
+            #[derive(Deserialize)]
+            struct LegacySnapshot {
+                #[allow(dead_code)]
+                version: u32,
+                current_state: Vec<(FullKey, VersionedValue)>,
+                #[allow(dead_code)]
+                history_log: Vec<(FullKey, Vec<VersionedValue>)>,
+            }
+
+            let snapshot: LegacySnapshot = serde_json::from_slice(&bytes).map_err(|e| {
+                DeltaError::StorageError(format!("Failed to deserialize database: {}", e))
+            })?;
+
+            let storage = CausalStorage::new(engine);
+
+            // Restore current state
+            for (full_key, versioned) in snapshot.current_state {
+                let _ = storage.put(&full_key.namespace, &full_key.key, versioned.value().clone());
+            }
+
+            return Ok(storage);
         }
-
-        let snapshot: LegacySnapshot = serde_json::from_slice(&bytes).map_err(|e| {
-            DeltaError::StorageError(format!("Failed to deserialize database: {}", e))
-        })?;
-
-        let storage = CausalStorage::new(engine);
-
-        // Restore current state
-        for (full_key, versioned) in snapshot.current_state {
-            let _ = storage.put(&full_key.namespace, &full_key.key, versioned.value().clone());
-        }
-
-        return Ok(storage);
     }
     
     // If directory exists but is empty (no WAL yet), return empty storage
