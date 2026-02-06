@@ -688,6 +688,55 @@ mod tests {
         assert!(expected_path.exists());
     }
 
+    /// Calculate total disk usage of the database in bytes.
+    pub async fn get_disk_usage(db_path: &Path) -> DeltaResult<u64> {
+        let mut total_size = 0u64;
+        
+        // Walk the directory tree
+        if db_path.exists() {
+            let mut entries = fs::read_dir(db_path).await
+                .map_err(|e| DeltaError::StorageError(format!("Failed to read db dir: {}", e)))?;
+            
+            while let Some(entry) = entries.next_entry().await
+                .map_err(|e| DeltaError::StorageError(format!("Failed to read entry: {}", e)))? {
+                let path = entry.path();
+                let metadata = entry.metadata().await
+                    .map_err(|e| DeltaError::StorageError(format!("Failed to read metadata: {}", e)))?;
+                
+                if metadata.is_file() {
+                    total_size += metadata.len();
+                } else if metadata.is_dir() {
+                    // Recursively calculate subdirectory size
+                    total_size += get_dir_size(&path).await?;
+                }
+            }
+        }
+        
+        Ok(total_size)
+    }
+    
+    /// Helper to recursively calculate directory size.
+    async fn get_dir_size(dir: &Path) -> DeltaResult<u64> {
+        let mut total_size = 0u64;
+        
+        let mut entries = fs::read_dir(dir).await
+            .map_err(|e| DeltaError::StorageError(format!("Failed to read dir: {}", e)))?;
+        
+        while let Some(entry) = entries.next_entry().await
+            .map_err(|e| DeltaError::StorageError(format!("Failed to read entry: {}", e)))? {
+            let metadata = entry.metadata().await
+                .map_err(|e| DeltaError::StorageError(format!("Failed to read metadata: {}", e)))?;
+            
+            if metadata.is_file() {
+                total_size += metadata.len();
+            } else if metadata.is_dir() {
+                total_size += Box::pin(get_dir_size(&entry.path())).await?;
+            }
+        }
+        
+        Ok(total_size)
+    }
+
     #[tokio::test]
     async fn test_append_and_load() {
         let temp_dir = TempDir::new().unwrap();

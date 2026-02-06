@@ -74,6 +74,32 @@ pub struct CoreConfig {
     pub auth: AuthConfig,
     /// Reconciliation configuration
     pub reconciliation: ReconciliationConfig,
+    /// Resource limits (memory, disk)
+    pub limits: ResourceLimits,
+}
+
+/// Resource limits for the database.
+#[derive(Debug, Clone)]
+pub struct ResourceLimits {
+    /// Maximum memory usage in MB (0 = unlimited)
+    pub max_memory_mb: usize,
+    /// Maximum disk usage in MB (0 = unlimited)
+    pub max_disk_mb: usize,
+    /// Maximum open files (0 = unlimited)
+    pub max_open_files: usize,
+    /// Maximum concurrent connections (0 = unlimited)
+    pub max_connections: usize,
+}
+
+impl Default for ResourceLimits {
+    fn default() -> Self {
+        Self {
+            max_memory_mb: 512,      // 512MB default
+            max_disk_mb: 10 * 1024,  // 10GB default
+            max_open_files: 256,
+            max_connections: 100,
+        }
+    }
 }
 
 /// Memory tier configuration.
