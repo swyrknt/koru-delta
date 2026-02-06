@@ -84,6 +84,34 @@ struct LogEntry {
     /// The actual value (only in "inline" mode for small values).
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<JsonValue>,
+    /// Checksum of the entry (for corruption detection).
+    /// Format: "crc32:XXXXXXXX" where X is hex.
+    checksum: String,
+}
+
+/// Calculate CRC32 checksum for data integrity.
+fn calculate_checksum(data: &str) -> String {
+    let crc = crc32fast::hash(data.as_bytes());
+    format!("crc32:{:08x}", crc)
+}
+
+/// Verify entry checksum.
+fn verify_checksum(entry: &LogEntry) -> bool {
+    // Create a copy without the checksum for verification
+    let json = serde_json::json!({
+        "version": entry.version,
+        "op": &entry.op,
+        "ns": &entry.ns,
+        "key": &entry.key,
+        "value_hash": &entry.value_hash,
+        "prev_hash": &entry.prev_hash,
+        "timestamp": entry.timestamp,
+        "seq": entry.seq,
+        "value": &entry.value,
+    });
+    let data = json.to_string();
+    let expected = calculate_checksum(&data);
+    entry.checksum == expected
 }
 
 /// Metadata for the WAL.
@@ -145,7 +173,23 @@ pub async fn append_write(
     let value_hash = versioned.version_id().to_string();
     store_value(&values_dir, &value_hash, versioned.value()).await?;
 
-    // Create log entry
+    // Create log entry (without checksum first)
+    let entry_without_checksum = serde_json::json!({
+        "version": WAL_VERSION,
+        "op": "put",
+        "ns": namespace,
+        "key": key,
+        "value_hash": &value_hash,
+        "prev_hash": versioned.previous_version(),
+        "timestamp": versioned.timestamp(),
+        "seq": seq,
+        "value": Option::<JsonValue>::None,
+    });
+
+    // Calculate checksum
+    let checksum = calculate_checksum(&entry_without_checksum.to_string());
+
+    // Create final entry with checksum
     let entry = LogEntry {
         version: WAL_VERSION,
         op: "put".to_string(),
@@ -155,7 +199,8 @@ pub async fn append_write(
         prev_hash: versioned.previous_version().map(|s| s.to_string()),
         timestamp: versioned.timestamp(),
         seq,
-        value: None, // Values stored separately
+        value: None,
+        checksum,
     };
 
     // Serialize to JSON line
@@ -354,6 +399,15 @@ async fn replay_segment(
                 continue;
             }
         };
+
+        // Verify checksum
+        if !verify_checksum(&entry) {
+            eprintln!(
+                "Warning: Checksum mismatch for entry seq={}, possible corruption",
+                entry.seq
+            );
+            continue;
+        }
 
         if entry.op == "put" {
             // Load value from content store
