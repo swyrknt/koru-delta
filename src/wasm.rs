@@ -74,7 +74,7 @@ impl KoruDeltaWasm {
     pub async fn get_js(&self, namespace: &str, key: &str) -> Result<JsValue, JsValue> {
         let versioned = self
             .db
-            .get_versioned(namespace, key)
+            .get(namespace, key)
             .await
             .map_err(|e| match e {
                 DeltaError::KeyNotFound { .. } => {

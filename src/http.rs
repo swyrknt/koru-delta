@@ -232,7 +232,7 @@ async fn handle_get(
     State(db): State<Arc<KoruDelta>>,
     axum::extract::Path((namespace, key)): axum::extract::Path<(String, String)>,
 ) -> Result<axum::Json<VersionedResponse>, axum::http::StatusCode> {
-    match db.get_versioned(&namespace, &key).await {
+    match db.get(&namespace, &key).await {
         Ok(versioned) => {
             let response = VersionedResponse {
                 value: versioned.value().clone(),
@@ -293,7 +293,7 @@ async fn handle_history(
 async fn handle_get_at(
     State(db): State<Arc<KoruDelta>>,
     axum::extract::Path((namespace, key, timestamp)): axum::extract::Path<(String, String, String)>,
-) -> Result<axum::Json<JsonValue>, axum::http::StatusCode> {
+) -> Result<axum::Json<VersionedResponse>, axum::http::StatusCode> {
     // Parse ISO 8601 timestamp
     let timestamp = match DateTime::parse_from_rfc3339(&timestamp) {
         Ok(ts) => ts.with_timezone(&Utc),
@@ -301,7 +301,15 @@ async fn handle_get_at(
     };
 
     match db.get_at(&namespace, &key, timestamp).await {
-        Ok(value) => Ok(axum::Json(value)),
+        Ok(versioned) => {
+            let response = VersionedResponse {
+                value: versioned.value().clone(),
+                version_id: versioned.version_id().to_string(),
+                timestamp: versioned.timestamp(),
+                previous_version: versioned.previous_version().map(|s| s.to_string()),
+            };
+            Ok(axum::Json(response))
+        }
         Err(_) => Err(axum::http::StatusCode::NOT_FOUND),
     }
 }
@@ -330,8 +338,9 @@ async fn handle_query(
     }
 
     match db.query(&namespace, query).await {
-        Ok(result) => {
-            let records: Vec<_> = result
+        Ok(results) => {
+            let total = results.total_count;
+            let records: Vec<_> = results
                 .records
                 .into_iter()
                 .map(|record| QueryRecordResponse {
@@ -344,7 +353,7 @@ async fn handle_query(
 
             let response = QueryResponse {
                 results: records,
-                total: result.total_count,
+                total,
                 namespace,
             };
             Ok(axum::Json(response))

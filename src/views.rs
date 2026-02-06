@@ -245,6 +245,26 @@ impl ViewManager {
         Ok(results)
     }
 
+    /// Refresh all views that source from a specific collection and have auto-refresh enabled.
+    pub fn refresh_for_collection(&self, collection: &str) -> DeltaResult<Vec<ViewInfo>> {
+        let to_refresh: Vec<String> = self
+            .views
+            .iter()
+            .filter(|entry| {
+                entry.value().definition.source_collection == collection
+                    && entry.value().definition.auto_refresh
+            })
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        let mut results = Vec::new();
+        for name in to_refresh {
+            results.push(self.refresh_view(&name)?);
+        }
+
+        Ok(results)
+    }
+
     /// Query a view.
     pub fn query_view(&self, name: &str) -> DeltaResult<QueryResult> {
         let view = self

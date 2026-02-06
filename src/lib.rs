@@ -112,9 +112,6 @@ pub mod reconciliation;
 // Self-sovereign authentication via distinctions
 pub mod auth;
 
-// Unified Core v2 (integrates all layers)
-pub mod core_v2;
-
 // Storage module (public for testing and cluster operations)
 pub mod storage;
 
@@ -147,7 +144,7 @@ pub mod http;
 pub mod wasm;
 
 // Public API exports
-pub use core::{DatabaseStats, KoruDelta};
+pub use core::{CoreConfig, DatabaseStats, KoruDelta, MemoryConfig};
 pub use error::{DeltaError, DeltaResult};
 pub use types::{FullKey, HistoryEntry, VersionedValue};
 

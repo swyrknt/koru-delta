@@ -26,9 +26,9 @@ async fn test_basic_put_get_workflow() {
 
     // Retrieve the user
     let user = db.get("users", "alice").await.unwrap();
-    assert_eq!(user["name"], "Alice");
-    assert_eq!(user["email"], "alice@example.com");
-    assert_eq!(user["age"], 30);
+    assert_eq!(user.value()["name"], "Alice");
+    assert_eq!(user.value()["email"], "alice@example.com");
+    assert_eq!(user.value()["age"], 30);
 }
 
 #[tokio::test]
@@ -49,16 +49,16 @@ async fn test_multiple_namespaces() {
     let session = db.get("sessions", "s123").await.unwrap();
     let config = db.get("config", "theme").await.unwrap();
 
-    assert_eq!(user["name"], "Alice");
-    assert_eq!(session["user"], "alice");
-    assert_eq!(config, "dark");
+    assert_eq!(user.value()["name"], "Alice");
+    assert_eq!(session.value()["user"], "alice");
+    assert_eq!(config.value(), "dark");
 
     // Verify namespace isolation (same key in different namespace)
     db.put("data", "key1", json!(1)).await.unwrap();
     db.put("other", "key1", json!(2)).await.unwrap();
 
-    assert_eq!(db.get("data", "key1").await.unwrap(), json!(1));
-    assert_eq!(db.get("other", "key1").await.unwrap(), json!(2));
+    assert_eq!(db.get("data", "key1").await.unwrap().value().clone(), json!(1));
+    assert_eq!(db.get("other", "key1").await.unwrap().value().clone(), json!(2));
 }
 
 #[tokio::test]
@@ -84,7 +84,7 @@ async fn test_update_tracking() {
 
     // Current value should be the latest
     let current = db.get("counter", "value").await.unwrap();
-    assert_eq!(current, json!(3));
+    assert_eq!(current.value().clone(), json!(3));
 }
 
 #[tokio::test]
@@ -144,20 +144,20 @@ async fn test_time_travel_precision() {
 
     // Time travel to each point
     let v_at_t0 = db.get_at("doc", "content", t0).await.unwrap();
-    assert_eq!(v_at_t0["version"], "v0");
+    assert_eq!(v_at_t0.value()["version"], "v0");
 
     let v_at_t1 = db.get_at("doc", "content", t1).await.unwrap();
-    assert_eq!(v_at_t1["version"], "v1");
+    assert_eq!(v_at_t1.value()["version"], "v1");
 
     let v_at_t2 = db.get_at("doc", "content", t2).await.unwrap();
-    assert_eq!(v_at_t2["version"], "v2");
+    assert_eq!(v_at_t2.value()["version"], "v2");
 
     let v_at_t3 = db.get_at("doc", "content", t3).await.unwrap();
-    assert_eq!(v_at_t3["version"], "v3");
+    assert_eq!(v_at_t3.value()["version"], "v3");
 
     // Current should be v3
     let current = db.get("doc", "content").await.unwrap();
-    assert_eq!(current["version"], "v3");
+    assert_eq!(current.value()["version"], "v3");
 }
 
 #[tokio::test]
@@ -201,16 +201,16 @@ async fn test_contains_key() {
     let db = KoruDelta::start().await.unwrap();
 
     // Key doesn't exist initially
-    assert!(!db.contains("users", "alice").await);
+    assert!(!db.contains_key("users", "alice").await);
 
     // Add the key
     db.put("users", "alice", json!({})).await.unwrap();
 
     // Now it exists
-    assert!(db.contains("users", "alice").await);
+    assert!(db.contains_key("users", "alice").await);
 
     // Different namespace
-    assert!(!db.contains("sessions", "alice").await);
+    assert!(!db.contains_key("sessions", "alice").await);
 }
 
 #[tokio::test]
@@ -305,14 +305,14 @@ async fn test_complex_json_structures() {
         .unwrap();
     let retrieved = db.get("profiles", "alice").await.unwrap();
 
-    assert_eq!(retrieved, complex_data);
-    assert_eq!(retrieved["user"]["name"], "Alice");
-    assert_eq!(retrieved["user"]["roles"][0], "admin");
+    assert_eq!(retrieved.value().clone(), complex_data);
+    assert_eq!(retrieved.value()["user"]["name"], "Alice");
+    assert_eq!(retrieved.value()["user"]["roles"][0], "admin");
     assert_eq!(
-        retrieved["user"]["metadata"]["preferences"]["theme"],
+        retrieved.value()["user"]["metadata"]["preferences"]["theme"],
         "dark"
     );
-    assert_eq!(retrieved["user"]["stats"]["login_count"], 42);
+    assert_eq!(retrieved.value()["user"]["stats"]["login_count"], 42);
 }
 
 #[tokio::test]
@@ -320,36 +320,36 @@ async fn test_various_json_types() {
     let db = KoruDelta::start().await.unwrap();
 
     // String
-    db.put("data", "string", "Hello, World!").await.unwrap();
+    db.put("data", "string", json!("Hello, World!")).await.unwrap();
     assert_eq!(
-        db.get("data", "string").await.unwrap(),
+        db.get("data", "string").await.unwrap().value().clone(),
         json!("Hello, World!")
     );
 
     // Number (integer)
-    db.put("data", "int", 42).await.unwrap();
-    assert_eq!(db.get("data", "int").await.unwrap(), json!(42));
+    db.put("data", "int", json!(42)).await.unwrap();
+    assert_eq!(db.get("data", "int").await.unwrap().value().clone(), json!(42));
 
     // Number (float)
-    db.put("data", "float", 3.15).await.unwrap();
-    assert_eq!(db.get("data", "float").await.unwrap(), json!(3.15));
+    db.put("data", "float", json!(3.15)).await.unwrap();
+    assert_eq!(db.get("data", "float").await.unwrap().value().clone(), json!(3.15));
 
     // Boolean
-    db.put("data", "bool_true", true).await.unwrap();
-    db.put("data", "bool_false", false).await.unwrap();
-    assert_eq!(db.get("data", "bool_true").await.unwrap(), json!(true));
-    assert_eq!(db.get("data", "bool_false").await.unwrap(), json!(false));
+    db.put("data", "bool_true", json!(true)).await.unwrap();
+    db.put("data", "bool_false", json!(false)).await.unwrap();
+    assert_eq!(db.get("data", "bool_true").await.unwrap().value().clone(), json!(true));
+    assert_eq!(db.get("data", "bool_false").await.unwrap().value().clone(), json!(false));
 
     // Array
-    db.put("data", "array", vec![1, 2, 3, 4, 5]).await.unwrap();
+    db.put("data", "array", json!([1, 2, 3, 4, 5])).await.unwrap();
     assert_eq!(
-        db.get("data", "array").await.unwrap(),
+        db.get("data", "array").await.unwrap().value().clone(),
         json!([1, 2, 3, 4, 5])
     );
 
     // Null
     db.put("data", "null", json!(null)).await.unwrap();
-    assert_eq!(db.get("data", "null").await.unwrap(), json!(null));
+    assert_eq!(db.get("data", "null").await.unwrap().value().clone(), json!(null));
 
     // Nested
     db.put(
@@ -363,8 +363,8 @@ async fn test_various_json_types() {
     .await
     .unwrap();
     let nested = db.get("data", "nested").await.unwrap();
-    assert_eq!(nested["a"][2]["b"], "c");
-    assert_eq!(nested["d"]["e"]["f"], true);
+    assert_eq!(nested.value()["a"][2]["b"], "c");
+    assert_eq!(nested.value()["d"]["e"]["f"], true);
 }
 
 #[tokio::test]
@@ -377,14 +377,14 @@ async fn test_database_clone_shares_state() {
 
     // Read with db2 (should see the same data)
     let value = db2.get("shared", "key1").await.unwrap();
-    assert_eq!(value, json!(1));
+    assert_eq!(value.value().clone(), json!(1));
 
     // Write with db2
     db2.put("shared", "key2", json!(2)).await.unwrap();
 
     // Read with db1 (should see the same data)
     let value = db1.get("shared", "key2").await.unwrap();
-    assert_eq!(value, json!(2));
+    assert_eq!(value.value().clone(), json!(2));
 
     // Stats should be consistent
     assert_eq!(db1.stats().await.key_count, db2.stats().await.key_count);
@@ -400,7 +400,7 @@ async fn test_concurrent_writes_different_keys() {
         let db_clone = db.clone();
         let handle = tokio::spawn(async move {
             db_clone
-                .put("concurrent", format!("key{}", i), json!(i))
+                .put("concurrent", &format!("key{}", i), json!(i))
                 .await
                 .unwrap();
         });
@@ -415,9 +415,9 @@ async fn test_concurrent_writes_different_keys() {
     // All keys should exist
     assert_eq!(db.stats().await.key_count, 20);
     for i in 0..20 {
-        assert!(db.contains("concurrent", format!("key{}", i)).await);
-        let value = db.get("concurrent", format!("key{}", i)).await.unwrap();
-        assert_eq!(value, json!(i));
+        assert!(db.contains_key("concurrent", &format!("key{}", i)).await);
+        let value = db.get("concurrent", &format!("key{}", i)).await.unwrap();
+        assert_eq!(value.value().clone(), json!(i));
     }
 }
 
@@ -513,5 +513,5 @@ async fn test_empty_database_operations() {
     assert_eq!(db.list_keys("any").await.len(), 0);
 
     // Contains returns false
-    assert!(!db.contains("any", "key").await);
+    assert!(!db.contains_key("any", "key").await);
 }

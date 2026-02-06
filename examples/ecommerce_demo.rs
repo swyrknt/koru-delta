@@ -9,7 +9,7 @@
 //!
 //! Run with: cargo run --example ecommerce_demo
 
-use koru_delta::query::{Aggregation, Filter, Query};
+use koru_delta::query::{Filter, Query};
 use koru_delta::subscriptions::Subscription;
 use koru_delta::views::ViewDefinition;
 use koru_delta::{DeltaResult, KoruDelta};
@@ -334,10 +334,12 @@ async fn main() -> DeltaResult<()> {
     println!("  Querying laptop state BEFORE Black Friday sale...");
     let past_value = db.get_at("products", "laptop", before_sale).await?;
     let price = past_value
+        .value
         .get("price")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
     let stock = past_value
+        .value
         .get("stock")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
@@ -346,8 +348,8 @@ async fn main() -> DeltaResult<()> {
 
     println!("\n  Current laptop state:");
     let current = db.get("products", "laptop").await?;
-    let price = current.get("price").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let stock = current.get("stock").and_then(|v| v.as_i64()).unwrap_or(0);
+    let price = current.value.get("price").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let stock = current.value.get("stock").and_then(|v| v.as_i64()).unwrap_or(0);
     println!("  ✓ Price is: ${:.2}", price);
     println!("  ✓ Stock is: {}", stock);
 
@@ -422,49 +424,34 @@ async fn main() -> DeltaResult<()> {
 
     print_section("Aggregations");
 
-    // Count
-    let count = db
-        .query("orders", Query::new().aggregate(Aggregation::Count))
-        .await?;
-    println!("  Total orders: {}", count.aggregation.unwrap_or(json!(0)));
+    // Count orders manually since query returns QueryResult
+    let all_orders = db.query("orders", Query::new()).await?;
+    println!("  Total orders: {}", all_orders.records.len());
 
-    // Sum
-    let sum = db
-        .query(
-            "orders",
-            Query::new().aggregate(Aggregation::Sum {
-                field: "total".into(),
-            }),
-        )
-        .await?;
-    if let Some(val) = sum.aggregation {
-        println!("  Total revenue: ${:.2}", val.as_f64().unwrap_or(0.0));
-    }
+    // Sum totals manually
+    let total_revenue: f64 = all_orders
+        .records
+        .iter()
+        .filter_map(|r| r.value.get("total").and_then(|t| t.as_f64()))
+        .sum();
+    println!("  Total revenue: ${:.2}", total_revenue);
 
     // Average
-    let avg = db
-        .query(
-            "orders",
-            Query::new().aggregate(Aggregation::Avg {
-                field: "total".into(),
-            }),
-        )
-        .await?;
-    if let Some(val) = avg.aggregation {
-        println!("  Average order value: ${:.2}", val.as_f64().unwrap_or(0.0));
-    }
+    let avg_order_value = if !all_orders.records.is_empty() {
+        total_revenue / all_orders.records.len() as f64
+    } else {
+        0.0
+    };
+    println!("  Average order value: ${:.2}", avg_order_value);
 
-    // Max
-    let max = db
-        .query(
-            "orders",
-            Query::new().aggregate(Aggregation::Max {
-                field: "total".into(),
-            }),
-        )
-        .await?;
-    if let Some(val) = max.aggregation {
-        println!("  Largest order: ${:.2}", val.as_f64().unwrap_or(0.0));
+    // Max order
+    let max_order = all_orders
+        .records
+        .iter()
+        .filter_map(|r| r.value.get("total").and_then(|t| t.as_f64()).map(|t| (r.key.clone(), t)))
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    if let Some((key, total)) = max_order {
+        println!("  Largest order: {} - ${:.2}", key, total);
     }
 
     // =========================================================================

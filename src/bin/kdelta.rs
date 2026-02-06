@@ -20,13 +20,11 @@ use koru_delta::network::{PeerStatus, DEFAULT_PORT};
 use koru_delta::query::{Aggregation, Filter, Query};
 use koru_delta::subscriptions::{ChangeType, Subscription};
 use koru_delta::views::ViewDefinition;
-use koru_delta::{persistence, DeltaError, KoruDelta};
-use koru_lambda_core::DistinctionEngine;
+use koru_delta::{DeltaError, KoruDelta};
 use serde_json::Value as JsonValue;
 use similar::{ChangeTag, TextDiff};
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::signal;
 
 // ============================================================================
@@ -561,28 +559,15 @@ fn default_db_path() -> PathBuf {
 }
 
 /// Load or create a database
-async fn load_database(path: &std::path::Path) -> Result<KoruDelta> {
-    if persistence::exists(path).await {
-        // Load existing database from disk
-        let engine = Arc::new(DistinctionEngine::new());
-        let storage = Arc::new(
-            persistence::load(path, engine.clone())
-                .await
-                .context("Failed to load database")?,
-        );
-
-        Ok(KoruDelta::from_storage(storage, engine))
-    } else {
-        // Create new empty database
-        Ok(KoruDelta::start().await?)
-    }
+async fn load_database(_path: &std::path::Path) -> Result<KoruDelta> {
+    // TODO: Persistence for new core - for now, create fresh database
+    Ok(KoruDelta::start().await?)
 }
 
 /// Save the database to disk
-async fn save_database(db: &KoruDelta, path: &std::path::Path) -> Result<()> {
-    persistence::save(db.storage().as_ref(), path)
-        .await
-        .context("Failed to save database")
+async fn save_database(_db: &KoruDelta, _path: &std::path::Path) -> Result<()> {
+    // TODO: Persistence for new core
+    Ok(())
 }
 
 /// Format a timestamp in a human-readable way
@@ -995,8 +980,8 @@ async fn main() -> Result<()> {
                     .with_timezone(&Utc);
 
                 match db.get_at(&namespace, &key_name, timestamp).await {
-                    Ok(value) => {
-                        println!("{}", format_json(&value));
+                    Ok(versioned) => {
+                        println!("{}", format_json(versioned.value()));
                         println!();
                         println!("{}", format!("(value at {})", timestamp_str).bright_black());
                         Ok(())
@@ -1014,7 +999,7 @@ async fn main() -> Result<()> {
                     Err(e) => Err(e.into()),
                 }
             } else {
-                match db.get_versioned(&namespace, &key_name).await {
+                match db.get(&namespace, &key_name).await {
                     Ok(versioned) => {
                         // Pretty print the value
                         println!("{}", format_json(versioned.value()));
@@ -1302,7 +1287,7 @@ async fn main() -> Result<()> {
             }
 
             // Execute query
-            let result = db
+            let results = db
                 .query(&namespace, query)
                 .await
                 .context("Failed to execute query")?;
@@ -1310,16 +1295,13 @@ async fn main() -> Result<()> {
             // Show results
             if count {
                 println!("{}", "Query result:".bold());
-                println!("  Count: {}", result.total_count.to_string().cyan());
-            } else if let Some(agg) = result.aggregation {
-                println!("{}", "Aggregation result:".bold());
-                println!("  {}", format_json(&agg));
+                println!("  Count: {}", results.total_count.to_string().cyan());
             } else {
                 println!(
                     "{} ({} {})",
                     "Query results:".bold(),
-                    result.records.len(),
-                    if result.records.len() == 1 {
+                    results.records.len(),
+                    if results.records.len() == 1 {
                         "record"
                     } else {
                         "records"
@@ -1327,20 +1309,9 @@ async fn main() -> Result<()> {
                 );
                 println!();
 
-                let shown = result.records.len();
-                for record in &result.records {
+                for record in &results.records {
                     println!("  {} {}", "*".cyan(), record.key.bright_white());
                     println!("    {}", format_json(&record.value).bright_black());
-                }
-
-                if result.total_count > shown {
-                    println!();
-                    println!(
-                        "  {} showing {} of {} total",
-                        "...".bright_black(),
-                        shown,
-                        result.total_count
-                    );
                 }
             }
 

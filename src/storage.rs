@@ -510,6 +510,11 @@ impl CausalStorage {
 
         storage
     }
+
+    /// Get the distinction engine.
+    pub fn distinction_engine(&self) -> &Arc<DistinctionEngine> {
+        &self.engine
+    }
 }
 
 #[cfg(test)]
