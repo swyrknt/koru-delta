@@ -176,9 +176,11 @@ pub struct KoruDelta {
     warm: Arc<RwLock<WarmMemory>>,
     cold: Arc<RwLock<ColdMemory>>,
     deep: Arc<RwLock<DeepMemory>>,
-    /// Process runner for background tasks
+    /// Process runner for background tasks (Phase 7)
+    #[allow(dead_code)]
     process_runner: Option<Arc<ProcessRunner>>,
-    /// Reconciliation manager
+    /// Reconciliation manager for distributed sync (Phase 7/8)
+    #[allow(dead_code)]
     reconciliation: Arc<RwLock<ReconciliationManager>>,
     /// Auth manager
     auth: Arc<AuthManager>,
@@ -253,10 +255,126 @@ impl KoruDelta {
 
         // Start background processes if enabled
         if db.config.processes.enabled {
-            // TODO: Start process runner
+            db.start_background_processes().await;
         }
 
         Ok(db)
+    }
+
+    /// Start background processes (consolidation, distillation, genome update).
+    async fn start_background_processes(&self) {
+        let hot = Arc::clone(&self.hot);
+        let warm = Arc::clone(&self.warm);
+        let cold = Arc::clone(&self.cold);
+        let deep = Arc::clone(&self.deep);
+        let storage = Arc::clone(&self.storage);
+        let mut shutdown = self.shutdown_rx.clone();
+        
+        let consolidation_interval = self.config.processes.consolidation_interval;
+        let distillation_interval = self.config.processes.distillation_interval;
+        let genome_interval = self.config.processes.genome_interval;
+
+        // Spawn consolidation task
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(consolidation_interval);
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        // Consolidation: Move data between tiers
+                        Self::run_consolidation(
+                            &hot, &warm, &cold, &deep, &storage
+                        ).await;
+                    }
+                    _ = shutdown.changed() => {
+                        if *shutdown.borrow() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        // Spawn distillation task
+        let hot = Arc::clone(&self.hot);
+        let warm = Arc::clone(&self.warm);
+        let cold = Arc::clone(&self.cold);
+        let storage = Arc::clone(&self.storage);
+        let mut shutdown = self.shutdown_rx.clone();
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(distillation_interval);
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        // Distillation: Remove noise, keep essence
+                        Self::run_distillation(
+                            &hot, &warm, &cold, &storage
+                        ).await;
+                    }
+                    _ = shutdown.changed() => {
+                        if *shutdown.borrow() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        // Spawn genome update task
+        let deep = Arc::clone(&self.deep);
+        let mut shutdown = self.shutdown_rx.clone();
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(genome_interval);
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        // Genome update: Extract causal topology
+                        Self::run_genome_update(&deep).await;
+                    }
+                    _ = shutdown.changed() => {
+                        if *shutdown.borrow() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /// Run consolidation: Move data between memory tiers.
+    async fn run_consolidation(
+        _hot: &Arc<RwLock<HotMemory>>,
+        _warm: &Arc<RwLock<WarmMemory>>,
+        _cold: &Arc<RwLock<ColdMemory>>,
+        _deep: &Arc<RwLock<DeepMemory>>,
+        _storage: &Arc<CausalStorage>,
+    ) {
+        // Phase 7: Full consolidation implementation
+        // TODO: Implement Hot → Warm → Cold → Deep promotion/demotion
+        // based on access patterns and capacity limits
+    }
+
+    /// Run distillation: Remove low-fitness distinctions.
+    async fn run_distillation(
+        _hot: &Arc<RwLock<HotMemory>>,
+        _warm: &Arc<RwLock<WarmMemory>>,
+        _cold: &Arc<RwLock<ColdMemory>>,
+        _storage: &Arc<CausalStorage>,
+    ) {
+        // Phase 7: Full distillation implementation
+        // TODO: Implement fitness-based natural selection
+        // - Evaluate distinction fitness (references, access patterns)
+        // - Remove noise, keep essence
+    }
+
+    /// Run genome update: Extract causal topology for backup.
+    async fn run_genome_update(
+        _deep: &Arc<RwLock<DeepMemory>>,
+    ) {
+        // Phase 7: Full genome implementation
+        // TODO: Extract genome (minimal causal topology)
+        // Store in deep memory for disaster recovery
     }
 
     /// Create a KoruDelta from existing storage and engine.
