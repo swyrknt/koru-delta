@@ -41,6 +41,7 @@
 //! }
 //! ```
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -154,6 +155,8 @@ impl Default for ReconciliationConfig {
 pub struct KoruDelta {
     /// Configuration
     config: CoreConfig,
+    /// Database path for persistence (None = in-memory only)
+    db_path: Option<PathBuf>,
     /// The underlying storage engine
     storage: Arc<CausalStorage>,
     /// The distinction engine (for advanced operations)
@@ -192,9 +195,88 @@ impl std::fmt::Debug for KoruDelta {
 impl KoruDelta {
     /// Start a new KoruDelta instance with default configuration.
     ///
-    /// This is the zero-configuration entry point.
+    /// This is the zero-configuration entry point (in-memory only).
     pub async fn start() -> DeltaResult<Self> {
         Self::new(CoreConfig::default()).await
+    }
+
+    /// Start a new KoruDelta instance with persistence at the given path.
+    ///
+    /// If the path exists and contains a database, it will be loaded.
+    /// If the path doesn't exist, a new database will be created.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let db = KoruDelta::start_with_path(Path::new("~/.korudelta/db")).await?;
+    /// ```
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn start_with_path(path: impl Into<PathBuf>) -> DeltaResult<Self> {
+        use crate::persistence;
+        
+        let path = path.into();
+        let config = CoreConfig::default();
+        
+        // Load from WAL if exists
+        let storage = if persistence::exists(&path).await {
+            let engine = Arc::new(DistinctionEngine::new());
+            persistence::load_from_wal(&path, engine).await?
+        } else {
+            CausalStorage::new(Arc::new(DistinctionEngine::new()))
+        };
+        
+        let storage = Arc::new(storage);
+        let engine = storage.engine();
+
+        // Initialize memory tiers
+        let hot = Arc::new(RwLock::new(HotMemory::with_config(HotConfig {
+            capacity: config.memory.hot_capacity,
+            promote_threshold: 2,
+        })));
+
+        let warm = Arc::new(RwLock::new(WarmMemory::new()));
+        let cold = Arc::new(RwLock::new(ColdMemory::new()));
+        let deep = Arc::new(RwLock::new(DeepMemory::new()));
+
+        // Initialize reconciliation
+        let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
+
+        // Initialize auth
+        let auth = Arc::new(AuthManager::with_config(Arc::clone(&storage), config.auth.clone()));
+
+        // Initialize views
+        let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
+
+        // Initialize subscriptions
+        let subscriptions = Arc::new(SubscriptionManager::new());
+
+        // Shutdown channel
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+        let db = Self {
+            config,
+            db_path: Some(path),
+            storage,
+            engine,
+            hot,
+            warm,
+            cold,
+            deep,
+            process_runner: None,
+            reconciliation,
+            auth,
+            views,
+            subscriptions,
+            shutdown_tx,
+            shutdown_rx,
+        };
+
+        // Start background processes if enabled
+        if db.config.processes.enabled {
+            db.start_background_processes().await;
+        }
+
+        Ok(db)
     }
 
     /// Create a new KoruDelta with the given configuration.
@@ -229,6 +311,7 @@ impl KoruDelta {
 
         let db = Self {
             config,
+            db_path: None,
             storage,
             engine,
             hot,
@@ -472,6 +555,7 @@ impl KoruDelta {
 
         Self {
             config: CoreConfig::default(),
+            db_path: None,
             storage,
             engine,
             hot,
@@ -501,6 +585,15 @@ impl KoruDelta {
 
         // Store in storage (source of truth)
         let versioned = self.storage.put(&namespace, &key, json_value)?;
+
+        // Persist to WAL if db_path is set
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(ref db_path) = self.db_path {
+            use crate::persistence;
+            if let Err(e) = persistence::append_write(db_path, &namespace, &key, &versioned).await {
+                eprintln!("Warning: Failed to persist write: {}", e);
+            }
+        }
 
         // Promote to hot memory
         {

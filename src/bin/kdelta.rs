@@ -559,14 +559,15 @@ fn default_db_path() -> PathBuf {
 }
 
 /// Load or create a database
-async fn load_database(_path: &std::path::Path) -> Result<KoruDelta> {
-    // TODO: Persistence for new core - for now, create fresh database
-    Ok(KoruDelta::start().await?)
+async fn load_database(path: &std::path::Path) -> Result<KoruDelta> {
+    KoruDelta::start_with_path(path)
+        .await
+        .context("Failed to initialize database")
 }
 
-/// Save the database to disk
+/// Save is now handled automatically in put() - this function is kept for API compatibility
 async fn save_database(_db: &KoruDelta, _path: &std::path::Path) -> Result<()> {
-    // TODO: Persistence for new core
+    // Persistence is handled incrementally in put() via WAL
     Ok(())
 }
 

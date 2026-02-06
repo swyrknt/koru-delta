@@ -85,6 +85,11 @@ impl CausalStorage {
         }
     }
 
+    /// Get a reference to the underlying distinction engine.
+    pub fn engine(&self) -> Arc<DistinctionEngine> {
+        Arc::clone(&self.engine)
+    }
+
     /// Store a value, capturing the emergent distinction and its relationships.
     ///
     /// This operation:
