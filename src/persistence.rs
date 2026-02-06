@@ -437,6 +437,80 @@ async fn replay_segment(
     Ok(())
 }
 
+/// Lock file for preventing concurrent database access and detecting unclean shutdown.
+const LOCK_FILE: &str = ".lock";
+
+/// Lock file contents indicating clean/unclean state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockState {
+    /// Database is currently running.
+    Running,
+    /// Database was shut down cleanly.
+    Clean,
+    /// Unclean shutdown detected.
+    Unclean,
+}
+
+/// Acquire a lock on the database.
+///
+/// Returns:
+/// - `Ok(LockState::Clean)` if this is a fresh start
+/// - `Ok(LockState::Unclean)` if previous shutdown was unclean (recovery needed)
+/// - `Err(...)` if another process is currently holding the lock
+pub async fn acquire_lock(db_path: &Path) -> DeltaResult<LockState> {
+    let lock_path = db_path.join(LOCK_FILE);
+    
+    // Check if lock file exists
+    if lock_path.exists() {
+        let content = fs::read_to_string(&lock_path).await
+            .map_err(|e| DeltaError::StorageError(format!("Failed to read lock file: {}", e)))?;
+        
+        match content.trim() {
+            "RUNNING" => {
+                return Err(DeltaError::StorageError(
+                    "Database is already running (lock file exists). \
+                     If this is incorrect, remove the lock file manually.".to_string()
+                ));
+            }
+            "CLEAN" => {
+                // Clean shutdown, proceed
+            }
+            "UNCLEAN" | _ => {
+                // Unclean shutdown detected
+                // Write RUNNING state
+                fs::write(&lock_path, "RUNNING").await
+                    .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
+                return Ok(LockState::Unclean);
+            }
+        }
+    }
+    
+    // Create lock file with RUNNING state
+    fs::create_dir_all(db_path).await
+        .map_err(|e| DeltaError::StorageError(format!("Failed to create db directory: {}", e)))?;
+    fs::write(&lock_path, "RUNNING").await
+        .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
+    
+    Ok(LockState::Clean)
+}
+
+/// Mark the database as cleanly shut down.
+pub async fn release_lock(db_path: &Path) -> DeltaResult<()> {
+    let lock_path = db_path.join(LOCK_FILE);
+    fs::write(&lock_path, "CLEAN").await
+        .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
+    Ok(())
+}
+
+/// Mark the database as having shut down uncleanly (for testing).
+#[allow(dead_code)]
+pub async fn mark_unclean_shutdown(db_path: &Path) -> DeltaResult<()> {
+    let lock_path = db_path.join(LOCK_FILE);
+    fs::write(&lock_path, "UNCLEAN").await
+        .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
+    Ok(())
+}
+
 /// Create a snapshot from current storage (for migration or compaction).
 pub async fn create_snapshot(
     storage: &CausalStorage,

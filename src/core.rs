@@ -217,6 +217,12 @@ impl KoruDelta {
         let path = path.into();
         let config = CoreConfig::default();
         
+        // Acquire lock and check for unclean shutdown
+        let lock_state = persistence::acquire_lock(&path).await?;
+        if lock_state == persistence::LockState::Unclean {
+            eprintln!("Warning: Unclean shutdown detected. Running recovery...");
+        }
+        
         // Load from WAL if exists
         let storage = if persistence::exists(&path).await {
             let engine = Arc::new(DistinctionEngine::new());
@@ -984,6 +990,16 @@ impl KoruDelta {
     /// Shutdown the database.
     pub async fn shutdown(self) -> DeltaResult<()> {
         let _ = self.shutdown_tx.send(true);
+        
+        // Release database lock
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(ref db_path) = self.db_path {
+            use crate::persistence;
+            if let Err(e) = persistence::release_lock(db_path).await {
+                eprintln!("Warning: Failed to release database lock: {}", e);
+            }
+        }
+        
         // TODO: Wait for background processes to complete
         Ok(())
     }

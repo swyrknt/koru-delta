@@ -942,8 +942,9 @@ async fn main() -> Result<()> {
         .await
         .context("Failed to initialize database")?;
 
-    // Execute command
-    let result = match cli.command {
+    // Execute command - wrap in async block to ensure shutdown is called
+    let result = async {
+        match cli.command {
         Commands::Set { key, value } => {
             let (namespace, key_name) = parse_key(&key)?;
 
@@ -1527,8 +1528,12 @@ async fn main() -> Result<()> {
         // Start and Serve are handled above
         Commands::Start { .. } => unreachable!(),
         Commands::Serve { .. } => unreachable!(),
-    };
-
+    }
+    }.await;
+    
+    // Shutdown database to release lock
+    db.shutdown().await.ok();
+    
     result
 }
 
