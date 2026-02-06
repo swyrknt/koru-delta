@@ -15,6 +15,9 @@ KoruDelta is architected in layers that enable distinction-driven operations:
 │         KoruDelta Public API            │  ← Simple, async interface
 │    (put, get, history, get_at)          │
 ├─────────────────────────────────────────┤
+│       Auth Layer (v2)                   │  ← Self-sovereign identity
+│  (Identity, Session, Capability)        │
+├─────────────────────────────────────────┤
 │      Reconciliation Layer (v2)          │  ← Distributed sync
 │  (MerkleTree, BloomFilter, WorldRec)    │
 ├─────────────────────────────────────────┤
@@ -148,6 +151,39 @@ Efficient distributed sync via set reconciliation.
 2. If different, drill down to find differences
 3. Send only missing distinctions
 4. Merge causal graphs (conflicts become branches)
+```
+
+### Layer 7: Auth Layer (`src/auth/`)
+
+Self-sovereign identity and capability-based authorization using distinctions.
+
+**Key Components:**
+- `Identity` - Mined identity with Ed25519 keys and proof-of-work
+- `Session` - Authenticated session with derived encryption keys
+- `Capability` - Signed permission grants (granter → grantee)
+- `AuthManager` - High-level authentication coordinator
+
+**Design Principles:**
+- **Self-sovereign**: Users generate and own their keys
+- **Distinction-based**: Auth state stored as `_auth:*` distinctions
+- **Capability-based**: No roles, only explicit permission grants
+- **Reconcilable**: Auth state syncs between nodes like any data
+
+**Storage Layout:**
+```
+_auth:identity:{pubkey}      → Identity (mined, proof-of-work)
+_auth:capability:{id}        → Capability (signed grant)
+_auth:revocation:{cap_id}    → Revocation (tombstone)
+```
+
+**Authentication Flow:**
+```
+1. Mine identity (proof-of-work, ~1s)
+2. Store identity as distinction
+3. Request challenge (ephemeral, 5min TTL)
+4. Sign challenge with private key
+5. Verify signature, create session
+6. Session keys derived via HKDF-SHA256
 ```
 
 ### Foundation: Distinction Engine
@@ -306,11 +342,20 @@ src/
 │   ├── consolidation.rs
 │   ├── distillation.rs
 │   └── genome_update.rs
-└── reconciliation/     # Set reconciliation (v2)
-    ├── mod.rs          # ReconciliationManager
-    ├── merkle.rs       # Merkle trees
-    ├── bloom.rs        # Bloom filters
-    └── world.rs        # World reconciliation
+├── reconciliation/     # Set reconciliation (v2)
+│   ├── mod.rs          # ReconciliationManager
+│   ├── merkle.rs       # Merkle trees
+│   ├── bloom.rs        # Bloom filters
+│   └── world.rs        # World reconciliation
+└── auth/               # Self-sovereign authentication (v2)
+    ├── mod.rs          # Public API exports
+    ├── types.rs        # Identity, Session, Capability
+    ├── identity.rs     # Proof-of-work mining
+    ├── verification.rs # Challenge-response
+    ├── session.rs      # Session management
+    ├── capability.rs   # Permission grants
+    ├── storage.rs      # Storage adapter
+    └── manager.rs      # High-level API
 ```
 
 ### Testing Strategy

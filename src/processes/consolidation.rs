@@ -139,7 +139,7 @@ impl ConsolidationProcess {
         &self,
         warm: &WarmMemory,
         hot: &HotMemory,
-        epoch_num: usize,
+        _epoch_num: usize,
         limit: usize,
     ) -> usize {
         let candidates = warm.find_promotion_candidates(limit);

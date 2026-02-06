@@ -299,7 +299,7 @@ impl DeepMemory {
     }
     
     /// Capture causal topology.
-    fn capture_topology(&self, causal_graph: &CausalGraph) -> CausalTopology {
+    fn capture_topology(&self, _causal_graph: &CausalGraph) -> CausalTopology {
         // TODO: Implement proper topology capture
         // For now, return empty
         CausalTopology {

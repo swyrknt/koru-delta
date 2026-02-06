@@ -36,20 +36,15 @@ use crate::causal_graph::CausalGraph;
 use std::collections::HashSet;
 
 /// Strategy for set reconciliation.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum SyncStrategy {
     /// Use Merkle tree comparison (exact, O(log n) bandwidth).
+    #[default]
     MerkleTree,
     /// Use Bloom filter (probabilistic, O(1) bandwidth).
     BloomFilter { expected_items: usize, fp_rate: f64 },
     /// Hybrid: Bloom filter first, then Merkle for differences.
     Hybrid { threshold: usize },
-}
-
-impl Default for SyncStrategy {
-    fn default() -> Self {
-        SyncStrategy::MerkleTree
-    }
 }
 
 /// Manager for set reconciliation operations.
@@ -60,6 +55,7 @@ pub struct ReconciliationManager {
     /// Local distinction IDs.
     local_distinctions: HashSet<String>,
     /// Strategy for sync.
+    #[allow(dead_code)]
     strategy: SyncStrategy,
     /// Cached Merkle tree (rebuilt on changes).
     cached_tree: Option<MerkleTree>,

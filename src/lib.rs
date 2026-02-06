@@ -109,6 +109,9 @@ pub mod memory;
 pub mod processes;
 pub mod reconciliation;
 
+// Self-sovereign authentication via distinctions
+pub mod auth;
+
 // Storage module (public for testing and cluster operations)
 pub mod storage;
 

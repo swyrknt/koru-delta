@@ -95,7 +95,7 @@ impl DistillationProcess {
         timestamp: DateTime<Utc>,
     ) -> Fitness {
         let reference_count = reference_graph.reference_count(&distinction_id.to_string());
-        let descendant_count = causal_graph.descendants(&distinction_id.to_string()).len();
+        let descendant_count = causal_graph.descendants(distinction_id).len();
         let age = Utc::now().signed_duration_since(timestamp);
         let age_days = age.num_days();
         
@@ -145,11 +145,11 @@ impl DistillationProcess {
     /// Distill a cold epoch - keep fit, archive unfit.
     pub fn distill_epoch(
         &self,
-        cold: &ColdMemory,
+        _cold: &ColdMemory,
         deep: &DeepMemory,
         epoch_num: usize,
-        reference_graph: &ReferenceGraph,
-        causal_graph: &CausalGraph,
+        _reference_graph: &ReferenceGraph,
+        _causal_graph: &CausalGraph,
     ) -> DistillationResult {
         // TODO: In real implementation, would iterate over epoch's distinctions
         // For now, placeholder

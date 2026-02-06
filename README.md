@@ -91,6 +91,32 @@ REST endpoints:
 - `GET /api/v1/:namespace/:key/at/:timestamp` - Time travel
 - `POST /api/v1/:namespace/query` - Execute queries
 
+### 🔐 Self-Sovereign Auth
+
+Built-in authentication with zero configuration. Users own their keys.
+
+```rust
+use koru_delta::auth::{AuthManager, IdentityUserData, Permission};
+
+let auth = AuthManager::new(storage);
+
+// Create identity (mines proof-of-work)
+let (identity, secret_key) = auth.create_identity(IdentityUserData {
+    display_name: Some("Alice".to_string()),
+    ..Default::default()
+})?;
+
+// Authenticate via challenge-response
+let challenge = auth.create_challenge(&identity.public_key)?;
+let response = sign_challenge(&secret_key, &challenge)?;
+let session = auth.verify_and_create_session(&identity.public_key, &challenge, &response)?;
+
+// Grant capabilities
+auth.grant_capability(&identity, &secret_key, &grantee, 
+    ResourcePattern::Namespace("documents".to_string()),
+    Permission::Write, None)?;
+```
+
 ### 🔍 Powerful Queries
 
 Filter, sort, and aggregate your data with a fluent query API:

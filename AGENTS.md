@@ -24,6 +24,9 @@ The project is built on top of [koru-lambda-core](https://github.com/swyrknt/kor
   - `axum` - HTTP API server
   - `chrono` - Time handling
   - `thiserror` / `anyhow` - Error handling
+  - `ed25519-dalek` - Ed25519 signatures
+  - `hkdf` / `hmac` - Key derivation
+  - `bs58` - Base58 encoding
 
 ## Project Structure
 
@@ -61,6 +64,15 @@ koru-delta/
 │   │   ├── merkle.rs     # Merkle trees
 │   │   ├── bloom.rs      # Bloom filters
 │   │   └── world.rs      # World reconciliation
+│   ├── auth/             # Self-sovereign authentication (v2)
+│   │   ├── mod.rs        # Public API
+│   │   ├── types.rs      # Identity, Session, Capability
+│   │   ├── identity.rs   # Proof-of-work identity mining
+│   │   ├── verification.rs # Challenge-response auth
+│   │   ├── session.rs    # Session management
+│   │   ├── capability.rs # Capability-based authorization
+│   │   ├── storage.rs    # Auth storage adapter
+│   │   └── manager.rs    # High-level AuthManager
 │   └── bin/kdelta.rs     # CLI binary implementation
 ├── tests/                # Integration tests
 │   ├── integration_tests.rs

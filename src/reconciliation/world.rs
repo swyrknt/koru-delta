@@ -90,6 +90,7 @@ pub struct WorldReconciliation {
     /// Our causal graph.
     local_graph: CausalGraph,
     /// Sync strategy.
+    #[allow(dead_code)]
     strategy: SyncStrategy,
     /// Statistics.
     stats: ReconciliationStats,
@@ -299,7 +300,7 @@ impl WorldReconciliation {
 
             // Check if this is a divergent branch
             let remote_ancestors: HashSet<_> = if let Some(divergence) = 
-                self.find_divergence(&[remote_id.clone()]) {
+                self.find_divergence(std::slice::from_ref(remote_id)) {
                 // Find path from divergence to remote
                 self.local_graph
                     .ancestors(remote_id)
@@ -316,7 +317,7 @@ impl WorldReconciliation {
                     key: format!("node_{}", remote_id),
                     our_version: "local".to_string(),
                     their_version: remote_id.clone(),
-                    common_ancestor: self.find_divergence(&[remote_id.clone()]),
+                    common_ancestor: self.find_divergence(std::slice::from_ref(remote_id)),
                 });
             }
         }

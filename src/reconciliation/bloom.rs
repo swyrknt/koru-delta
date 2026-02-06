@@ -53,7 +53,7 @@ impl BloomFilter {
     /// ```
     pub fn new(expected_items: usize, false_positive_rate: f64) -> Self {
         // Calculate optimal bit array size: m = -n * ln(p) / (ln(2)^2)
-        let m = ((-1.0 * expected_items as f64 * false_positive_rate.ln())
+        let m = ((-(expected_items as f64) * false_positive_rate.ln())
             / (2.0_f64.ln().powi(2)))
             .ceil() as usize;
 
@@ -123,14 +123,14 @@ impl BloomFilter {
 
     /// Get the size of the bit array in bytes.
     pub fn size_in_bytes(&self) -> usize {
-        (self.m + 7) / 8 // Round up to nearest byte
+        self.m.div_ceil(8) // Round up to nearest byte
     }
 
     /// Estimate current false positive rate.
     ///
     /// Formula: (1 - e^(-kn/m))^k
     pub fn current_false_positive_rate(&self) -> f64 {
-        let exponent = -1.0 * self.k as f64 * self.n as f64 / self.m as f64;
+        let exponent = -(self.k as f64) * self.n as f64 / self.m as f64;
         (1.0 - exponent.exp()).powi(self.k as i32)
     }
 

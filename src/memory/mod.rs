@@ -28,7 +28,6 @@
 /// - Frequently accessed data stays fast
 /// - Old data compressed but available
 /// - Runs on devices from Raspberry Pi to datacenter
-
 pub mod hot;
 pub mod warm;
 pub mod cold;
