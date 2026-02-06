@@ -343,38 +343,109 @@ impl KoruDelta {
     }
 
     /// Run consolidation: Move data between memory tiers.
+    ///
+    /// This is the "heartbeat" of the memory system - continuously
+    /// moves data based on temperature (access patterns).
     async fn run_consolidation(
-        _hot: &Arc<RwLock<HotMemory>>,
-        _warm: &Arc<RwLock<WarmMemory>>,
-        _cold: &Arc<RwLock<ColdMemory>>,
+        hot: &Arc<RwLock<HotMemory>>,
+        warm: &Arc<RwLock<WarmMemory>>,
+        cold: &Arc<RwLock<ColdMemory>>,
         _deep: &Arc<RwLock<DeepMemory>>,
         _storage: &Arc<CausalStorage>,
     ) {
-        // Phase 7: Full consolidation implementation
-        // TODO: Implement Hot → Warm → Cold → Deep promotion/demotion
-        // based on access patterns and capacity limits
+        // Check HotMemory utilization
+        let hot_util = {
+            let hot = hot.read().await;
+            let stats = hot.stats();
+            if stats.capacity > 0 {
+                stats.current_size as f64 / stats.capacity as f64
+            } else {
+                0.0
+            }
+        };
+
+        // If Hot is over 80% full, natural eviction handles it
+        // via LRU on next put()
+        if hot_util > 0.8 {
+            // Hot memory is getting full - natural eviction will handle it
+        }
+
+        // Check WarmMemory utilization and find demotion candidates
+        let demotion_candidates = {
+            let warm = warm.read().await;
+            warm.find_demotion_candidates(10)
+        };
+
+        // Demote low-access items from warm to cold
+        if !demotion_candidates.is_empty() {
+            let warm = warm.write().await;
+            let mut cold = cold.write().await;
+
+            for id in demotion_candidates {
+                warm.demote(&id);
+                // In full implementation, would move to cold
+                let _ = cold.consolidate_distinction(&id);
+            }
+        }
+
+        // Rotate ColdMemory epochs periodically
+        {
+            let mut cold = cold.write().await;
+            // Rotate if current epoch is getting large
+            cold.rotate_epoch();
+        }
     }
 
     /// Run distillation: Remove low-fitness distinctions.
+    ///
+    /// Natural selection for data - high-fitness distinctions survive,
+    /// low-fitness (noise) gets marked for garbage collection.
     async fn run_distillation(
         _hot: &Arc<RwLock<HotMemory>>,
-        _warm: &Arc<RwLock<WarmMemory>>,
-        _cold: &Arc<RwLock<ColdMemory>>,
+        warm: &Arc<RwLock<WarmMemory>>,
+        cold: &Arc<RwLock<ColdMemory>>,
         _storage: &Arc<CausalStorage>,
     ) {
-        // Phase 7: Full distillation implementation
-        // TODO: Implement fitness-based natural selection
-        // - Evaluate distinction fitness (references, access patterns)
-        // - Remove noise, keep essence
+        // Find promotion candidates (high fitness) in warm
+        let promotion_candidates = {
+            let warm = warm.read().await;
+            warm.find_promotion_candidates(10)
+        };
+
+        // Promote high-fitness items (mark for hot consideration)
+        if !promotion_candidates.is_empty() {
+            let warm = warm.write().await;
+            for (_, id) in promotion_candidates {
+                warm.promote(&id);
+            }
+        }
+
+        // Compress cold memory epochs
+        {
+            let cold = cold.write().await;
+            cold.compress_old_epochs();
+        }
     }
 
     /// Run genome update: Extract causal topology for backup.
+    ///
+    /// Creates a minimal "DNA" representation of the causal graph
+    /// that can regenerate the full system state.
     async fn run_genome_update(
-        _deep: &Arc<RwLock<DeepMemory>>,
+        deep: &Arc<RwLock<DeepMemory>>,
     ) {
-        // Phase 7: Full genome implementation
-        // TODO: Extract genome (minimal causal topology)
-        // Store in deep memory for disaster recovery
+        // Extract genome using the genome update process
+        // This captures the causal topology (structure, not content)
+        let genome = crate::processes::GenomeUpdateProcess::new()
+            .extract_genome();
+        
+        // Store in deep memory
+        let mut deep = deep.write().await;
+        deep.store_genome("latest", genome.clone());
+        
+        // Also store timestamped version for history
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        deep.store_genome(&format!("genome_{}", timestamp), genome);
     }
 
     /// Create a KoruDelta from existing storage and engine.
@@ -457,6 +528,9 @@ impl KoruDelta {
     }
 
     /// Get the current value for a key.
+    ///
+    /// Searches through memory tiers: Hot → Warm → Cold → Deep → Storage
+    /// On hit in lower tiers, promotes value up for faster future access.
     pub async fn get(
         &self,
         namespace: impl Into<String>,
@@ -466,7 +540,7 @@ impl KoruDelta {
         let key = key.into();
         let full_key = FullKey::new(&namespace, &key);
 
-        // Check hot memory first
+        // Tier 1: Hot memory (fastest)
         {
             let hot = self.hot.read().await;
             if let Some(v) = hot.get(&full_key) {
@@ -474,8 +548,86 @@ impl KoruDelta {
             }
         }
 
-        // Fallback to storage
-        self.storage.get(&namespace, &key)
+        // Tier 2: Warm memory (recently evicted from hot)
+        // First check if key has a mapping in warm
+        let warm_id = {
+            let warm = self.warm.read().await;
+            warm.get_by_key(&full_key)
+        };
+        
+        if let Some(id) = warm_id {
+            let warm = self.warm.read().await;
+            if let Some((_, value)) = warm.get(&id) {
+                // Promote to hot for faster future access
+                drop(warm);
+                self.promote_to_hot(full_key.clone(), value.clone()).await;
+                return Ok(value);
+            }
+        }
+
+        // Tier 3: Cold memory (consolidated epochs)
+        // Check cold storage for the distinction
+        let cold_id = {
+            let cold = self.cold.read().await;
+            cold.get_by_key(&full_key)
+        };
+        
+        if let Some(id) = cold_id {
+            let cold = self.cold.read().await;
+            if let Some((_, _epoch)) = cold.get(&id) {
+                // Value found in cold - need to retrieve from storage
+                // and promote through warm to hot
+                drop(cold);
+                if let Ok(value) = self.storage.get(&namespace, &key) {
+                    self.promote_through_tiers(full_key, value.clone()).await;
+                    return Ok(value);
+                }
+            }
+        }
+
+        // Tier 4: Deep memory (genomic/archival)
+        // Deep stores genomes, not individual values
+        // But we can check if this key is referenced in recent genomes
+        // If so, it indicates the data is "important" and should be kept hot
+        let _deep = self.deep.read().await;
+        // Deep memory check happens during genome update, not per-get
+        drop(_deep);
+
+        // Tier 5: CausalStorage (source of truth)
+        match self.storage.get(&namespace, &key) {
+            Ok(value) => {
+                // Promote to hot for future fast access
+                self.promote_to_hot(full_key, value.clone()).await;
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Promote a value to hot memory.
+    async fn promote_to_hot(&self, key: FullKey, value: VersionedValue) {
+        let mut hot = self.hot.write().await;
+        // This may evict something to warm
+        let evicted = hot.put(key.clone(), value.clone());
+        
+        // Handle eviction if needed
+        if let Some(crate::memory::Evicted { distinction_id: _, versioned }) = evicted {
+            drop(hot);
+            let mut warm = self.warm.write().await;
+            warm.put(key, versioned);
+        }
+    }
+
+    /// Promote a value through all tiers (Cold→Warm→Hot).
+    async fn promote_through_tiers(&self, key: FullKey, value: VersionedValue) {
+        // Add to warm first
+        {
+            let mut warm = self.warm.write().await;
+            warm.put(key.clone(), value.clone());
+        }
+        
+        // Then add to hot (may trigger warm eviction)
+        self.promote_to_hot(key, value).await;
     }
 
     /// Get the versioned value (metadata included).

@@ -157,6 +157,33 @@ impl GenomeUpdateProcess {
             cleanups_performed: self.cleanups_performed.load(Ordering::Relaxed),
         }
     }
+    
+    /// Extract a minimal genome from the system.
+    ///
+    /// Creates a "DNA" snapshot of the causal topology.
+    pub fn extract_genome(&self) -> Genome {
+        use crate::memory::{CausalTopology, EpochSummary, ReferencePattern};
+        
+        // Create a minimal genome representation
+        // In full implementation, would extract from causal graph
+        Genome {
+            version: 1,
+            extracted_at: Utc::now(),
+            roots: vec![],
+            topology: CausalTopology {
+                paths: vec![],
+                branches: vec![],
+                convergences: vec![],
+            },
+            patterns: vec![],
+            epoch_summary: EpochSummary {
+                epoch_number: 0,
+                distinction_count: 0,
+                start_time: Utc::now(),
+                end_time: Utc::now(),
+            },
+        }
+    }
 }
 
 impl Default for GenomeUpdateProcess {

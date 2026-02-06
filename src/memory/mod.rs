@@ -36,4 +36,4 @@ pub mod deep;
 pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
 pub use warm::{WarmConfig, WarmMemory, WarmStats};
 pub use cold::{ColdConfig, ColdMemory, ColdStats, ConsolidationResult, Pattern};
-pub use deep::{DeepConfig, DeepMemory, DeepStats, ExpressionResult, Genome};
+pub use deep::{CausalTopology, DeepConfig, DeepMemory, DeepStats, EpochSummary, ExpressionResult, Genome, ReferencePattern};

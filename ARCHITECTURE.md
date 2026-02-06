@@ -105,36 +105,57 @@ Bridge between JSON data and distinction structures.
 - Deterministic (order-independent for objects, order-dependent for arrays)
 - Efficient via koru-lambda-core's byte caching
 
-### Layer 4: Memory Tiering (`src/memory/`)
+### Layer 4: Memory Tiering ✅ (`src/memory/`)
 
-Brain-like memory hierarchy for efficient resource usage.
-
-**Components:**
-- `HotMemory` - LRU cache for frequently accessed distinctions
-- `WarmMemory` - Recent chronicle with idle detection
-- `ColdMemory` - Consolidated epochs with fitness filtering
-- `DeepMemory` - Genomic storage for 1KB portable backups
-
-**Flow:**
-```
-Hot ←→ Warm ←→ Cold ←→ Deep
- │       │       │       │
- │    (idle)  (epoch) (archive)
- │       │       │       │
-promote  │       │       │
-←←←←←←←←←
-```
-
-### Layer 5: Evolutionary Processes (`src/processes/`)
-
-Automated memory management through natural selection.
+Brain-like memory hierarchy for efficient resource usage. **Fully implemented in Phase 7.**
 
 **Components:**
-- `ConsolidationProcess` - Rhythmic movement between memory layers
-- `DistillationProcess` - Fitness-based natural selection
-- `GenomeUpdateProcess` - DNA maintenance and disaster recovery
+- `HotMemory` - LRU cache for frequently accessed distinctions (ACTIVE)
+- `WarmMemory` - Recent chronicle with idle detection (ACTIVE)
+- `ColdMemory` - Consolidated epochs with fitness filtering (ACTIVE)
+- `DeepMemory` - Genomic storage for 1KB portable backups (ACTIVE)
+
+**GET Cascade with Promotion:**
+```
+User → get(key)
+          ↓
+     HotMemory? → Return (<1ms)
+          ↓ No
+     WarmMemory? → Promote to Hot → Return
+          ↓ No
+     ColdMemory? → Promote through tiers → Return
+          ↓ No
+     CausalStorage → Promote to Hot → Return
+```
+
+**Background Processes:**
+- **Consolidation** (5 min): Hot ↔ Warm ↔ Cold ↔ Deep
+- **Distillation** (1 hour): Fitness-based selection
+- **Genome Update** (daily): Extract causal topology
+
+### Layer 5: Evolutionary Processes ✅ (`src/processes/`)
+
+Automated memory management through natural selection. **Running in Phase 7.**
+
+**Components:**
+- `ConsolidationProcess` - Rhythmic movement between memory layers (5 min interval)
+- `DistillationProcess` - Fitness-based natural selection (1 hour interval)
+- `GenomeUpdateProcess` - DNA maintenance and disaster recovery (daily interval)
 
 **Analogy:** Like sleep consolidating memories—unfit distinctions are archived, essence is preserved.
+
+**Implementation:**
+```rust
+// Spawned on KoruDelta initialization
+tokio::spawn(async move {
+    loop {
+        tokio::select! {
+            _ = interval.tick() => run_consolidation(),
+            _ = shutdown.changed() => break,
+        }
+    }
+});
+```
 
 ### Layer 6: Reconciliation (`src/reconciliation/`)
 

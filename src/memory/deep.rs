@@ -228,6 +228,11 @@ impl DeepMemory {
         self.archive.insert(epoch_id, archived);
     }
     
+    /// Store a genome.
+    pub fn store_genome(&self, id: &str, genome: Genome) {
+        self.genome.insert(id.to_string(), genome);
+    }
+    
     /// Get a genome by ID.
     pub fn get_genome(&self, id: &str) -> Option<Genome> {
         self.genome.get(id).map(|g| g.clone())

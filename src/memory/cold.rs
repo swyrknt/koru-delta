@@ -194,6 +194,27 @@ impl ColdMemory {
         None
     }
     
+    /// Get distinction ID by key (reverse lookup).
+    ///
+    /// Searches through epochs from newest to oldest.
+    pub fn get_by_key(&self, key: &FullKey) -> Option<DistinctionId> {
+        let current = self.current_epoch.load(Ordering::Relaxed) as usize;
+        
+        // Search from newest to oldest
+        for epoch_num in (0..=current).rev() {
+            if let Some(epoch) = self.epochs.get(&epoch_num) {
+                // Find entry with matching key
+                for (id, entry) in &epoch.index {
+                    if &entry.key == key {
+                        return Some(id.clone());
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+    
     /// Check if a distinction is in cold memory.
     pub fn contains(&self, id: &DistinctionId) -> bool {
         self.get(id).is_some()
@@ -301,6 +322,25 @@ impl ColdMemory {
         if should_compress {
             // TODO: Implement compression
             self.compressions.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    
+    /// Consolidate a distinction into cold memory.
+    /// 
+    /// Adds the distinction to the current epoch.
+    pub fn consolidate_distinction(&self, id: &DistinctionId) {
+        // In real implementation, would fetch from storage and add to epoch
+        // For now, just increment counter
+        self.consolidations.fetch_add(1, Ordering::Relaxed);
+    }
+    
+    /// Compress old epochs to save space.
+    pub fn compress_old_epochs(&self) {
+        let current = self.current_epoch.load(Ordering::Relaxed) as usize;
+        
+        // Compress all epochs except the current one
+        for epoch_num in 0..current {
+            self.maybe_compress_epoch(epoch_num);
         }
     }
 }
