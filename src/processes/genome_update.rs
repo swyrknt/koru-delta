@@ -162,7 +162,7 @@ impl GenomeUpdateProcess {
     ///
     /// Creates a "DNA" snapshot of the causal topology.
     pub fn extract_genome(&self) -> Genome {
-        use crate::memory::{CausalTopology, EpochSummary, ReferencePattern};
+        use crate::memory::{CausalTopology, EpochSummary};
         
         // Create a minimal genome representation
         // In full implementation, would extract from causal graph

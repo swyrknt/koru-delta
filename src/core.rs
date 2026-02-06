@@ -63,6 +63,7 @@ use crate::views::{ViewDefinition, ViewInfo, ViewManager};
 
 /// Configuration for KoruDelta.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct CoreConfig {
     /// Memory tier configuration
     pub memory: MemoryConfig,
@@ -107,16 +108,6 @@ pub struct ReconciliationConfig {
     pub sync_interval: Duration,
 }
 
-impl Default for CoreConfig {
-    fn default() -> Self {
-        Self {
-            memory: MemoryConfig::default(),
-            processes: ProcessConfig::default(),
-            auth: AuthConfig::default(),
-            reconciliation: ReconciliationConfig::default(),
-        }
-    }
-}
 
 impl Default for MemoryConfig {
     fn default() -> Self {
@@ -379,18 +370,18 @@ impl KoruDelta {
         // Demote low-access items from warm to cold
         if !demotion_candidates.is_empty() {
             let warm = warm.write().await;
-            let mut cold = cold.write().await;
+            let cold = cold.write().await;
 
             for id in demotion_candidates {
                 warm.demote(&id);
                 // In full implementation, would move to cold
-                let _ = cold.consolidate_distinction(&id);
+                cold.consolidate_distinction(&id);
             }
         }
 
         // Rotate ColdMemory epochs periodically
         {
-            let mut cold = cold.write().await;
+            let cold = cold.write().await;
             // Rotate if current epoch is getting large
             cold.rotate_epoch();
         }
@@ -440,7 +431,7 @@ impl KoruDelta {
             .extract_genome();
         
         // Store in deep memory
-        let mut deep = deep.write().await;
+        let deep = deep.write().await;
         deep.store_genome("latest", genome.clone());
         
         // Also store timestamped version for history
@@ -606,14 +597,14 @@ impl KoruDelta {
 
     /// Promote a value to hot memory.
     async fn promote_to_hot(&self, key: FullKey, value: VersionedValue) {
-        let mut hot = self.hot.write().await;
+        let hot = self.hot.write().await;
         // This may evict something to warm
         let evicted = hot.put(key.clone(), value.clone());
         
         // Handle eviction if needed
         if let Some(crate::memory::Evicted { distinction_id: _, versioned }) = evicted {
             drop(hot);
-            let mut warm = self.warm.write().await;
+            let warm = self.warm.write().await;
             warm.put(key, versioned);
         }
     }
@@ -622,7 +613,7 @@ impl KoruDelta {
     async fn promote_through_tiers(&self, key: FullKey, value: VersionedValue) {
         // Add to warm first
         {
-            let mut warm = self.warm.write().await;
+            let warm = self.warm.write().await;
             warm.put(key.clone(), value.clone());
         }
         
@@ -885,7 +876,7 @@ impl KoruDelta {
             version_id: Some(versioned.version_id().to_string()),
             previous_version_id: versioned.previous_version().map(|s| s.to_string()),
         };
-        let _ = self.subscriptions.notify(event);
+        self.subscriptions.notify(event);
 
         // Auto-refresh views for this collection
         let _ = self.views.refresh_for_collection(&namespace);

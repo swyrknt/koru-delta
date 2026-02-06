@@ -328,7 +328,7 @@ impl ColdMemory {
     /// Consolidate a distinction into cold memory.
     /// 
     /// Adds the distinction to the current epoch.
-    pub fn consolidate_distinction(&self, id: &DistinctionId) {
+    pub fn consolidate_distinction(&self, _id: &DistinctionId) {
         // In real implementation, would fetch from storage and add to epoch
         // For now, just increment counter
         self.consolidations.fetch_add(1, Ordering::Relaxed);

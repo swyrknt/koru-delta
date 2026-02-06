@@ -567,8 +567,8 @@ mod tests {
         assert_ne!(v1.version_id(), v2.version_id());
 
         // Causal graph is keyed by write_id (unique per write)
-        assert!(storage.causal_graph.contains(&v1.write_id()));
-        assert!(storage.causal_graph.contains(&v2.write_id()));
+        assert!(storage.causal_graph.contains(v1.write_id()));
+        assert!(storage.causal_graph.contains(v2.write_id()));
     }
 
     #[test]
@@ -580,17 +580,17 @@ mod tests {
         let v3 = storage.put("test", "key", json!(3)).unwrap();
 
         // Check causal graph structure (keyed by write_id)
-        assert!(storage.causal_graph.contains(&v1.write_id()));
-        assert!(storage.causal_graph.contains(&v2.write_id()));
-        assert!(storage.causal_graph.contains(&v3.write_id()));
+        assert!(storage.causal_graph.contains(v1.write_id()));
+        assert!(storage.causal_graph.contains(v2.write_id()));
+        assert!(storage.causal_graph.contains(v3.write_id()));
 
         // Check edges (v1 -> v2 -> v3) using write_ids
         let v2_id = v2.write_id();
-        let ancestors_v2 = storage.causal_graph.ancestors(&v2_id);
+        let ancestors_v2 = storage.causal_graph.ancestors(v2_id);
         assert!(ancestors_v2.contains(&v1.write_id().to_string()));
 
         let v3_id = v3.write_id();
-        let ancestors_v3 = storage.causal_graph.ancestors(&v3_id);
+        let ancestors_v3 = storage.causal_graph.ancestors(v3_id);
         assert!(ancestors_v3.contains(&v2.write_id().to_string()));
         assert!(ancestors_v3.contains(&v1.write_id().to_string()));
     }
@@ -638,9 +638,9 @@ mod tests {
         assert_eq!(storage.total_version_count(), 3);
 
         // Verify all are in causal graph (keyed by write_id)
-        assert!(storage.causal_graph.contains(&v1.write_id().to_string()));
-        assert!(storage.causal_graph.contains(&v2.write_id().to_string()));
-        assert!(storage.causal_graph.contains(&v3.write_id().to_string()));
+        assert!(storage.causal_graph.contains(v1.write_id()));
+        assert!(storage.causal_graph.contains(v2.write_id()));
+        assert!(storage.causal_graph.contains(v3.write_id()));
     }
 
     #[test]

@@ -323,7 +323,7 @@ mod tests {
     fn test_add_node() {
         let graph = CausalGraph::new();
         graph.add_node("a".to_string());
-        assert!(graph.contains(&"a".to_string()));
+        assert!(graph.contains("a"));
         assert_eq!(graph.node_count(), 1);
     }
 
@@ -334,7 +334,7 @@ mod tests {
         graph.add_node("child".to_string());
         graph.add_edge("parent".to_string(), "child".to_string());
 
-        let ancestors = graph.ancestors(&"child".to_string());
+        let ancestors = graph.ancestors("child");
         assert_eq!(ancestors, vec!["parent".to_string()]);
     }
 
@@ -348,7 +348,7 @@ mod tests {
         graph.add_edge("a".to_string(), "b".to_string());
         graph.add_edge("b".to_string(), "c".to_string());
 
-        let ancestors_c = graph.ancestors(&"c".to_string());
+        let ancestors_c = graph.ancestors("c");
         assert_eq!(ancestors_c.len(), 2);
         assert!(ancestors_c.contains(&"a".to_string()));
         assert!(ancestors_c.contains(&"b".to_string()));
@@ -364,7 +364,7 @@ mod tests {
         graph.add_edge("a".to_string(), "b".to_string());
         graph.add_edge("b".to_string(), "c".to_string());
 
-        let descendants_a = graph.descendants(&"a".to_string());
+        let descendants_a = graph.descendants("a");
         assert_eq!(descendants_a.len(), 2);
         assert!(descendants_a.contains(&"b".to_string()));
         assert!(descendants_a.contains(&"c".to_string()));
@@ -379,7 +379,7 @@ mod tests {
         graph.add_edge("a".to_string(), "b".to_string());
 
         // LCA of a and b should be a (since a is ancestor of b)
-        let lca = graph.lca(&"a".to_string(), &"b".to_string());
+        let lca = graph.lca("a", "b");
         assert_eq!(lca, Some("a".to_string()));
     }
 
@@ -395,7 +395,7 @@ mod tests {
         graph.add_edge("a".to_string(), "b".to_string());
         graph.add_edge("a".to_string(), "c".to_string());
 
-        let lca = graph.lca(&"b".to_string(), &"c".to_string());
+        let lca = graph.lca("b", "c");
         assert_eq!(lca, Some("a".to_string()));
     }
 
@@ -451,11 +451,11 @@ mod tests {
         graph.add_with_parents("d".to_string(), vec!["b".to_string(), "c".to_string()]);
 
         // d's ancestors should include a, b, c
-        let ancestors_d = graph.ancestors(&"d".to_string());
+        let ancestors_d = graph.ancestors("d");
         assert_eq!(ancestors_d.len(), 3);
 
         // LCA of b and c should be a
-        let lca = graph.lca(&"b".to_string(), &"c".to_string());
+        let lca = graph.lca("b", "c");
         assert_eq!(lca, Some("a".to_string()));
 
         // Frontier should be d

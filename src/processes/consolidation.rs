@@ -233,7 +233,7 @@ mod tests {
         
         // Simulate some evictions
         for i in 0..5 {
-            let key = crate::types::FullKey::new("ns", &format!("key{}", i));
+            let key = crate::types::FullKey::new("ns", format!("key{}", i));
             let versioned = create_versioned(&format!("v{}", i));
             consolidation.handle_hot_eviction(&warm, key, versioned);
         }
