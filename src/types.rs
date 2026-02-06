@@ -212,7 +212,6 @@ mod tests {
 
     #[test]
     fn test_versioned_value_accessors() {
-        use std::sync::Arc;
         let now = Utc::now();
         let value = serde_json::json!({"name": "Alice"});
         let versioned = VersionedValue::from_json(

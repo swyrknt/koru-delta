@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn test_create_and_get_identity() {
-        let mut manager = create_test_manager();
+        let manager = create_test_manager();
 
         let user_data = IdentityUserData {
             display_name: Some("Alice".to_string()),
@@ -426,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_identity() {
-        let mut manager = create_test_manager();
+        let manager = create_test_manager();
 
         let user_data = IdentityUserData::default();
         let (identity, _secret_key) = manager.create_identity(user_data.clone()).unwrap();
@@ -438,7 +438,7 @@ mod tests {
 
     #[test]
     fn test_full_auth_flow() {
-        let mut manager = create_test_manager();
+        let manager = create_test_manager();
 
         // 1. Create identity
         let user_data = IdentityUserData::default();
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_authorize_without_capability() {
-        let mut manager = create_test_manager();
+        let manager = create_test_manager();
 
         // Create identity but don't grant any capabilities
         let (identity, _secret_key) = manager.create_identity(IdentityUserData::default()).unwrap();
@@ -549,7 +549,7 @@ mod tests {
 
     #[test]
     fn test_cleanup() {
-        let mut manager = create_test_manager();
+        let manager = create_test_manager();
 
         // Create identity and challenge
         let (identity, _secret_key) = manager.create_identity(IdentityUserData::default()).unwrap();

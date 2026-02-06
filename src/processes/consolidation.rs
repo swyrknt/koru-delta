@@ -199,7 +199,7 @@ pub struct ConsolidationStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::{HotConfig, HotMemory, WarmConfig, WarmMemory};
+    use crate::memory::WarmMemory;
     use serde_json::json;
     use std::sync::Arc;
 
