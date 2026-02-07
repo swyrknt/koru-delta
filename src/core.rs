@@ -63,6 +63,9 @@ use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionId, Subscripti
 use crate::types::{FullKey, HistoryEntry, VersionedValue};
 use crate::views::{ViewDefinition, ViewInfo, ViewManager};
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::cluster::ClusterNode;
+
 /// Configuration for KoruDelta.
 #[derive(Debug, Clone)]
 #[derive(Default)]
@@ -205,6 +208,9 @@ pub struct KoruDelta {
     reconciliation: Arc<RwLock<ReconciliationManager>>,
     /// Auth manager
     auth: Arc<AuthManager>,
+    /// Cluster node for distributed operation (optional)
+    #[cfg(not(target_arch = "wasm32"))]
+    cluster: Option<Arc<ClusterNode>>,
     /// Shutdown signal
     shutdown_tx: tokio::sync::watch::Sender<bool>,
     shutdown_rx: tokio::sync::watch::Receiver<bool>,
@@ -313,6 +319,8 @@ impl KoruDelta {
             auth,
             views,
             subscriptions,
+            #[cfg(not(target_arch = "wasm32"))]
+            cluster: None,
             shutdown_tx,
             shutdown_rx,
         };
@@ -369,6 +377,8 @@ impl KoruDelta {
             auth,
             views,
             subscriptions,
+            #[cfg(not(target_arch = "wasm32"))]
+            cluster: None,
             shutdown_tx,
             shutdown_rx,
         };
@@ -379,6 +389,15 @@ impl KoruDelta {
         }
 
         Ok(db)
+    }
+
+    /// Attach a cluster node for distributed operation.
+    /// 
+    /// This enables automatic broadcast of writes to cluster peers.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn with_cluster(mut self, cluster: Arc<ClusterNode>) -> Self {
+        self.cluster = Some(cluster);
+        self
     }
 
     /// Start background processes (consolidation, distillation, genome update).
@@ -613,6 +632,8 @@ impl KoruDelta {
             auth,
             views,
             subscriptions,
+            #[cfg(not(target_arch = "wasm32"))]
+            cluster: None,
             shutdown_tx,
             shutdown_rx,
         }
@@ -646,6 +667,18 @@ impl KoruDelta {
             } else {
                 trace!("Write persisted to WAL");
             }
+        }
+
+        // Broadcast to cluster if configured
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(ref cluster) = self.cluster {
+            let full_key = FullKey::new(&namespace, &key);
+            let value_clone = versioned.clone();
+            let cluster_clone = Arc::clone(cluster);
+            tokio::spawn(async move {
+                trace!("Broadcasting write to cluster");
+                cluster_clone.broadcast_write(full_key, value_clone).await;
+            });
         }
 
         // Promote to hot memory

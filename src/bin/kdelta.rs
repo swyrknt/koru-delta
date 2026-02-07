@@ -1576,8 +1576,9 @@ async fn run_server(
         config = config.join(addr);
     }
 
-    // Create and start cluster node
-    let node = ClusterNode::new(db.storage().clone(), db.engine().clone(), config);
+    // Create cluster node and attach to database for write broadcasting
+    let node = std::sync::Arc::new(ClusterNode::new(db.storage().clone(), db.engine().clone(), config));
+    let db = db.with_cluster(node.clone());
 
     println!("{}", "Starting KoruDelta node...".bold().cyan());
     println!();
