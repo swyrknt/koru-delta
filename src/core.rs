@@ -1096,6 +1096,27 @@ impl KoruDelta {
         &self.auth
     }
 
+    /// Create an agent memory manager.
+    ///
+    /// Returns a new `AgentMemory` instance for the given agent ID.
+    /// Each agent gets its own isolated memory namespace.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let db = KoruDelta::start().await?;
+    /// let agent = db.agent_memory("agent-42");
+    ///
+    /// // Store a memory
+    /// agent.remember_episode("User asked about Python", 0.8).await?;
+    ///
+    /// // Recall relevant memories
+    /// let memories = agent.recall("Python", RecallOptions::new().limit(5)).await?;
+    /// ```
+    pub fn agent_memory(&self, agent_id: impl Into<String>) -> crate::memory::AgentMemory {
+        crate::memory::AgentMemory::new(self.clone(), agent_id)
+    }
+
     /// Get storage reference.
     pub fn storage(&self) -> &Arc<CausalStorage> {
         &self.storage

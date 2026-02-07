@@ -28,11 +28,16 @@
 /// - Frequently accessed data stays fast
 /// - Old data compressed but available
 /// - Runs on devices from Raspberry Pi to datacenter
+pub mod agent;
 pub mod hot;
 pub mod warm;
 pub mod cold;
 pub mod deep;
 
+pub use agent::{
+    AgentMemory, ConsolidationSummary, Memory, MemoryRecall, MemoryStats, MemoryType,
+    RecallOptions,
+};
 pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
 pub use warm::{WarmConfig, WarmMemory, WarmStats};
 pub use cold::{ColdConfig, ColdMemory, ColdStats, ConsolidationResult, Pattern};

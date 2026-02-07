@@ -163,6 +163,12 @@ pub use views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
 // Vector exports
 pub use vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
 
+// Agent Memory exports
+pub use memory::{
+    AgentMemory, ConsolidationSummary, Memory, MemoryRecall, MemoryStats, MemoryType,
+    RecallOptions,
+};
+
 // Subscriptions exports (non-WASM only)
 #[cfg(not(target_arch = "wasm32"))]
 pub use subscriptions::{
@@ -208,6 +214,11 @@ pub mod prelude {
 
     // Vector types
     pub use crate::vector::{Vector, VectorSearchOptions, VectorSearchResult};
+
+    // Agent Memory types
+    pub use crate::memory::{
+        AgentMemory, Memory, MemoryRecall, MemoryStats, MemoryType, RecallOptions,
+    };
 
     // Subscriptions types (non-WASM only)
     #[cfg(not(target_arch = "wasm32"))]
