@@ -1,6 +1,11 @@
 """
 Time-Travel Config Management & Feature Debugger
 
+To run:
+    cd bindings/python
+    source venv/bin/activate  # or your virtualenv
+    python examples/04_config_management.py
+
 This example demonstrates KoruDelta's unique config capabilities:
 - "Git for configuration" - complete version history
 - Time-travel debugging: "What did the config look like during the outage?"

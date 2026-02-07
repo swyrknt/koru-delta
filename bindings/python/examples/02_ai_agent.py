@@ -1,6 +1,11 @@
 """
 AI Agent with Semantic Memory & Natural Forgetting
 
+To run:
+    cd bindings/python
+    source venv/bin/activate  # or your virtualenv
+    python examples/02_ai_agent.py
+
 This example demonstrates what makes KoruDelta unique for AI:
 - Content-addressed vector embeddings (find by meaning, not keywords)
 - Natural memory lifecycle (hot→warm→cold→deep)

@@ -1,6 +1,11 @@
 """
 Fraud Detection & Compliance with Time Travel
 
+To run:
+    cd bindings/python
+    source venv/bin/activate  # or your virtualenv
+    python examples/03_audit_trail.py
+
 This example demonstrates KoruDelta's unique audit capabilities:
 - Detect tampering by viewing data BEFORE changes
 - Prove compliance: "This value was X on date Y"
