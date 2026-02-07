@@ -429,6 +429,12 @@ enum Commands {
         #[arg(long)]
         updates_only: bool,
     },
+
+    /// Authentication and authorization commands
+    ///
+    /// Manage identities, capabilities, and access control.
+    #[command(subcommand)]
+    Auth(AuthCommands),
 }
 
 /// View management subcommands
@@ -482,6 +488,60 @@ enum ViewCommands {
     Delete {
         /// View name
         name: String,
+    },
+}
+
+/// Authentication subcommands
+#[derive(Subcommand)]
+enum AuthCommands {
+    /// Create a new identity
+    ///
+    /// Generates Ed25519 keypair and mines proof-of-work identity.
+    ///
+    /// Example:
+    ///   kdelta auth create --name "Alice"
+    CreateIdentity {
+        /// Display name for the identity
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+
+    /// List all identities
+    ListIdentities,
+
+    /// Grant a capability to another identity
+    ///
+    /// Example:
+    ///   kdelta auth grant --to <identity> --resource "users/*" --permission read
+    Grant {
+        /// Identity to grant capability to
+        #[arg(short, long)]
+        to: String,
+
+        /// Resource pattern (e.g., "users/*", "documents:file1")
+        #[arg(short, long)]
+        resource: String,
+
+        /// Permission level: read, write, or admin
+        #[arg(short, long)]
+        permission: String,
+
+        /// Expiration time (e.g., "1h", "1d", "7d")
+        #[arg(short, long)]
+        expires: Option<String>,
+    },
+
+    /// List capabilities for current identity
+    ListCapabilities,
+
+    /// Revoke a capability
+    ///
+    /// Example:
+    ///   kdelta auth revoke --capability <capability_id>
+    Revoke {
+        /// Capability ID to revoke
+        #[arg(short, long)]
+        capability: String,
     },
 }
 
@@ -910,6 +970,12 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
 
         Commands::Watch { .. } => {
             println!("{}", "Watch command not available via HTTP API (use websockets for streaming)".yellow());
+            Ok(())
+        }
+
+        Commands::Auth(_) => {
+            println!("{}", "Auth commands require local database access.".yellow());
+            println!("{}", "Remove --url to use auth commands locally.".yellow());
             Ok(())
         }
     }
@@ -1447,6 +1513,90 @@ async fn main() -> Result<()> {
             }
         },
 
+        Commands::Auth(auth_cmd) => match auth_cmd {
+            AuthCommands::CreateIdentity { name } => {
+                use koru_delta::auth::IdentityUserData;
+                
+                let (identity, _secret_key) = db.auth()
+                    .create_identity(IdentityUserData {
+                        display_name: name.clone(),
+                        ..Default::default()
+                    })
+                    .context("Failed to create identity")?;
+
+                println!("{}", "Identity created:".bold().green());
+                println!("  ID: {}", identity.public_key.cyan());
+                if let Some(n) = identity.user_data.display_name {
+                    println!("  Name: {}", n);
+                }
+                println!("\n{}", "IMPORTANT: Save your secret key!".yellow().bold());
+                println!("{}", "It cannot be recovered if lost.".yellow());
+
+                Ok(())
+            }
+
+            AuthCommands::ListIdentities => {
+                println!("{}", "Identities:".bold());
+                println!();
+                println!("{}", "Note: Identity listing requires direct storage access.".yellow());
+                println!("{}", "Use the Rust API for programmatic identity management.".yellow());
+                Ok(())
+            }
+
+            AuthCommands::Grant { to, resource, permission, expires } => {
+                use koru_delta::auth::{Permission, ResourcePattern};
+                
+                let perm = match permission.to_lowercase().as_str() {
+                    "read" => Permission::Read,
+                    "write" => Permission::Write,
+                    "admin" => Permission::Admin,
+                    _ => {
+                        anyhow::bail!("Invalid permission. Use: read, write, or admin");
+                    }
+                };
+
+                let _pattern = if resource.contains(':') {
+                    ResourcePattern::Exact(resource.clone())
+                } else if resource.ends_with("/*") {
+                    ResourcePattern::Namespace(resource.trim_end_matches("/*").to_string())
+                } else {
+                    ResourcePattern::Namespace(resource.clone())
+                };
+
+                let expiration = expires.as_ref().and_then(|e| parse_duration(e));
+
+                // Note: This requires the granter's secret key which we don't have in CLI context
+                // For now, show what would be needed
+                println!("{}", "Capability grant request:".bold());
+                println!("  To: {}", to.cyan());
+                println!("  Resource: {}", resource);
+                println!("  Permission: {:?}", perm);
+                if let Some(exp) = expiration {
+                    println!("  Expires: {}", exp);
+                }
+                println!();
+                println!("{}", "Note: Granting requires your secret key.".yellow());
+                println!("{}", "Use the Rust API for programmatic grants.".yellow());
+
+                Ok(())
+            }
+
+            AuthCommands::ListCapabilities => {
+                println!("{}", "Capabilities for current identity:".bold());
+                println!();
+                println!("{}", "Note: Use the Rust API to query capabilities.".yellow());
+                Ok(())
+            }
+
+            AuthCommands::Revoke { capability } => {
+                println!("{}", format!("Revoking capability: {}", capability).bold());
+                println!();
+                println!("{}", "Note: Revocation requires the granter's secret key.".yellow());
+                println!("{}", "Use the Rust API for programmatic revocation.".yellow());
+                Ok(())
+            }
+        },
+
         Commands::Watch {
             target,
             all,
@@ -1698,4 +1848,19 @@ async fn run_http_server(
 
     println!("{}", "Server stopped.".green());
     Ok(())
+}
+
+
+/// Parse a duration string like "1h", "1d", "7d" into seconds
+fn parse_duration(s: &str) -> Option<u64> {
+    let s = s.trim().to_lowercase();
+    if s.ends_with('h') {
+        s.trim_end_matches('h').parse::<u64>().ok().map(|n| n * 3600)
+    } else if s.ends_with('d') {
+        s.trim_end_matches('d').parse::<u64>().ok().map(|n| n * 86400)
+    } else if s.ends_with('m') {
+        s.trim_end_matches('m').parse::<u64>().ok().map(|n| n * 60)
+    } else {
+        s.parse::<u64>().ok()
+    }
 }
