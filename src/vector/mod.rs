@@ -36,11 +36,19 @@
 //! ```
 
 mod index;
+pub mod snsw;
 mod types;
 
 // Public exports
 pub use index::{AnnIndex, FlatIndex, VectorIndex};
+pub use snsw::{
+    ContentHash, DistinctionNode, FactorScores, SynthesisConfig, SynthesisEdge,
+    SynthesisGraph, SynthesisPathStep, SynthesisSearchResult, SynthesisType,
+};
 pub use types::{Vector, VectorSearchOptions, VectorSearchResult};
+
+// Re-export snsw module for advanced usage
+pub use snsw as synthesis_navigable;
 
 use crate::error::DeltaResult;
 use crate::types::VersionedValue;
