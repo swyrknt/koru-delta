@@ -118,6 +118,9 @@ pub mod storage;
 // Query module
 pub mod query;
 
+// Vector module (AI embeddings and similarity search)
+pub mod vector;
+
 // Views module
 pub mod views;
 
@@ -156,6 +159,9 @@ pub use query::{
 
 // Views exports
 pub use views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
+
+// Vector exports
+pub use vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
 
 // Subscriptions exports (non-WASM only)
 #[cfg(not(target_arch = "wasm32"))]
@@ -199,6 +205,9 @@ pub mod prelude {
 
     // Views types
     pub use crate::views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
+
+    // Vector types
+    pub use crate::vector::{Vector, VectorSearchOptions, VectorSearchResult};
 
     // Subscriptions types (non-WASM only)
     #[cfg(not(target_arch = "wasm32"))]

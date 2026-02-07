@@ -62,6 +62,7 @@ use crate::storage::CausalStorage;
 use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionId, SubscriptionManager};
 use crate::types::{FullKey, HistoryEntry, VersionedValue};
 use crate::views::{ViewDefinition, ViewInfo, ViewManager};
+use crate::vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::cluster::ClusterNode;
@@ -208,6 +209,8 @@ pub struct KoruDelta {
     reconciliation: Arc<RwLock<ReconciliationManager>>,
     /// Auth manager
     auth: Arc<AuthManager>,
+    /// Vector index for similarity search
+    vector_index: VectorIndex,
     /// Cluster node for distributed operation (optional)
     #[cfg(not(target_arch = "wasm32"))]
     cluster: Option<Arc<ClusterNode>>,
@@ -319,6 +322,7 @@ impl KoruDelta {
             auth,
             views,
             subscriptions,
+            vector_index: VectorIndex::new_flat(),
             #[cfg(not(target_arch = "wasm32"))]
             cluster: None,
             shutdown_tx,
@@ -377,6 +381,7 @@ impl KoruDelta {
             auth,
             views,
             subscriptions,
+            vector_index: VectorIndex::new_flat(),
             #[cfg(not(target_arch = "wasm32"))]
             cluster: None,
             shutdown_tx,
@@ -632,6 +637,7 @@ impl KoruDelta {
             auth,
             views,
             subscriptions,
+            vector_index: VectorIndex::new_flat(),
             #[cfg(not(target_arch = "wasm32"))]
             cluster: None,
             shutdown_tx,
@@ -876,6 +882,144 @@ impl KoruDelta {
         }
 
         Ok(entries)
+    }
+
+    // ============================================================================
+    // Vector / Embedding Operations (AI Infrastructure)
+    // ============================================================================
+
+    /// Store a vector embedding.
+    ///
+    /// Vectors are stored as versioned values with metadata, enabling:
+    /// - Automatic versioning of embeddings
+    /// - Time travel for embeddings
+    /// - Causal tracking of embedding changes
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace for the embedding (e.g., "documents", "embeddings")
+    /// * `key` - The unique key for this embedding
+    /// * `vector` - The vector embedding to store
+    /// * `metadata` - Optional JSON metadata to store with the vector
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let embedding = Vector::new(vec![0.1, 0.2, 0.3], "text-embedding-3-small");
+    /// db.embed("docs", "article1", embedding, Some(json!({"title": "AI"}))).await?;
+    /// ```
+    pub async fn embed(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        vector: Vector,
+        metadata: Option<serde_json::Value>,
+    ) -> DeltaResult<VersionedValue> {
+        let namespace = namespace.into();
+        let key = key.into();
+
+        // Serialize vector with metadata
+        let value = crate::vector::vector_to_json(&vector, metadata);
+
+        // Store in database (this handles versioning, persistence, etc.)
+        let versioned = self.put(&namespace, &key, value).await?;
+
+        // Add to vector index for fast similarity search
+        let full_key = FullKey::new(&namespace, &key);
+        self.vector_index.add(full_key, vector);
+
+        debug!(namespace = %namespace, key = %key, "Vector embedding stored");
+        Ok(versioned)
+    }
+
+    /// Search for similar vectors using cosine similarity.
+    ///
+    /// Performs approximate nearest neighbor search on stored embeddings.
+    /// Results are sorted by similarity (highest first).
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - Optional namespace to search (None = search all)
+    /// * `query` - The query vector to search for
+    /// * `options` - Search options (top_k, threshold, model_filter)
+    ///
+    /// # Returns
+    ///
+    /// A vector of search results sorted by similarity score.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let query = Vector::new(vec![0.1, 0.2, 0.3], "text-embedding-3-small");
+    /// let results = db.embed_search(Some("docs"), &query, VectorSearchOptions::new().top_k(5)).await?;
+    /// for result in results {
+    ///     println!("{}: similarity = {}", result.key, result.score);
+    /// }
+    /// ```
+    pub async fn embed_search(
+        &self,
+        namespace: Option<&str>,
+        query: &Vector,
+        options: VectorSearchOptions,
+    ) -> DeltaResult<Vec<VectorSearchResult>> {
+        // Search the vector index
+        let mut results = self.vector_index.search(query, &options);
+
+        // Filter by namespace if specified
+        if let Some(ns) = namespace {
+            results.retain(|r| r.namespace == ns);
+        }
+
+        // Re-apply top_k after namespace filtering
+        results.truncate(options.top_k);
+
+        debug!(results = results.len(), "Vector search completed");
+        Ok(results)
+    }
+
+    /// Get a stored vector by key.
+    ///
+    /// Returns None if the key doesn't exist or if the stored value
+    /// is not a valid vector.
+    pub async fn get_embed(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+    ) -> DeltaResult<Option<Vector>> {
+        let namespace = namespace.into();
+        let key = key.into();
+
+        match self.storage.get(&namespace, &key) {
+            Ok(versioned) => {
+                let vector = crate::vector::json_to_vector(versioned.value());
+                Ok(vector)
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// Delete a vector embedding.
+    ///
+    /// Removes the vector from the search index and stores a null value
+    /// (since KoruDelta is append-only, we can't truly delete).
+    ///
+    /// To "undelete", retrieve the previous version using `history()`.
+    pub async fn delete_embed(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+    ) -> DeltaResult<VersionedValue> {
+        let namespace = namespace.into();
+        let key = key.into();
+
+        // Remove from index
+        self.vector_index.remove(&namespace, &key);
+
+        // Store null value (mark as deleted)
+        let versioned = self.put(&namespace, &key, serde_json::Value::Null).await?;
+
+        debug!(namespace = %namespace, key = %key, "Vector embedding deleted (index removed)");
+        Ok(versioned)
     }
 
     /// Query with full filter, sort, projection, and aggregation support.

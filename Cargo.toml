@@ -54,6 +54,9 @@ rand = "0.8"
 # Query engine
 regex = "1.10"
 
+# Async traits
+async-trait = "0.1"
+
 # Observability
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

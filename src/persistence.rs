@@ -475,8 +475,8 @@ pub async fn acquire_lock(db_path: &Path) -> DeltaResult<LockState> {
             "CLEAN" => {
                 // Clean shutdown, proceed
             }
-            "UNCLEAN" | _ => {
-                // Unclean shutdown detected
+            _ => {
+                // Unclean shutdown detected (or unknown state)
                 // Write RUNNING state
                 fs::write(&lock_path, "RUNNING").await
                     .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
@@ -690,6 +690,7 @@ mod tests {
     }
 
     /// Calculate total disk usage of the database in bytes.
+    #[allow(dead_code)]
     pub async fn get_disk_usage(db_path: &Path) -> DeltaResult<u64> {
         let mut total_size = 0u64;
         
@@ -717,6 +718,7 @@ mod tests {
     }
     
     /// Helper to recursively calculate directory size.
+    #[allow(dead_code)]
     async fn get_dir_size(dir: &Path) -> DeltaResult<u64> {
         let mut total_size = 0u64;
         
