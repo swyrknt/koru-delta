@@ -1,43 +1,37 @@
-//! Synthesis-Navigable Small World (SNSW) - Adaptive Tiered Vector Search
+//! Synthesis-Navigable Small World (SNSW) - Escalating Adaptive Search
 //!
 //! An intelligent approximate nearest neighbor (ANN) search implementation that
-//! automatically selects the optimal search strategy based on dataset size and
-//! query history.
+//! uses escalating search with confidence-based tier selection.
 //!
-//! # Four-Tier Search Architecture
+//! # Escalating Search Architecture
 //!
-//! 1. **🔥 Hot (Semantic Cache)**: Content-addressed query results. Same query
-//!    (or near-identical) returns instantly via Blake3 hash lookup.
+//! Instead of hardcoded thresholds, the system escalates through search strategies
+//! based on result confidence:
 //!
-//! 2. **🌤️ Warm (SNSW Graph)**: K-NN graph with beam search for medium-to-large
-//!    active datasets. O(log n) complexity with 98-99% recall.
+//! 1. **🔥 Hot (Cache)**: O(1) lookup for repeated/near-identical queries
+//! 2. **🌤️ Warm-Fast**: O(log n) beam search with low ef (fast but approximate)
+//! 3. **🌤️ Warm-Thorough**: O(log n) beam search with high ef (better recall)
+//! 4. **❄️ Cold (Exact)**: O(n) brute force when confidence is insufficient
 //!
-//! 3. **❄️ Cold (Exact Linear)**: Brute force for small datasets (<1K vectors)
-//!    where graph traversal overhead exceeds linear scan benefits.
+//! # Confidence Estimation
 //!
-//! 4. **🕳️ Deep (Archive)**: Delta-encoded on disk. Requires explicit hydration
-//!    before searchable - perfect for historical compliance data.
-//!
-//! # Adaptive Search Strategy
-//!
-//! The system automatically selects the optimal tier:
-//! - Tiny datasets (≤100): Exact linear scan (fastest)
-//! - Small datasets (101-1000): Cold tier with SIMD-optimized scan
-//! - Medium datasets (1001-100K): Warm tier with auto-tuned ef_search
-//! - Large datasets (100K+): Warm tier with high-effort search
+//! Search quality is estimated without ground truth using score distribution:
+//! - High confidence: Large gap between top results (clear winner)
+//! - Low confidence: Similar scores (uncertain about true nearest neighbors)
 //!
 //! # The 5 Axioms of Distinction
 //!
 //! 1. **Identity**: Content-addressing via Blake3 enables semantic caching
 //! 2. **Synthesis**: K-NN graph connects similar distinctions
 //! 3. **Deduplication**: Same content = same hash = same identity
-//! 4. **Memory Tiers**: Hot/Warm/Cold/Deep match natural access patterns
-//! 5. **Causality**: Temporal pruning for time-bounded searches
+//! 4. **Memory Tiers**: Escalating search matches computational cost to query difficulty
+//! 5. **Causality**: Query feedback loop enables continuous optimization
 
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::sync::Arc;
+
 
 use blake3::Hasher as Blake3Hasher;
 use dashmap::DashMap;
@@ -70,7 +64,7 @@ impl ContentHash {
     }
 }
 
-/// Search result.
+/// Search result with provenance.
 #[derive(Clone, Debug)]
 pub struct SearchResult {
     /// Content hash of result.
@@ -79,30 +73,30 @@ pub struct SearchResult {
     pub score: f32,
     /// Which tier produced this result.
     pub tier: SearchTier,
-    /// Whether this score was computed exactly.
-    pub verified: bool,
+    /// Confidence that these are the true nearest neighbors (0.0 - 1.0).
+    pub confidence: f32,
 }
 
-/// Which search tier produced the result.
-#[derive(Clone, Debug, Copy, PartialEq)]
+/// Search tier indicating the strategy used.
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub enum SearchTier {
     /// Hot: From semantic cache (instant).
     Hot,
-    /// Warm: From SNSW graph search (fast).
-    Warm,
-    /// Cold: From exact linear scan (tiny datasets).
+    /// WarmFast: Quick beam search with low ef.
+    WarmFast,
+    /// WarmThorough: Beam search with high ef.
+    WarmThorough,
+    /// Cold: Exact linear scan (confidence insufficient).
     Cold,
-    /// Deep: From on-disk archive (requires hydration).
-    Deep,
 }
 
 impl std::fmt::Display for SearchTier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SearchTier::Hot => write!(f, "hot"),
-            SearchTier::Warm => write!(f, "warm"),
+            SearchTier::WarmFast => write!(f, "warm-fast"),
+            SearchTier::WarmThorough => write!(f, "warm-thorough"),
             SearchTier::Cold => write!(f, "cold"),
-            SearchTier::Deep => write!(f, "deep"),
         }
     }
 }
@@ -110,12 +104,8 @@ impl std::fmt::Display for SearchTier {
 /// Cached query result for hot tier.
 #[derive(Clone, Debug)]
 struct CachedResult {
-    /// Query hash that produced this result.
-    query_hash: ContentHash,
-    /// Top-k results.
+    /// Top-k results stored as (id, score) pairs.
     results: Vec<(ContentHash, f32)>,
-    /// When this was cached.
-    cached_at: std::time::Instant,
     /// How many times this cache entry was hit.
     hit_count: u64,
 }
@@ -157,50 +147,51 @@ impl Ord for SearchCandidate {
     }
 }
 
-/// Configuration for adaptive tiered search.
+/// Configuration for escalating search.
 #[derive(Clone, Debug)]
 pub struct AdaptiveConfig {
     /// Number of nearest neighbors per node (M parameter).
     pub m: usize,
-    /// Base expansion factor for search.
-    pub ef_search: usize,
-    /// Threshold for cold tier (brute force).
-    pub cold_threshold: usize,
-    /// Threshold for hot tier (cache lookup).
-    pub hot_threshold: f32,
+    /// Expansion factor for fast warm search (low effort).
+    pub ef_fast: usize,
+    /// Expansion factor for thorough warm search (high effort).
+    pub ef_thorough: usize,
+    /// Confidence threshold to accept fast search results.
+    pub confidence_threshold_fast: f32,
+    /// Confidence threshold to accept thorough search results.
+    pub confidence_threshold_thorough: f32,
     /// Maximum cache size.
     pub max_cache_size: usize,
-    /// Cache TTL in seconds.
-    pub cache_ttl_secs: u64,
+    /// Similarity threshold for near-hit cache lookup.
+    pub near_hit_threshold: f32,
 }
 
 impl Default for AdaptiveConfig {
     fn default() -> Self {
         Self {
             m: 16,
-            ef_search: 100,
-            cold_threshold: 1000,  // ≤1000 vectors: use brute force
-            hot_threshold: 0.98,   // 98% similarity for cache hit
+            ef_fast: 50,
+            ef_thorough: 200,
+            confidence_threshold_fast: 0.90,
+            confidence_threshold_thorough: 0.95,
             max_cache_size: 1000,
-            cache_ttl_secs: 300,   // 5 minutes
+            near_hit_threshold: 0.98,
         }
     }
 }
 
-/// Adaptive tiered search graph with hot/warm/cold/deep tiers.
+/// Escalating search graph with confidence-based tier selection.
 pub struct SynthesisGraph {
     /// Configuration.
     config: AdaptiveConfig,
-    /// All nodes (warm/cold tier data).
+    /// All nodes.
     nodes: DashMap<ContentHash, SynthesisNode>,
     /// Semantic cache (hot tier).
     cache: DashMap<ContentHash, CachedResult>,
-    /// Cache access statistics for LRU eviction.
-    cache_stats: DashMap<ContentHash, u64>,
 }
 
 impl SynthesisGraph {
-    /// Create a new adaptive search graph with default configuration.
+    /// Create a new graph with default configuration.
     pub fn new() -> Self {
         Self::with_config(AdaptiveConfig::default())
     }
@@ -211,15 +202,15 @@ impl SynthesisGraph {
             config,
             nodes: DashMap::new(),
             cache: DashMap::new(),
-            cache_stats: DashMap::new(),
         }
     }
     
-    /// Create with explicit M and ef_search (backward compatible).
+    /// Create with explicit M and ef parameters (backward compatible).
     pub fn new_with_params(m: usize, ef_search: usize) -> Self {
         let mut config = AdaptiveConfig::default();
         config.m = m;
-        config.ef_search = ef_search;
+        config.ef_thorough = ef_search;
+        config.ef_fast = ef_search / 2;
         Self::with_config(config)
     }
     
@@ -271,31 +262,58 @@ impl SynthesisGraph {
         Ok(id)
     }
     
-    /// Adaptive search - automatically selects optimal tier.
+    /// Escalating search - automatically selects optimal strategy based on confidence.
     ///
-    /// # Tier Selection Logic
+    /// # Escalation Stages
     ///
-    /// 1. **Hot**: Check semantic cache for exact/near-exact query match
-    /// 2. **Cold**: If dataset ≤ cold_threshold, use exact linear scan
-    /// 3. **Warm**: Use SNSW graph search with auto-tuned ef_search
+    /// 1. **Hot**: Check semantic cache
+    /// 2. **Warm-Fast**: Beam search with ef_fast, check confidence
+    /// 3. **Warm-Thorough**: If confidence low, beam search with ef_thorough
+    /// 4. **Cold**: If still low confidence, exact linear scan
     pub fn search(&self, query: &Vector, k: usize) -> DeltaResult<Vec<SearchResult>> {
-        // Tier 1: Hot - Check semantic cache
-        if let Some(cached) = self.check_cache(query, k) {
-            return Ok(cached);
+        // Stage 1: Hot - Check semantic cache
+        if let Some(results) = self.check_cache(query, k) {
+            return Ok(results);
         }
         
-        let count = self.nodes.len();
+        // Stage 2: Warm-Fast - Quick beam search
+        let fast_results = self.beam_search_with_rerank(query, k, self.config.ef_fast, SearchTier::WarmFast)?;
+        let fast_confidence = self.estimate_confidence(&fast_results, k);
         
-        // Tier 3: Cold - Brute force for small datasets
-        if count <= self.config.cold_threshold {
-            let results = self.exact_linear_search(query, k, SearchTier::Cold)?;
+        if fast_confidence >= self.config.confidence_threshold_fast {
+            let results: Vec<SearchResult> = fast_results.into_iter().map(|(id, score)| SearchResult {
+                id,
+                score,
+                tier: SearchTier::WarmFast,
+                confidence: fast_confidence,
+            }).collect();
             self.add_to_cache(query, &results);
             return Ok(results);
         }
         
-        // Tier 2: Warm - SNSW graph search
-        let ef = if k > 10 { k * 2 } else { self.config.ef_search };
-        let results = self.snsw_search(query, k, ef)?;
+        // Stage 3: Warm-Thorough - Higher effort beam search
+        let thorough_results = self.beam_search_with_rerank(query, k, self.config.ef_thorough, SearchTier::WarmThorough)?;
+        let thorough_confidence = self.estimate_confidence(&thorough_results, k);
+        
+        if thorough_confidence >= self.config.confidence_threshold_thorough {
+            let results: Vec<SearchResult> = thorough_results.into_iter().map(|(id, score)| SearchResult {
+                id,
+                score,
+                tier: SearchTier::WarmThorough,
+                confidence: thorough_confidence,
+            }).collect();
+            self.add_to_cache(query, &results);
+            return Ok(results);
+        }
+        
+        // Stage 4: Cold - Exact linear scan when confidence is insufficient
+        let exact_results = self.exact_linear_search(query, k)?;
+        let results: Vec<SearchResult> = exact_results.into_iter().map(|(id, score)| SearchResult {
+            id,
+            score,
+            tier: SearchTier::Cold,
+            confidence: 1.0, // Exact search has perfect confidence
+        }).collect();
         self.add_to_cache(query, &results);
         Ok(results)
     }
@@ -305,33 +323,33 @@ impl SynthesisGraph {
         let query_hash = ContentHash::from_vector(query);
         
         // Direct hit
-        if let Some(cached) = self.cache.get(&query_hash) {
-            // Update stats
-            self.cache_stats.insert(query_hash.clone(), cached.hit_count + 1);
+        if let Some(mut cached) = self.cache.get_mut(&query_hash) {
+            cached.hit_count += 1;
             
             return Some(cached.results.iter().take(k).map(|(id, score)| SearchResult {
                 id: id.clone(),
                 score: *score,
                 tier: SearchTier::Hot,
-                verified: true,
+                confidence: 1.0,
             }).collect());
         }
         
         // Near-hit: Check for similar queries in cache
-        // This is expensive, so only check a few recent entries
         for entry in self.cache.iter().take(10) {
-            if let Some(query_node) = self.nodes.get(&entry.key()) {
+            if let Some(query_node) = self.nodes.get(entry.key()) {
                 if let Some(similarity) = query.cosine_similarity(&query_node.vector) {
-                    if similarity >= self.config.hot_threshold {
+                    if similarity >= self.config.near_hit_threshold {
                         // Near-exact match - use cached results
-                        self.cache_stats.insert(entry.key().clone(), entry.value().hit_count + 1);
-                        
-                        return Some(entry.value().results.iter().take(k).map(|(id, score)| SearchResult {
-                            id: id.clone(),
-                            score: *score,
-                            tier: SearchTier::Hot,
-                            verified: true,
-                        }).collect());
+                        if let Some(mut cached) = self.cache.get_mut(entry.key()) {
+                            cached.hit_count += 1;
+                            
+                            return Some(cached.results.iter().take(k).map(|(id, score)| SearchResult {
+                                id: id.clone(),
+                                score: *score,
+                                tier: SearchTier::Hot,
+                                confidence: similarity,
+                            }).collect());
+                        }
                     }
                 }
             }
@@ -342,90 +360,57 @@ impl SynthesisGraph {
     
     /// Add results to semantic cache.
     fn add_to_cache(&self, query: &Vector, results: &[SearchResult]) {
+        // Simple eviction if cache is full
         if self.cache.len() >= self.config.max_cache_size {
-            self.evict_oldest_cache_entry();
+            // Find entry with lowest hit count to evict
+            let to_remove = self.cache.iter()
+                .min_by_key(|e| e.value().hit_count)
+                .map(|e| e.key().clone());
+            
+            if let Some(key) = to_remove {
+                self.cache.remove(&key);
+            }
         }
         
         let query_hash = ContentHash::from_vector(query);
         let cached = CachedResult {
-            query_hash: query_hash.clone(),
             results: results.iter().map(|r| (r.id.clone(), r.score)).collect(),
-            cached_at: std::time::Instant::now(),
             hit_count: 0,
         };
         
         self.cache.insert(query_hash, cached);
     }
     
-    /// Evict oldest/lowest-hit cache entry.
-    fn evict_oldest_cache_entry(&self) {
-        // Simple eviction: remove entry with lowest hit count
-        let to_remove = self.cache_stats.iter()
-            .min_by_key(|e| *e.value())
-            .map(|e| e.key().clone());
-        
-        if let Some(key) = to_remove {
-            self.cache.remove(&key);
-            self.cache_stats.remove(&key);
-        }
-    }
-    
-    /// Invalidate entire cache (e.g., after insertions).
+    /// Invalidate entire cache.
     fn invalidate_cache(&self) {
         self.cache.clear();
-        self.cache_stats.clear();
     }
     
-    /// Exact linear search (Cold tier).
-    fn exact_linear_search(&self, query: &Vector, k: usize, tier: SearchTier) -> DeltaResult<Vec<SearchResult>> {
+    /// Beam search with exact re-ranking.
+    fn beam_search_with_rerank(
+        &self, 
+        query: &Vector, 
+        k: usize, 
+        ef: usize,
+        _tier: SearchTier
+    ) -> DeltaResult<Vec<(ContentHash, f32)>> {
         if self.nodes.is_empty() || k == 0 {
             return Ok(Vec::new());
         }
         
-        let mut results: Vec<SearchResult> = self.nodes
-            .iter()
-            .filter_map(|entry| {
-                let similarity = query.cosine_similarity(&entry.value().vector)?;
-                Some(SearchResult {
-                    id: entry.key().clone(),
-                    score: similarity,
-                    tier,
-                    verified: true,
-                })
-            })
-            .collect();
-        
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
-        results.truncate(k);
-        
-        Ok(results)
-    }
-    
-    /// SNSW graph search (Warm tier).
-    fn snsw_search(&self, query: &Vector, k: usize, ef: usize) -> DeltaResult<Vec<SearchResult>> {
-        if self.nodes.is_empty() || k == 0 {
-            return Ok(Vec::new());
-        }
-        
-        // Beam search to collect candidates
         let candidates = self.beam_search(query, ef)?;
         
         // Exact re-ranking
-        let mut results: Vec<SearchResult> = candidates
+        let mut results: Vec<(ContentHash, f32)> = candidates
             .into_iter()
             .filter_map(|id| {
                 let node = self.nodes.get(&id)?;
                 let similarity = query.cosine_similarity(&node.vector)?;
-                Some(SearchResult {
-                    id: id.clone(),
-                    score: similarity,
-                    tier: SearchTier::Warm,
-                    verified: true,
-                })
+                Some((id, similarity))
             })
             .collect();
         
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
         results.truncate(k);
         
         Ok(results)
@@ -484,7 +469,7 @@ impl SynthesisGraph {
             }
         }
         
-        // Fill remaining slots with random unvisited nodes
+        // Fill remaining slots with unvisited nodes
         if results.len() < ef {
             for entry in self.nodes.iter() {
                 if !visited.contains(entry.key()) {
@@ -495,6 +480,57 @@ impl SynthesisGraph {
                 }
             }
         }
+        
+        Ok(results)
+    }
+    
+    /// Estimate search confidence based on score distribution.
+    ///
+    /// High confidence: Large gap between top results (clear ordering)
+    /// Low confidence: Similar scores (uncertain about true nearest neighbors)
+    fn estimate_confidence(&self, results: &[(ContentHash, f32)], k: usize) -> f32 {
+        if results.len() < 2 {
+            return 0.5; // Not enough data
+        }
+        
+        // Look at gap between #1 and #k (or last available)
+        let top_score = results[0].1;
+        let kth_score = results.get(k.saturating_sub(1)).map(|r| r.1)
+            .or_else(|| results.last().map(|r| r.1))
+            .unwrap_or(0.0);
+        
+        if top_score <= 0.0 {
+            return 0.0;
+        }
+        
+        // Gap relative to top score magnitude
+        let gap = top_score - kth_score;
+        let relative_gap = gap / top_score;
+        
+        // Boost confidence based on gap
+        // gap of 0.0 -> confidence 0.5
+        // gap of 0.5 -> confidence 0.95
+        let confidence = 0.5 + (relative_gap * 0.9);
+        
+        confidence.min(0.99) // Cap at 0.99 since we're estimating
+    }
+    
+    /// Exact linear search (Cold tier).
+    fn exact_linear_search(&self, query: &Vector, k: usize) -> DeltaResult<Vec<(ContentHash, f32)>> {
+        if self.nodes.is_empty() || k == 0 {
+            return Ok(Vec::new());
+        }
+        
+        let mut results: Vec<(ContentHash, f32)> = self.nodes
+            .iter()
+            .filter_map(|entry| {
+                let similarity = query.cosine_similarity(&entry.value().vector)?;
+                Some((entry.key().clone(), similarity))
+            })
+            .collect();
+        
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        results.truncate(k);
         
         Ok(results)
     }
@@ -520,8 +556,10 @@ impl SynthesisGraph {
     }
     
     /// Get cache statistics.
-    pub fn cache_stats(&self) -> (usize, usize) {
-        (self.cache.len(), self.cache_stats.len())
+    pub fn cache_stats(&self) -> (usize, u64) {
+        let size = self.cache.len();
+        let hits: u64 = self.cache.iter().map(|e| e.value().hit_count).sum();
+        (size, hits)
     }
 }
 
@@ -557,32 +595,7 @@ mod tests {
     }
     
     #[test]
-    fn test_adaptive_tier_selection() {
-        let graph = SynthesisGraph::new();
-        
-        // Small dataset - should use cold tier
-        for _ in 0..50 {
-            graph.insert(random_vector(128)).unwrap();
-        }
-        
-        let query = random_vector(128);
-        let results = graph.search(&query, 10).unwrap();
-        
-        // Small dataset uses cold tier (brute force)
-        assert!(!results.is_empty());
-        assert!(results[0].score > 0.0);
-        
-        // Add more vectors to cross threshold
-        for _ in 0..2000 {
-            graph.insert(random_vector(128)).unwrap();
-        }
-        
-        let results2 = graph.search(&query, 10).unwrap();
-        assert!(!results2.is_empty());
-    }
-    
-    #[test]
-    fn test_semantic_cache() {
+    fn test_escalating_search() {
         let graph = SynthesisGraph::new();
         
         // Insert vectors
@@ -591,18 +604,38 @@ mod tests {
         }
         
         let query = random_vector(128);
+        let results = graph.search(&query, 10).unwrap();
         
-        // First search - cold tier
+        assert!(!results.is_empty());
+        assert!(results[0].score > 0.0);
+        
+        // Should have some tier assigned
+        let tiers: std::collections::HashSet<_> = results.iter().map(|r| r.tier).collect();
+        assert!(!tiers.is_empty());
+    }
+    
+    #[test]
+    fn test_semantic_cache() {
+        let graph = SynthesisGraph::new();
+        
+        // Insert vectors
+        for _ in 0..50 {
+            graph.insert(random_vector(128)).unwrap();
+        }
+        
+        let query = random_vector(128);
+        
+        // First search
         let results1 = graph.search(&query, 10).unwrap();
         assert!(!results1.is_empty());
         
-        // Second search - should hit cache (hot tier)
+        // Second search should hit cache
         let results2 = graph.search(&query, 10).unwrap();
         assert!(!results2.is_empty());
         
-        // Check cache was populated
-        let (cache_size, _) = graph.cache_stats();
-        assert!(cache_size > 0);
+        // At least one result should be from hot tier
+        let has_hot = results2.iter().any(|r| r.tier == SearchTier::Hot);
+        assert!(has_hot, "Second query should hit cache");
     }
     
     #[test]
@@ -615,5 +648,23 @@ mod tests {
         
         let avg_edges = graph.avg_edges();
         assert!(avg_edges >= 8.0, "Graph should be well-connected");
+    }
+    
+    #[test]
+    fn test_confidence_estimation() {
+        let graph = SynthesisGraph::new();
+        
+        // Insert vectors
+        for _ in 0..50 {
+            graph.insert(random_vector(128)).unwrap();
+        }
+        
+        let query = random_vector(128);
+        let results = graph.search(&query, 10).unwrap();
+        
+        // All results should have confidence
+        for r in &results {
+            assert!(r.confidence >= 0.0 && r.confidence <= 1.0);
+        }
     }
 }

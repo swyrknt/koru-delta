@@ -1,15 +1,19 @@
-//! SNSW Demo - Adaptive Tiered Vector Search
+//! SNSW Demo - Escalating Adaptive Search
 //!
-//! Demonstrates the four-tier search architecture:
+//! Demonstrates the escalating search architecture:
 //! - 🔥 Hot: Semantic cache for repeated/near-identical queries
-//! - 🌤️ Warm: SNSW graph search for medium-to-large datasets
-//! - ❄️ Cold: Exact linear scan for small datasets (<1K vectors)
-//! - 🕳️ Deep: Archive tier (on-disk, requires hydration)
+//! - 🌤️ Warm-Fast: Quick beam search with confidence check
+//! - 🌤️ Warm-Thorough: Higher-effort beam search if needed
+//! - ❄️ Cold: Exact linear scan when confidence is insufficient
+//!
+//! The key insight: Instead of hardcoded thresholds, the system escalates
+//! based on result confidence (estimated from score distribution).
 //!
 //! Run: cargo run --example snsw_demo --release
 
 use koru_delta::vector::Vector;
 use koru_delta::vector::snsw::{SynthesisGraph, SearchTier};
+use std::collections::HashMap;
 use std::time::Instant;
 
 fn random_vector(dimensions: usize) -> Vector {
@@ -21,22 +25,27 @@ fn random_vector(dimensions: usize) -> Vector {
 
 fn main() {
     println!("{}", "=".repeat(80));
-    println!("SNSW - Adaptive Tiered Vector Search");
+    println!("SNSW - Escalating Adaptive Search with Confidence");
     println!("{}", "=".repeat(80));
     println!();
-    println!("Architecture: 🔥 Hot / 🌤️ Warm / ❄️ Cold / 🕳️ Deep");
+    println!("Architecture: Escalation based on result confidence");
     println!();
-    println!("Tier Selection:");
-    println!("  🔥 Hot:    Semantic cache hit (same/near-same query)");
-    println!("  ❄️ Cold:   Dataset ≤1000 vectors (exact linear scan)");
-    println!("  🌤️ Warm:   Dataset >1000 vectors (SNSW graph search)");
+    println!("Escalation Stages:");
+    println!("  1. 🔥 Hot:       Semantic cache hit (instant)");
+    println!("  2. 🌤️ Fast:      Beam search with ef=50, check confidence");
+    println!("  3. 🌤️ Thorough:  Beam search with ef=200 if confidence low");
+    println!("  4. ❄️ Cold:      Exact linear scan if still uncertain");
+    println!();
+    println!("Confidence Estimation:");
+    println!("  - High confidence = large gap between top scores");
+    println!("  - Low confidence = similar scores (uncertain ordering)");
     println!();
     
     let dimensions = 128;
     let graph = SynthesisGraph::new();
     
     // Test across different dataset sizes
-    let test_sizes = vec![50, 500, 1000, 2000, 5000];
+    let test_sizes = vec![100, 500, 1000, 2000, 5000];
     
     for &target_size in &test_sizes {
         let target_size: usize = target_size;
@@ -59,12 +68,12 @@ fn main() {
         println!("  Total vectors: {}", graph.len());
         println!("  Avg edges per node: {:.1}", graph.avg_edges());
         
-        // Test with fresh queries (cold cache)
-        let fresh_queries: Vec<Vector> = (0..10).map(|_| random_vector(dimensions)).collect();
+        // Test with fresh queries (cache miss, escalation happens)
+        let fresh_queries: Vec<Vector> = (0..20).map(|_| random_vector(dimensions)).collect();
         
-        println!("\n  --- Fresh Queries (Cache Miss) ---");
-        let mut cold_count = 0;
-        let mut warm_count = 0;
+        println!("\n  --- Fresh Queries (Escalation Demo) ---");
+        let mut tier_counts: HashMap<SearchTier, usize> = HashMap::new();
+        let mut confidence_sum = 0.0;
         let mut total_time = 0.0;
         
         for query in &fresh_queries {
@@ -72,79 +81,73 @@ fn main() {
             let results = graph.search(query, 10).unwrap();
             total_time += start.elapsed().as_secs_f64();
             
-            for r in &results {
-                match r.tier {
-                    SearchTier::Cold => cold_count += 1,
-                    SearchTier::Warm => warm_count += 1,
-                    _ => {}
-                }
+            if let Some(first) = results.first() {
+                *tier_counts.entry(first.tier).or_insert(0) += 1;
+                confidence_sum += first.confidence;
             }
         }
         
         let avg_time = total_time / fresh_queries.len() as f64 * 1000.0;
+        let avg_confidence = confidence_sum / fresh_queries.len() as f32;
+        
         println!("  Avg query time: {:.3}ms", avg_time);
-        println!("  Results from Cold tier: {}", cold_count);
-        println!("  Results from Warm tier: {}", warm_count);
+        println!("  Avg confidence: {:.1}%", avg_confidence * 100.0);
+        println!("  Tier distribution:");
+        
+        for (tier, count) in &tier_counts {
+            let pct = *count as f64 / fresh_queries.len() as f64 * 100.0;
+            match tier {
+                SearchTier::Hot => println!("    🔥 Hot (cache):        {} queries ({:.0}%)", count, pct),
+                SearchTier::WarmFast => println!("    🌤️ Warm-Fast:          {} queries ({:.0}%)", count, pct),
+                SearchTier::WarmThorough => println!("    🌤️ Warm-Thorough:      {} queries ({:.0}%)", count, pct),
+                SearchTier::Cold => println!("    ❄️ Cold (exact):       {} queries ({:.0}%)", count, pct),
+            }
+        }
         
         // Test with repeated queries (cache hit)
-        println!("\n  --- Repeated Queries (Cache Hit) ---");
+        println!("\n  --- Repeated Queries (Cache Demo) ---");
         let repeated_query = fresh_queries[0].clone();
         
-        // Clear and warm up cache
+        // Warm up cache
         let _ = graph.search(&repeated_query, 10).unwrap();
         
         let start = Instant::now();
         let cached_results = graph.search(&repeated_query, 10).unwrap();
         let cache_time = start.elapsed().as_secs_f64() * 1000.0;
         
-        let hot_count = cached_results.iter().filter(|r| r.tier == SearchTier::Hot).count();
+        let is_hot = cached_results.iter().all(|r| r.tier == SearchTier::Hot);
         
         println!("  Cache hit query time: {:.3}ms", cache_time);
-        println!("  Results from Hot tier: {}", hot_count);
+        println!("  All from Hot tier: {}", if is_hot { "Yes 🔥" } else { "No" });
         
-        if hot_count > 0 {
+        if avg_time > 0.0 {
             let speedup = avg_time / cache_time;
-            println!("  🔥 Cache speedup: {:.1}x", speedup);
+            println!("  Cache speedup: {:.1}x", speedup);
         }
         
         // Show cache stats
-        let (cache_size, _) = graph.cache_stats();
-        println!("  Cache entries: {}", cache_size);
-        
-        // Show which tier is active
-        if target_size <= 1000 {
-            println!("\n  → Active Tier: ❄️ Cold (exact linear scan)");
-        } else {
-            println!("\n  → Active Tier: 🌤️ Warm (SNSW graph search)");
-        }
+        let (cache_size, total_hits) = graph.cache_stats();
+        println!("  Cache entries: {} | Total hits: {}", cache_size, total_hits);
     }
     
     println!("\n{}", "=".repeat(80));
-    println!("Summary: Adaptive Search Benefits");
+    println!("Key Insights");
     println!("{}", "=".repeat(80));
     println!();
-    println!("🔥 Hot Tier (Cache):");
-    println!("  - Instant results for repeated queries");
-    println!("  - Content-addressed by query hash");
-    println!("  - Near-hit detection (98% similarity threshold)");
+    println!("1. No Hardcoded Thresholds:");
+    println!("   - System escalates based on result confidence, not vector count");
+    println!("   - Adapts to query difficulty (some queries need more work)");
     println!();
-    println!("❄️ Cold Tier (Brute Force):");
-    println!("  - Optimal for small datasets (≤1000 vectors)");
-    println!("  - Better cache locality than graph traversal");
-    println!("  - No graph construction overhead");
+    println!("2. Confidence Estimation:");
+    println!("   - Large score gap → High confidence → Stop early (fast)");
+    println!("   - Similar scores → Low confidence → Escalate (thorough)");
     println!();
-    println!("🌤️ Warm Tier (SNSW Graph):");
-    println!("  - K-NN graph with guaranteed connectivity");
-    println!("  - Beam search + exact re-ranking");
-    println!("  - 98-100% recall at medium-to-large scale");
+    println!("3. Cache Benefits:");
+    println!("   - Repeated queries: Instant response (🔥 Hot tier)");
+    println!("   - Near-identical queries: Detected via similarity threshold");
     println!();
-    println!("🕳️ Deep Tier (Archive):");
-    println!("  - Delta-encoded on disk");
-    println!("  - Requires explicit hydration");
-    println!("  - Perfect for compliance/historical data");
-    println!();
-    println!("The system automatically selects the optimal tier based on:");
-    println!("  1. Cache hit/miss status");
-    println!("  2. Dataset size");
-    println!("  3. Query patterns");
+    println!("4. Efficiency:");
+    println!("   - Easy queries: Stop at Warm-Fast (low effort)");
+    println!("   - Hard queries: Escalate to Cold (guaranteed accuracy)");
+    println!("   - Never do more work than necessary");
 }
