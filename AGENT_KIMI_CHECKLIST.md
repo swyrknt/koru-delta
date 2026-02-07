@@ -239,6 +239,16 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [ ] Simple importance scoring
   - [ ] Background jobs framework
 
+### v2.5.2 Research: Distinction-Based Search 🧪 EXPERIMENTAL
+- [ ] **SNSW (Synthesis-Navigable Small World)** - See [DISTINCTION_BASED_VECTOR_SEARCH.md](bindings/python/docs/DISTINCTION_BASED_VECTOR_SEARCH.md)
+  - [ ] Apply distinction calculus to ANN (koru-lambda-core integration)
+  - [ ] Content-addressed vectors (automatic deduplication)
+  - [ ] Synthesis relationships (semantic navigation vs geometric)
+  - [ ] Multi-layer abstraction (coarse→fine distinctions)
+  - [ ] Explainable similarity (show WHY vectors are related)
+  - [ ] Prototype benchmark: SNSW vs HNSW on 10K vectors
+  - [ ] **Goal**: Prove distinction calculus improves ANN search
+
 ## CHECKLIST: Next Week
 
 ### Day 6-7: JavaScript Bindings
