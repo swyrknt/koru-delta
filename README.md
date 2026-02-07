@@ -7,6 +7,18 @@
 
 **One-line:** *"KoruDelta is the invisible database that gives you Git-like history, Redis-like speed, and distributed consistency—without configuration."*
 
+## Current Status ✅ Production Ready (Single-Node)
+
+**v2.0.0 is production-ready for single-node deployments:**
+- ✅ Zero-config setup
+- ✅ Crash recovery (WAL + checksums)
+- ✅ 400ns reads, 50µs writes
+- ✅ Automatic memory management (Hot/Warm/Cold/Deep tiers)
+- ✅ Complete version history & time travel
+- ✅ Structured logging & resource limits
+
+**Coming in v2.1:** Multi-node clustering improvements
+
 ## Get Started in 10 Seconds
 
 ```rust
@@ -34,9 +46,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `KoruDelta::start()` is all you need. No config files, no cluster rituals.
 
-### 🤝 Always Consistent
+### 🛡️ Production Hardened
 
-Multiple nodes? KoruDelta automatically syncs and keeps data consistent.
+Crash recovery, corruption detection, and structured logging built-in. Data survives power loss.
 
 ### ⏱ Built-in History
 
@@ -54,18 +66,16 @@ let past_user = db.get_at("users", "alice", timestamp).await?;
 
 Same core engine runs in servers, laptops, browsers, and edge devices.
 
-### 🤝 Automatic Distribution
+### 🤝 Clustering (v2.1+)
 
-Multiple nodes sync automatically with zero configuration:
+Multi-node clustering is under development. Single-node is production-ready today:
 
 ```bash
-# Machine 1 - Start a node
+# Start a production node
 kdelta start
 
-# Machine 2 - Join the cluster
-kdelta start --join 192.168.1.100:7878
-
-# Now you have a distributed cluster!
+# Multi-node clustering coming in v2.1
+# kdelta start --join 192.168.1.100:7878
 ```
 
 ### 🔌 HTTP API
@@ -175,20 +185,21 @@ while let Ok(event) = rx.recv().await {
 ## Core Features
 
 - **Zero-configuration** - Start a node with one line of code
-- **Causal history** - Every change is an event in a versioned timeline
+- **Production hardened** - Crash recovery, corruption detection, structured logging
+- **Causal history** - Every change is versioned with full audit trail
 - **Time travel** - Query data at any point in history
+- **Memory tiering** - Hot/Warm/Cold/Deep automatic management like the human brain
 - **Visual diffs** - Compare versions with Git-style colored output
 - **JSON native** - Store and query JSON documents naturally
 - **Content-addressed** - Built on koru-lambda-core's distinction calculus
 - **Thread-safe** - Concurrent operations with no data races
-- **WASM-ready** - Run in browsers, Node.js, and edge environments
 - **HTTP API** - RESTful endpoints for remote access
 - **Remote CLI** - Connect to any KoruDelta instance over HTTP
 - **CLI included** - Full-featured command-line tool for interactive use
-- **High performance** - ~340ns reads, 27K+ writes/sec
+- **High performance** - ~400ns reads, ~50µs writes (with persistence)
 - **Query engine** - Filter, sort, project, and aggregate data
 - **Materialized views** - Cache query results for instant access
-- **Real-time subscriptions** - Get notified when data changes
+- **Resource limits** - Configurable memory/disk bounds
 
 ## CLI Reference
 
