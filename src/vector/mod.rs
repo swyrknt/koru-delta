@@ -37,6 +37,7 @@
 
 mod index;
 pub mod snsw;
+pub mod snsw_advanced;
 mod types;
 
 // Public exports
