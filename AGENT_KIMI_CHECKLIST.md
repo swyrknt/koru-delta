@@ -212,30 +212,32 @@ agent.remember_episode("User asked about Python").await?;
 
 ---
 
-## CHECKLIST: v2.6 Roadmap (High Impact Items)
+## CHECKLIST: v2.5.1 Preview Features (In v2.5 Release)
 
-### Week 3: Vector Search Enhancement
-- [ ] **HNSW Index Implementation**
-  - [ ] Evaluate hnsw_rs vs custom implementation
-  - [ ] Proof-of-concept: 100K vectors
-  - [ ] Benchmark: 1M vectors in <10ms
-  - [ ] Causal-consistent index updates
-  
-- [ ] **Time-Travel Vector Search** (Unique Feature!)
-  - [ ] `similar_at(namespace, query, timestamp)` API
-  - [ ] Versioned index snapshots
-  - [ ] Example: "What was similar to this query last week?"
+These v2.6 features are included in v2.5 as **preview/beta**:
 
-### Week 4: Production Integrations
-- [ ] **LangChain VectorStore** integration
-- [ ] **LlamaIndex Storage** backend
-- [ ] **Multi-modal embeddings** support (images, audio)
-- [ ] Production deployment guide
+### v2.5.1 Preview: Enhanced Vector Search
+- [ ] **HNSW Index** (beta) - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
+  - [ ] Basic HNSW implementation for 100K-1M vectors
+  - [ ] 20x speedup target: 5ms @ 1M (vs 100ms flat)
+  - [ ] Causal-consistent index snapshots
+- [ ] **Time-Travel Vector Search** (preview)
+  - [ ] `similar_at()` API - query similarity at any past timestamp
+  - [ ] Unique feature: "What was similar last Tuesday?"
 
-### Week 5: Automated Lifecycle
-- [ ] **Memory consolidation daemon**
-- [ ] **Importance scoring** (ML-based)
-- [ ] **Cross-modal memory** linking
+### v2.5.1 Preview: LLM Integrations  
+- [ ] **LangChain VectorStore** (beta)
+  - [ ] `KoruDeltaVectorStore` class
+  - [ ] Drop-in replacement for Pinecone/Chroma
+- [ ] **LlamaIndex Storage** (beta)
+  - [ ] Native storage backend
+  - [ ] Hybrid search example
+
+### v2.5.1 Preview: Automated Lifecycle
+- [ ] **Basic memory consolidation** (preview)
+  - [ ] Hot→Warm transition rules
+  - [ ] Simple importance scoring
+  - [ ] Background jobs framework
 
 ## CHECKLIST: Next Week
 
@@ -312,20 +314,24 @@ impl AgentContext {
 
 ### Week 1
 - [x] Python bindings work (maturin build, clean clippy, imports successfully)
-- [ ] 3 use case examples (AI, audit, config)
+- [x] 3 use case examples (AI, audit, config) ✅ COMPLETE
 - [ ] Documentation updated
 
 ### Week 2: v2.5.0 Release (Current Focus)
-- [x] Vector storage (flat index)
-- [x] Python bindings with examples
+**Theme: "Causal Database with Vector Search"**
+- [x] Vector storage (flat index) - MVP complete
+- [x] Python bindings with 4 wow-factor examples
+- [x] VECTOR_SEARCH_DESIGN.md for v2.5.1
 - [ ] v2.5.0 release
 - [ ] PyPI package
 - [ ] Web playground
 
-### Week 3-4: v2.6 Preview (High Impact)
-- [ ] HNSW for million-scale ANN
-- [ ] Automated memory lifecycle
-- [ ] LangChain/LlamaIndex integrations
+### Week 3-4: v2.5.1 Preview (High Impact Features)
+**Theme: "Production-Ready AI Memory"**
+- [ ] HNSW for million-scale ANN (beta)
+- [ ] LangChain/LlamaIndex integrations (beta)
+- [ ] Automated memory lifecycle (preview)
+- [ ] Time-travel vector search (unique!)
 
 ### Month 1
 - [ ] 500+ PyPI downloads
