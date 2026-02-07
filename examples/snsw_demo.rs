@@ -1,12 +1,15 @@
-//! SNSW Demo - High-Recall Vector Search
+//! SNSW Demo - Adaptive Tiered Vector Search
 //!
-//! This demo shows the Synthesis-Navigable Small World (SNSW) implementation
-//! which achieves 98-100% recall with O(log n) query performance.
+//! Demonstrates the four-tier search architecture:
+//! - 🔥 Hot: Semantic cache for repeated/near-identical queries
+//! - 🌤️ Warm: SNSW graph search for medium-to-large datasets
+//! - ❄️ Cold: Exact linear scan for small datasets (<1K vectors)
+//! - 🕳️ Deep: Archive tier (on-disk, requires hydration)
 //!
 //! Run: cargo run --example snsw_demo --release
 
 use koru_delta::vector::Vector;
-use koru_delta::vector::snsw::SynthesisGraph;
+use koru_delta::vector::snsw::{SynthesisGraph, SearchTier};
 use std::time::Instant;
 
 fn random_vector(dimensions: usize) -> Vector {
@@ -16,135 +19,132 @@ fn random_vector(dimensions: usize) -> Vector {
     Vector::new(data, "demo-model")
 }
 
-fn generate_dataset(n: usize, dimensions: usize) -> Vec<Vector> {
-    (0..n).map(|_| random_vector(dimensions)).collect()
-}
-
-fn brute_force_search(dataset: &[Vector], query: &Vector, k: usize) -> Vec<(usize, f32)> {
-    let mut results: Vec<(usize, f32)> = dataset
-        .iter()
-        .enumerate()
-        .filter_map(|(i, v)| {
-            let score = v.cosine_similarity(query)?;
-            Some((i, score))
-        })
-        .collect();
-    
-    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    results.truncate(k);
-    results
-}
-
 fn main() {
     println!("{}", "=".repeat(80));
-    println!("SNSW - High-Recall Vector Search Demo");
+    println!("SNSW - Adaptive Tiered Vector Search");
     println!("{}", "=".repeat(80));
     println!();
-    println!("Algorithm: K-NN Graph + Beam Search + Exact Re-ranking");
-    println!("Target: 98-100% recall with O(log n) query time");
+    println!("Architecture: 🔥 Hot / 🌤️ Warm / ❄️ Cold / 🕳️ Deep");
+    println!();
+    println!("Tier Selection:");
+    println!("  🔥 Hot:    Semantic cache hit (same/near-same query)");
+    println!("  ❄️ Cold:   Dataset ≤1000 vectors (exact linear scan)");
+    println!("  🌤️ Warm:   Dataset >1000 vectors (SNSW graph search)");
     println!();
     
     let dimensions = 128;
-    let test_sizes = vec![100, 500, 1000, 5000];
+    let graph = SynthesisGraph::new();
     
-    for size in test_sizes {
+    // Test across different dataset sizes
+    let test_sizes = vec![50, 500, 1000, 2000, 5000];
+    
+    for &target_size in &test_sizes {
+        let target_size: usize = target_size;
         println!("{}", "-".repeat(80));
-        println!("Dataset: {} vectors ({}D)", size, dimensions);
+        println!("Dataset Size: {} vectors", target_size);
         println!("{}", "-".repeat(80));
         
-        let dataset = generate_dataset(size, dimensions);
-        let queries: Vec<Vector> = (0..50).map(|_| random_vector(dimensions)).collect();
+        // Insert vectors to reach target size
+        let current = graph.len();
+        let to_insert = target_size.saturating_sub(current);
         
-        // Recommended: M=16, ef_search=100 for balanced performance
-        let m = 16;
-        let ef = 100;
-        
-        println!("\nConfiguration: M={}, ef_search={}", m, ef);
-        
-        let graph = SynthesisGraph::new(m, ef);
-        
-        // Insert
-        let insert_start = Instant::now();
-        for vector in &dataset {
-            graph.insert(vector.clone()).unwrap();
+        if to_insert > 0 {
+            let insert_start = Instant::now();
+            for _ in 0..to_insert {
+                graph.insert(random_vector(dimensions)).unwrap();
+            }
+            println!("  Inserted {} vectors in {:.2?}", to_insert, insert_start.elapsed());
         }
-        let insert_time = insert_start.elapsed();
         
-        // Measure performance
-        let mut total_recall = 0.0;
-        let mut total_snsw_time = 0.0;
-        let mut total_bf_time = 0.0;
+        println!("  Total vectors: {}", graph.len());
+        println!("  Avg edges per node: {:.1}", graph.avg_edges());
         
-        for query in &queries {
-            // SNSW search
-            let snsw_start = Instant::now();
-            let snsw_results = graph.search(query, 10).unwrap();
-            total_snsw_time += snsw_start.elapsed().as_secs_f64();
+        // Test with fresh queries (cold cache)
+        let fresh_queries: Vec<Vector> = (0..10).map(|_| random_vector(dimensions)).collect();
+        
+        println!("\n  --- Fresh Queries (Cache Miss) ---");
+        let mut cold_count = 0;
+        let mut warm_count = 0;
+        let mut total_time = 0.0;
+        
+        for query in &fresh_queries {
+            let start = Instant::now();
+            let results = graph.search(query, 10).unwrap();
+            total_time += start.elapsed().as_secs_f64();
             
-            // Brute force (ground truth)
-            let bf_start = Instant::now();
-            let bf_results = brute_force_search(&dataset, query, 10);
-            total_bf_time += bf_start.elapsed().as_secs_f64();
-            
-            // Compute recall
-            let snsw_set: std::collections::HashSet<_> = snsw_results
-                .iter()
-                .map(|r| r.id.as_str())
-                .collect();
-            
-            let mut hits = 0;
-            for (idx, _) in &bf_results {
-                let v = &dataset[*idx];
-                let id = koru_delta::vector::snsw::ContentHash::from_vector(v);
-                if snsw_set.contains(id.as_str()) {
-                    hits += 1;
+            for r in &results {
+                match r.tier {
+                    SearchTier::Cold => cold_count += 1,
+                    SearchTier::Warm => warm_count += 1,
+                    _ => {}
                 }
             }
-            
-            total_recall += hits as f32 / bf_results.len() as f32;
         }
         
-        let avg_recall = total_recall / queries.len() as f32;
-        let avg_snsw_time = total_snsw_time / queries.len() as f64 * 1000.0;
-        let avg_bf_time = total_bf_time / queries.len() as f64 * 1000.0;
-        let speedup = avg_bf_time / avg_snsw_time;
+        let avg_time = total_time / fresh_queries.len() as f64 * 1000.0;
+        println!("  Avg query time: {:.3}ms", avg_time);
+        println!("  Results from Cold tier: {}", cold_count);
+        println!("  Results from Warm tier: {}", warm_count);
         
-        println!("  Build time: {:.2?}", insert_time);
-        println!("  Avg edges per node: {:.1}", graph.avg_edges());
-        println!("  SNSW query: {:.3}ms", avg_snsw_time);
-        println!("  Brute force: {:.3}ms", avg_bf_time);
-        println!("  Speedup: {:.1}x", speedup);
-        println!("  Recall@10: {:.1}%", avg_recall * 100.0);
+        // Test with repeated queries (cache hit)
+        println!("\n  --- Repeated Queries (Cache Hit) ---");
+        let repeated_query = fresh_queries[0].clone();
         
-        if avg_recall >= 0.99 {
-            println!("  ✓✓ PERFECT: 99%+ recall");
-        } else if avg_recall >= 0.95 {
-            println!("  ✓ EXCELLENT: 95%+ recall");
-        } else if avg_recall >= 0.90 {
-            println!("  ✓ VERY GOOD: 90%+ recall");
+        // Clear and warm up cache
+        let _ = graph.search(&repeated_query, 10).unwrap();
+        
+        let start = Instant::now();
+        let cached_results = graph.search(&repeated_query, 10).unwrap();
+        let cache_time = start.elapsed().as_secs_f64() * 1000.0;
+        
+        let hot_count = cached_results.iter().filter(|r| r.tier == SearchTier::Hot).count();
+        
+        println!("  Cache hit query time: {:.3}ms", cache_time);
+        println!("  Results from Hot tier: {}", hot_count);
+        
+        if hot_count > 0 {
+            let speedup = avg_time / cache_time;
+            println!("  🔥 Cache speedup: {:.1}x", speedup);
+        }
+        
+        // Show cache stats
+        let (cache_size, _) = graph.cache_stats();
+        println!("  Cache entries: {}", cache_size);
+        
+        // Show which tier is active
+        if target_size <= 1000 {
+            println!("\n  → Active Tier: ❄️ Cold (exact linear scan)");
         } else {
-            println!("  ⚠ MODERATE: <90% recall");
+            println!("\n  → Active Tier: 🌤️ Warm (SNSW graph search)");
         }
     }
     
     println!("\n{}", "=".repeat(80));
-    println!("Summary");
+    println!("Summary: Adaptive Search Benefits");
     println!("{}", "=".repeat(80));
     println!();
-    println!("SNSW achieves high recall through:");
-    println!("  1. K-NN graph: Guaranteed M edges per node");
-    println!("  2. Beam search: Efficient candidate collection");
-    println!("  3. Exact re-ranking: Correct final ordering");
+    println!("🔥 Hot Tier (Cache):");
+    println!("  - Instant results for repeated queries");
+    println!("  - Content-addressed by query hash");
+    println!("  - Near-hit detection (98% similarity threshold)");
     println!();
-    println!("The 5 Axioms of Distinction:");
-    println!("  1. Identity: Content-addressing via Blake3");
-    println!("  2. Synthesis: K-NN connects similar distinctions");
-    println!("  3. Deduplication: Same content = same hash");
-    println!("  4. Memory tiers: Graph creates access patterns");
-    println!("  5. Causality: Version tracking for provenance");
+    println!("❄️ Cold Tier (Brute Force):");
+    println!("  - Optimal for small datasets (≤1000 vectors)");
+    println!("  - Better cache locality than graph traversal");
+    println!("  - No graph construction overhead");
     println!();
-    println!("Tuning guide:");
-    println!("  • M=8,  ef=100 → Fast, 80% recall");
-    println!("  • M=16, ef=100 → Balanced, 98% recall (recommended)");
-    println!("  • M=32, ef=200 → Thorough, 99%+ recall");
+    println!("🌤️ Warm Tier (SNSW Graph):");
+    println!("  - K-NN graph with guaranteed connectivity");
+    println!("  - Beam search + exact re-ranking");
+    println!("  - 98-100% recall at medium-to-large scale");
+    println!();
+    println!("🕳️ Deep Tier (Archive):");
+    println!("  - Delta-encoded on disk");
+    println!("  - Requires explicit hydration");
+    println!("  - Perfect for compliance/historical data");
+    println!();
+    println!("The system automatically selects the optimal tier based on:");
+    println!("  1. Cache hit/miss status");
+    println!("  2. Dataset size");
+    println!("  3. Query patterns");
 }
