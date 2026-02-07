@@ -130,41 +130,38 @@ let results = db.embed_search(Some("docs"), &query,
 ).await?;
 ```
 
-### Hour 3-4: Agent Memory Layer ✅ COMPLETE
-- [x] Create `src/memory/agent.rs` module (996 lines)
-- [x] `AgentMemory` struct with content-addressed memory IDs
-- [x] Memory types: Episodic, Semantic, Procedural
+### Hour 3-4: Workspace Layer ✅ COMPLETE (REFACTORED)
+- [x] Create `src/memory/workspace.rs` module (GENERAL - not AI-specific)
+- [x] `Workspace` struct - general purpose causal storage container
+- [x] Memory patterns: Event, Reference, Procedure (conventions, not hardcoded)
+- [x] `AgentContext` thin wrapper for AI-specific convenience methods
 - [x] Relevance scoring (importance + recency + frequency + semantic)
-- [x] In-memory cache + persistent storage
-- [x] Natural consolidation (30-day threshold for old memories)
+- [x] Natural consolidation (30-day threshold for old items)
 - [x] Thread-safe with RwLock
-- [x] 11 unit tests, all passing
+- [x] 0 warnings, clippy clean
+- [x] Deleted old `agent.rs` - clean replacement
 
-**API Usage:**
+**Refactor Summary:**
+- **Before:** AgentMemory (AI-specific, too narrow)
+- **After:** Workspace (general) + AgentContext (AI wrapper)
+
+**New API - General Purpose:**
 ```rust
-let db = KoruDelta::start().await?;
-let agent = db.agent_memory("agent-42");
+// Any application can use workspaces
+let audit = db.workspace("audit-2026");
+audit.store("tx-123", data, MemoryPattern::Event).await?;
+let history = audit.history("tx-123").await?;
 
-// Store memories
-agent.remember_episode("User asked about Python", 0.8).await?;
-agent.remember_fact("python_bindings", "KoruDelta has Python bindings", vec!["python"]).await?;
-
-// Recall
-let recalls = agent.recall("Python", RecallOptions::new().limit(5)).await?;
-for recall in recalls {
-    println!("{}: {}", recall.relevance, recall.memory.content);
-}
-
-// Consolidate old memories
-let summary = agent.consolidate().await?;
+// AI agents use the same workspace
+let agent = db.workspace("agent-42").ai_context();
+agent.remember_episode("User asked about Python").await?;
 ```
 
-**Architecture:**
-- Memories stored in `agent_memory:{agent_id}` namespace
-- Embeddings stored in `agent_embeddings:{agent_id}` namespace
-- Content-addressed IDs via SHA256
-- Automatic versioning via CausalStorage
-- Memory tiers handle natural forgetting
+**Why this is better:**
+- **General:** Audit trails, config management, scientific data - all work
+- **Flexible:** Patterns are conventions, not enforced types
+- **Clean:** AI is a use case, not the whole identity
+- **Aligned with koru-lambda-core:** Workspaces are distinctions
 
 ### Hour 4-5: Python Bindings (PyO3)
 - [ ] Create `bindings/python/` directory

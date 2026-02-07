@@ -163,10 +163,10 @@ pub use views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
 // Vector exports
 pub use vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
 
-// Agent Memory exports
+// Workspace exports (causal storage containers)
 pub use memory::{
-    AgentMemory, ConsolidationSummary, Memory, MemoryRecall, MemoryStats, MemoryType,
-    RecallOptions,
+    AgentContext, ConsolidationSummary, MemoryPattern, SearchOptions, Workspace, WorkspaceItem,
+    WorkspaceSearchResult, WorkspaceStats,
 };
 
 // Subscriptions exports (non-WASM only)
@@ -215,9 +215,9 @@ pub mod prelude {
     // Vector types
     pub use crate::vector::{Vector, VectorSearchOptions, VectorSearchResult};
 
-    // Agent Memory types
+    // Workspace types
     pub use crate::memory::{
-        AgentMemory, Memory, MemoryRecall, MemoryStats, MemoryType, RecallOptions,
+        AgentContext, MemoryPattern, SearchOptions, Workspace, WorkspaceItem, WorkspaceStats,
     };
 
     // Subscriptions types (non-WASM only)

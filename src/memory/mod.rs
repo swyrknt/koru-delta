@@ -1,16 +1,29 @@
-/// Memory tiering subsystem.
+/// Memory tiering subsystem and workspaces.
 ///
-/// This module implements the layered memory architecture inspired by
-/// the human brain's memory systems:
+/// This module provides:
+/// - **Workspaces**: Isolated, versioned storage containers with natural lifecycle
+/// - **Memory Tiers**: Hot, Warm, Cold, Deep for automatic data lifecycle
 ///
-/// - **Hot Memory**: Working memory (fast, limited, LRU cache)
-/// - **Warm Memory**: Recent chronicle (full detail, disk-backed)
-/// - **Cold Memory**: Consolidated epochs (compressed patterns)
-/// - **Deep Memory**: Genomic storage (minimal, portable)
+/// ## Workspaces
 ///
-/// ## The Flow
+/// Workspaces are the primary interface for causal storage:
 ///
-/// Data flows through the layers based on access patterns:
+/// ```ignore
+/// let workspace = db.workspace("project-alpha");
+/// workspace.store("config", data, MemoryPattern::Reference).await?;
+/// let history = workspace.history("config").await?;
+/// ```
+///
+/// ## Memory Patterns
+///
+/// Patterns are conventions for organizing data:
+/// - **Event**: Things that happened (logs, audit trail, episodes)
+/// - **Reference**: Facts and knowledge (config, taxonomy)
+/// - **Procedure**: Computable knowledge (workflows, rules)
+///
+/// ## Memory Tiers
+///
+/// Data automatically moves through tiers based on access patterns:
 ///
 /// ```text
 /// Put: Data → Hot (immediate access)
@@ -21,22 +34,15 @@
 ///          ↓
 ///     Epoch ends → Deep (genomic)
 /// ```
-///
-/// ## User Benefit
-///
-/// - Bounded RAM regardless of database size
-/// - Frequently accessed data stays fast
-/// - Old data compressed but available
-/// - Runs on devices from Raspberry Pi to datacenter
-pub mod agent;
 pub mod hot;
 pub mod warm;
 pub mod cold;
 pub mod deep;
+pub mod workspace;
 
-pub use agent::{
-    AgentMemory, ConsolidationSummary, Memory, MemoryRecall, MemoryStats, MemoryType,
-    RecallOptions,
+pub use workspace::{
+    AgentContext, ConsolidationSummary, MemoryPattern, SearchOptions, Workspace,
+    WorkspaceItem, WorkspaceSearchResult, WorkspaceStats,
 };
 pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
 pub use warm::{WarmConfig, WarmMemory, WarmStats};

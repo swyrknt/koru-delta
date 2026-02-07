@@ -1096,25 +1096,30 @@ impl KoruDelta {
         &self.auth
     }
 
-    /// Create an agent memory manager.
+    /// Create a workspace.
     ///
-    /// Returns a new `AgentMemory` instance for the given agent ID.
-    /// Each agent gets its own isolated memory namespace.
+    /// Workspaces provide isolated, versioned storage with natural lifecycle.
+    /// Each workspace is independent - data in one doesn't affect others.
     ///
     /// # Example
     ///
     /// ```ignore
     /// let db = KoruDelta::start().await?;
-    /// let agent = db.agent_memory("agent-42");
     ///
-    /// // Store a memory
-    /// agent.remember_episode("User asked about Python", 0.8).await?;
+    /// // General purpose workspace
+    /// let project = db.workspace("project-alpha");
+    /// project.store("config", data, MemoryPattern::Reference).await?;
     ///
-    /// // Recall relevant memories
-    /// let memories = agent.recall("Python", RecallOptions::new().limit(5)).await?;
+    /// // AI agent workspace
+    /// let agent = db.workspace("agent-42").ai_context();
+    /// agent.remember_episode("User asked about Python").await?;
+    ///
+    /// // Audit workspace
+    /// let audit = db.workspace("audit-2026");
+    /// audit.store("tx-123", transaction, MemoryPattern::Event).await?;
     /// ```
-    pub fn agent_memory(&self, agent_id: impl Into<String>) -> crate::memory::AgentMemory {
-        crate::memory::AgentMemory::new(self.clone(), agent_id)
+    pub fn workspace(&self, name: impl Into<String>) -> crate::memory::Workspace {
+        crate::memory::Workspace::new(self.clone(), name)
     }
 
     /// Get storage reference.
