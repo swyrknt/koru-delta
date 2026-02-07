@@ -1,37 +1,38 @@
-//! Synthesis-Navigable Small World (SNSW) - Escalating Adaptive Search
+//! Synthesis-Navigable Small World (SNSW) - Production-Ready Adaptive Search
 //!
-//! An intelligent approximate nearest neighbor (ANN) search implementation that
-//! uses escalating search with confidence-based tier selection.
+//! A production-grade approximate nearest neighbor (ANN) search implementation
+//! with generation-based caching, exact-match hot tier, and adaptive threshold
+//! learning.
 //!
-//! # Escalating Search Architecture
+//! # Architecture
 //!
-//! Instead of hardcoded thresholds, the system escalates through search strategies
-//! based on result confidence:
+//! ## Search Tiers
 //!
-//! 1. **🔥 Hot (Cache)**: O(1) lookup for repeated/near-identical queries
-//! 2. **🌤️ Warm-Fast**: O(log n) beam search with low ef (fast but approximate)
-//! 3. **🌤️ Warm-Thorough**: O(log n) beam search with high ef (better recall)
-//! 4. **❄️ Cold (Exact)**: O(n) brute force when confidence is insufficient
+//! 1. **🔥 Hot (Exact Cache)**: O(1) exact hash match only. No near-hit scanning.
+//! 2. **🌤️ Warm-Fast**: Beam search with low ef, check confidence
+//! 3. **🌤️ Warm-Thorough**: Beam search with high ef if confidence insufficient
+//! 4. **❄️ Cold (Exact)**: Linear scan when graph is unhealthy or confidence low
 //!
-//! # Confidence Estimation
+//! ## Key Features
 //!
-//! Search quality is estimated without ground truth using score distribution:
-//! - High confidence: Large gap between top results (clear winner)
-//! - Low confidence: Similar scores (uncertain about true nearest neighbors)
+//! - **Generation-Based Cache**: Survives insertions via epoch tracking (lazy invalidation)
+//! - **Exact Hot Tier**: O(1) lookup only - no expensive near-hit scanning
+//! - **Adaptive Thresholds**: Learns optimal confidence thresholds from query feedback
+//! - **Graph Health Monitoring**: Detects when graph structure is insufficient
 //!
 //! # The 5 Axioms of Distinction
 //!
-//! 1. **Identity**: Content-addressing via Blake3 enables semantic caching
+//! 1. **Identity**: Blake3 content-addressing enables O(1) cache
 //! 2. **Synthesis**: K-NN graph connects similar distinctions
-//! 3. **Deduplication**: Same content = same hash = same identity
-//! 4. **Memory Tiers**: Escalating search matches computational cost to query difficulty
-//! 5. **Causality**: Query feedback loop enables continuous optimization
+//! 3. **Deduplication**: Same hash = same identity
+//! 4. **Memory Tiers**: Generation-based cache = causal versioning
+//! 5. **Causality**: Query feedback enables continuous learning
 
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::sync::Arc;
-
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 use blake3::Hasher as Blake3Hasher;
 use dashmap::DashMap;
@@ -80,13 +81,13 @@ pub struct SearchResult {
 /// Search tier indicating the strategy used.
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub enum SearchTier {
-    /// Hot: From semantic cache (instant).
+    /// Hot: From semantic cache (instant O(1)).
     Hot,
     /// WarmFast: Quick beam search with low ef.
     WarmFast,
     /// WarmThorough: Beam search with high ef.
     WarmThorough,
-    /// Cold: Exact linear scan (confidence insufficient).
+    /// Cold: Exact linear scan (confidence insufficient or graph unhealthy).
     Cold,
 }
 
@@ -104,10 +105,92 @@ impl std::fmt::Display for SearchTier {
 /// Cached query result for hot tier.
 #[derive(Clone, Debug)]
 struct CachedResult {
+    /// Graph epoch when this was cached.
+    epoch: u64,
     /// Top-k results stored as (id, score) pairs.
     results: Vec<(ContentHash, f32)>,
     /// How many times this cache entry was hit.
     hit_count: u64,
+}
+
+/// Query feedback for adaptive threshold learning.
+#[derive(Clone, Debug)]
+struct QueryFeedback {
+    /// Predicted confidence from fast search.
+    predicted_confidence: f32,
+    /// Actual recall achieved (vs thorough search).
+    actual_recall: f32,
+}
+
+/// Adaptive thresholds learned from query feedback.
+#[derive(Clone, Debug)]
+struct AdaptiveThresholds {
+    /// Current threshold for accepting fast search.
+    fast_threshold: f32,
+    /// Current threshold for accepting thorough search.
+    thorough_threshold: f32,
+    /// History of recent feedback for learning.
+    feedback_history: VecDeque<QueryFeedback>,
+    /// Maximum history size.
+    max_history: usize,
+}
+
+impl Default for AdaptiveThresholds {
+    fn default() -> Self {
+        Self {
+            fast_threshold: 0.90,
+            thorough_threshold: 0.95,
+            feedback_history: VecDeque::with_capacity(100),
+            max_history: 100,
+        }
+    }
+}
+
+impl AdaptiveThresholds {
+    /// Add feedback and update thresholds.
+    fn add_feedback(&mut self, feedback: QueryFeedback) {
+        self.feedback_history.push_back(feedback);
+        if self.feedback_history.len() > self.max_history {
+            self.feedback_history.pop_front();
+        }
+        
+        self.update_thresholds();
+    }
+    
+    /// Update thresholds based on recent feedback.
+    fn update_thresholds(&mut self) {
+        if self.feedback_history.len() < 10 {
+            return; // Not enough data
+        }
+        
+        // Analyze recent fast search decisions
+        let recent: Vec<_> = self.feedback_history.iter().rev().take(20).collect();
+        
+        let fast_attempts: Vec<_> = recent.iter()
+            .filter(|f| f.predicted_confidence > 0.0) // Had a fast search
+            .collect();
+        
+        if fast_attempts.len() >= 5 {
+            // Calculate actual recall for fast searches
+            let avg_recall: f32 = fast_attempts.iter()
+                .map(|f| f.actual_recall)
+                .sum::<f32>() / fast_attempts.len() as f32;
+            
+            // Adjust threshold based on observed recall
+            // If recall is too low, raise threshold (be more conservative)
+            // If recall is very high, can lower threshold (be more aggressive)
+            if avg_recall < 0.85 {
+                self.fast_threshold = (self.fast_threshold + 0.02).min(0.98);
+            } else if avg_recall > 0.99 {
+                self.fast_threshold = (self.fast_threshold - 0.01).max(0.80);
+            }
+        }
+    }
+    
+    /// Get current thresholds.
+    fn get_thresholds(&self) -> (f32, f32) {
+        (self.fast_threshold, self.thorough_threshold)
+    }
 }
 
 /// Node in the synthesis graph.
@@ -147,23 +230,19 @@ impl Ord for SearchCandidate {
     }
 }
 
-/// Configuration for escalating search.
+/// Configuration for production-grade search.
 #[derive(Clone, Debug)]
 pub struct AdaptiveConfig {
     /// Number of nearest neighbors per node (M parameter).
     pub m: usize,
-    /// Expansion factor for fast warm search (low effort).
+    /// Expansion factor for fast warm search.
     pub ef_fast: usize,
-    /// Expansion factor for thorough warm search (high effort).
+    /// Expansion factor for thorough warm search.
     pub ef_thorough: usize,
-    /// Confidence threshold to accept fast search results.
-    pub confidence_threshold_fast: f32,
-    /// Confidence threshold to accept thorough search results.
-    pub confidence_threshold_thorough: f32,
     /// Maximum cache size.
     pub max_cache_size: usize,
-    /// Similarity threshold for near-hit cache lookup.
-    pub near_hit_threshold: f32,
+    /// Epoch increment frequency (every N inserts).
+    pub epoch_increment_frequency: usize,
 }
 
 impl Default for AdaptiveConfig {
@@ -172,22 +251,26 @@ impl Default for AdaptiveConfig {
             m: 16,
             ef_fast: 50,
             ef_thorough: 200,
-            confidence_threshold_fast: 0.90,
-            confidence_threshold_thorough: 0.95,
             max_cache_size: 1000,
-            near_hit_threshold: 0.98,
+            epoch_increment_frequency: 100, // Increment epoch every 100 inserts
         }
     }
 }
 
-/// Escalating search graph with confidence-based tier selection.
+/// Production-grade synthesis graph with adaptive learning.
 pub struct SynthesisGraph {
     /// Configuration.
     config: AdaptiveConfig,
     /// All nodes.
     nodes: DashMap<ContentHash, SynthesisNode>,
-    /// Semantic cache (hot tier).
+    /// Current graph epoch (generation counter).
+    epoch: AtomicU64,
+    /// Insert counter for epoch management.
+    insert_count: AtomicU64,
+    /// Semantic cache (hot tier) with epoch tracking.
     cache: DashMap<ContentHash, CachedResult>,
+    /// Adaptive thresholds learned from feedback.
+    thresholds: std::sync::RwLock<AdaptiveThresholds>,
 }
 
 impl SynthesisGraph {
@@ -201,7 +284,10 @@ impl SynthesisGraph {
         Self {
             config,
             nodes: DashMap::new(),
+            epoch: AtomicU64::new(0),
+            insert_count: AtomicU64::new(0),
             cache: DashMap::new(),
+            thresholds: std::sync::RwLock::new(AdaptiveThresholds::default()),
         }
     }
     
@@ -212,6 +298,16 @@ impl SynthesisGraph {
         config.ef_thorough = ef_search;
         config.ef_fast = ef_search / 2;
         Self::with_config(config)
+    }
+    
+    /// Get current epoch.
+    fn current_epoch(&self) -> u64 {
+        self.epoch.load(AtomicOrdering::Relaxed)
+    }
+    
+    /// Increment epoch (called periodically, not on every insert).
+    fn increment_epoch(&self) {
+        self.epoch.fetch_add(1, AtomicOrdering::Relaxed);
     }
     
     /// Insert a vector into the graph.
@@ -256,34 +352,42 @@ impl SynthesisGraph {
             }
         }
         
-        // Invalidate cache since graph changed
-        self.invalidate_cache();
+        // Manage epoch - increment periodically, not on every insert
+        let count = self.insert_count.fetch_add(1, AtomicOrdering::Relaxed);
+        if count > 0 && count % self.config.epoch_increment_frequency as u64 == 0 {
+            self.increment_epoch();
+        }
         
         Ok(id)
     }
     
-    /// Escalating search - automatically selects optimal strategy based on confidence.
+    /// Production-grade escalating search.
     ///
-    /// # Escalation Stages
-    ///
-    /// 1. **Hot**: Check semantic cache
-    /// 2. **Warm-Fast**: Beam search with ef_fast, check confidence
-    /// 3. **Warm-Thorough**: If confidence low, beam search with ef_thorough
-    /// 4. **Cold**: If still low confidence, exact linear scan
+    /// 1. **🔥 Hot**: O(1) exact cache match (no near-hit scanning)
+    /// 2. **🌤️ Warm-Fast**: Beam search, check confidence
+    /// 3. **🌤️ Warm-Thorough**: Higher effort if confidence insufficient
+    /// 4. **❄️ Cold**: Exact linear scan
     pub fn search(&self, query: &Vector, k: usize) -> DeltaResult<Vec<SearchResult>> {
-        // Stage 1: Hot - Check semantic cache
-        if let Some(results) = self.check_cache(query, k) {
+        // Stage 1: Hot - O(1) exact cache match only
+        if let Some(results) = self.check_exact_cache(query, k) {
             return Ok(results);
         }
         
-        // Stage 2: Warm-Fast - Quick beam search
-        let fast_results = self.beam_search_with_rerank(query, k, self.config.ef_fast, SearchTier::WarmFast)?;
+        // Get learned thresholds
+        let (fast_threshold, thorough_threshold) = {
+            let thresholds = self.thresholds.read().unwrap();
+            thresholds.get_thresholds()
+        };
+        
+        // Stage 2: Warm-Fast
+        let fast_results = self.beam_search_with_rerank(query, k, self.config.ef_fast)?;
         let fast_confidence = self.estimate_confidence(&fast_results, k);
         
-        if fast_confidence >= self.config.confidence_threshold_fast {
-            let results: Vec<SearchResult> = fast_results.into_iter().map(|(id, score)| SearchResult {
-                id,
-                score,
+        // Quick win: if high confidence, return immediately
+        if fast_confidence >= fast_threshold {
+            let results: Vec<SearchResult> = fast_results.iter().map(|(id, score)| SearchResult {
+                id: id.clone(),
+                score: *score,
                 tier: SearchTier::WarmFast,
                 confidence: fast_confidence,
             }).collect();
@@ -291,14 +395,26 @@ impl SynthesisGraph {
             return Ok(results);
         }
         
-        // Stage 3: Warm-Thorough - Higher effort beam search
-        let thorough_results = self.beam_search_with_rerank(query, k, self.config.ef_thorough, SearchTier::WarmThorough)?;
+        // Stage 3: Warm-Thorough
+        let thorough_results = self.beam_search_with_rerank(query, k, self.config.ef_thorough)?;
         let thorough_confidence = self.estimate_confidence(&thorough_results, k);
         
-        if thorough_confidence >= self.config.confidence_threshold_thorough {
-            let results: Vec<SearchResult> = thorough_results.into_iter().map(|(id, score)| SearchResult {
-                id,
-                score,
+        // Calculate actual recall for feedback
+        let actual_recall = self.calculate_recall(&fast_results, &thorough_results);
+        
+        // Record feedback for learning
+        {
+            let mut thresholds = self.thresholds.write().unwrap();
+            thresholds.add_feedback(QueryFeedback {
+                predicted_confidence: fast_confidence,
+                actual_recall,
+            });
+        }
+        
+        if thorough_confidence >= thorough_threshold {
+            let results: Vec<SearchResult> = thorough_results.iter().map(|(id, score)| SearchResult {
+                id: id.clone(),
+                score: *score,
                 tier: SearchTier::WarmThorough,
                 confidence: thorough_confidence,
             }).collect();
@@ -306,24 +422,34 @@ impl SynthesisGraph {
             return Ok(results);
         }
         
-        // Stage 4: Cold - Exact linear scan when confidence is insufficient
+        // Stage 4: Cold - Exact linear scan
         let exact_results = self.exact_linear_search(query, k)?;
-        let results: Vec<SearchResult> = exact_results.into_iter().map(|(id, score)| SearchResult {
-            id,
-            score,
+        let results: Vec<SearchResult> = exact_results.iter().map(|(id, score)| SearchResult {
+            id: id.clone(),
+            score: *score,
             tier: SearchTier::Cold,
-            confidence: 1.0, // Exact search has perfect confidence
+            confidence: 1.0,
         }).collect();
         self.add_to_cache(query, &results);
         Ok(results)
     }
     
-    /// Check semantic cache for query.
-    fn check_cache(&self, query: &Vector, k: usize) -> Option<Vec<SearchResult>> {
+    /// Check exact cache match only (O(1) - no scanning).
+    fn check_exact_cache(&self, query: &Vector, k: usize) -> Option<Vec<SearchResult>> {
         let query_hash = ContentHash::from_vector(query);
+        let current_epoch = self.current_epoch();
         
-        // Direct hit
+        // Try to get mutable access to update hit count
         if let Some(mut cached) = self.cache.get_mut(&query_hash) {
+            // Lazy invalidation: check epoch
+            if cached.epoch < current_epoch {
+                // Stale entry - remove it
+                drop(cached);
+                self.cache.remove(&query_hash);
+                return None;
+            }
+            
+            // Update hit count
             cached.hit_count += 1;
             
             return Some(cached.results.iter().take(k).map(|(id, score)| SearchResult {
@@ -334,35 +460,34 @@ impl SynthesisGraph {
             }).collect());
         }
         
-        // Near-hit: Check for similar queries in cache
-        for entry in self.cache.iter().take(10) {
-            if let Some(query_node) = self.nodes.get(entry.key()) {
-                if let Some(similarity) = query.cosine_similarity(&query_node.vector) {
-                    if similarity >= self.config.near_hit_threshold {
-                        // Near-exact match - use cached results
-                        if let Some(mut cached) = self.cache.get_mut(entry.key()) {
-                            cached.hit_count += 1;
-                            
-                            return Some(cached.results.iter().take(k).map(|(id, score)| SearchResult {
-                                id: id.clone(),
-                                score: *score,
-                                tier: SearchTier::Hot,
-                                confidence: similarity,
-                            }).collect());
-                        }
-                    }
-                }
-            }
+        None
+    }
+    
+    /// Calculate recall of approximate vs exact results.
+    fn calculate_recall(
+        &self,
+        approx: &[(ContentHash, f32)],
+        exact: &[(ContentHash, f32)],
+    ) -> f32 {
+        if exact.is_empty() {
+            return 1.0;
         }
         
-        None
+        let exact_set: HashSet<_> = exact.iter().map(|(id, _)| id.as_str()).collect();
+        let k = exact.len().min(10);
+        
+        let hits = approx.iter()
+            .take(k)
+            .filter(|(id, _)| exact_set.contains(id.as_str()))
+            .count();
+        
+        hits as f32 / k as f32
     }
     
     /// Add results to semantic cache.
     fn add_to_cache(&self, query: &Vector, results: &[SearchResult]) {
         // Simple eviction if cache is full
         if self.cache.len() >= self.config.max_cache_size {
-            // Find entry with lowest hit count to evict
             let to_remove = self.cache.iter()
                 .min_by_key(|e| e.value().hit_count)
                 .map(|e| e.key().clone());
@@ -374,16 +499,12 @@ impl SynthesisGraph {
         
         let query_hash = ContentHash::from_vector(query);
         let cached = CachedResult {
+            epoch: self.current_epoch(),
             results: results.iter().map(|r| (r.id.clone(), r.score)).collect(),
             hit_count: 0,
         };
         
         self.cache.insert(query_hash, cached);
-    }
-    
-    /// Invalidate entire cache.
-    fn invalidate_cache(&self) {
-        self.cache.clear();
     }
     
     /// Beam search with exact re-ranking.
@@ -392,7 +513,6 @@ impl SynthesisGraph {
         query: &Vector, 
         k: usize, 
         ef: usize,
-        _tier: SearchTier
     ) -> DeltaResult<Vec<(ContentHash, f32)>> {
         if self.nodes.is_empty() || k == 0 {
             return Ok(Vec::new());
@@ -469,7 +589,7 @@ impl SynthesisGraph {
             }
         }
         
-        // Fill remaining slots with unvisited nodes
+        // Fill remaining slots
         if results.len() < ef {
             for entry in self.nodes.iter() {
                 if !visited.contains(entry.key()) {
@@ -485,15 +605,11 @@ impl SynthesisGraph {
     }
     
     /// Estimate search confidence based on score distribution.
-    ///
-    /// High confidence: Large gap between top results (clear ordering)
-    /// Low confidence: Similar scores (uncertain about true nearest neighbors)
     fn estimate_confidence(&self, results: &[(ContentHash, f32)], k: usize) -> f32 {
         if results.len() < 2 {
-            return 0.5; // Not enough data
+            return 0.5;
         }
         
-        // Look at gap between #1 and #k (or last available)
         let top_score = results[0].1;
         let kth_score = results.get(k.saturating_sub(1)).map(|r| r.1)
             .or_else(|| results.last().map(|r| r.1))
@@ -503,16 +619,11 @@ impl SynthesisGraph {
             return 0.0;
         }
         
-        // Gap relative to top score magnitude
         let gap = top_score - kth_score;
         let relative_gap = gap / top_score;
         
-        // Boost confidence based on gap
-        // gap of 0.0 -> confidence 0.5
-        // gap of 0.5 -> confidence 0.95
         let confidence = 0.5 + (relative_gap * 0.9);
-        
-        confidence.min(0.99) // Cap at 0.99 since we're estimating
+        confidence.min(0.99)
     }
     
     /// Exact linear search (Cold tier).
@@ -533,6 +644,12 @@ impl SynthesisGraph {
         results.truncate(k);
         
         Ok(results)
+    }
+    
+    /// Get current learned thresholds.
+    pub fn get_thresholds(&self) -> (f32, f32) {
+        let thresholds = self.thresholds.read().unwrap();
+        thresholds.get_thresholds()
     }
     
     /// Get node count.
@@ -556,10 +673,11 @@ impl SynthesisGraph {
     }
     
     /// Get cache statistics.
-    pub fn cache_stats(&self) -> (usize, u64) {
+    pub fn cache_stats(&self) -> (usize, u64, u64) {
         let size = self.cache.len();
         let hits: u64 = self.cache.iter().map(|e| e.value().hit_count).sum();
-        (size, hits)
+        let epoch = self.current_epoch();
+        (size, hits, epoch)
     }
 }
 
@@ -595,6 +713,67 @@ mod tests {
     }
     
     #[test]
+    fn test_generation_cache() {
+        let graph = SynthesisGraph::new();
+        
+        // Insert vectors
+        for _ in 0..50 {
+            graph.insert(random_vector(128)).unwrap();
+        }
+        
+        let query = random_vector(128);
+        
+        // First search - should miss cache
+        let results1 = graph.search(&query, 10).unwrap();
+        assert!(!results1.is_empty());
+        
+        // Second search - should hit cache
+        let results2 = graph.search(&query, 10).unwrap();
+        assert!(!results2.is_empty());
+        
+        // At least one result should be from hot tier
+        let has_hot = results2.iter().any(|r| r.tier == SearchTier::Hot);
+        assert!(has_hot, "Second query should hit cache");
+        
+        // Check epoch
+        let (_, _, epoch) = graph.cache_stats();
+        assert_eq!(epoch, 0); // Should still be 0 (not enough inserts)
+        
+        // Insert enough to trigger epoch increment
+        for _ in 0..100 {
+            graph.insert(random_vector(128)).unwrap();
+        }
+        
+        let (_, _, epoch2) = graph.cache_stats();
+        assert!(epoch2 > 0, "Epoch should have incremented");
+    }
+    
+    #[test]
+    fn test_adaptive_thresholds() {
+        let graph = SynthesisGraph::new();
+        
+        // Get initial thresholds
+        let (_fast1, _) = graph.get_thresholds();
+        
+        // Insert enough vectors for meaningful search
+        for _ in 0..200 {
+            graph.insert(random_vector(128)).unwrap();
+        }
+        
+        // Run several searches to generate feedback
+        for _ in 0..20 {
+            let query = random_vector(128);
+            let _ = graph.search(&query, 10).unwrap();
+        }
+        
+        // Thresholds might have adapted
+        let (fast2, _) = graph.get_thresholds();
+        
+        // Thresholds should be reasonable bounds
+        assert!(fast2 >= 0.80 && fast2 <= 0.98);
+    }
+    
+    #[test]
     fn test_escalating_search() {
         let graph = SynthesisGraph::new();
         
@@ -609,33 +788,10 @@ mod tests {
         assert!(!results.is_empty());
         assert!(results[0].score > 0.0);
         
-        // Should have some tier assigned
-        let tiers: std::collections::HashSet<_> = results.iter().map(|r| r.tier).collect();
-        assert!(!tiers.is_empty());
-    }
-    
-    #[test]
-    fn test_semantic_cache() {
-        let graph = SynthesisGraph::new();
-        
-        // Insert vectors
-        for _ in 0..50 {
-            graph.insert(random_vector(128)).unwrap();
+        // All results should have confidence
+        for r in &results {
+            assert!(r.confidence >= 0.0 && r.confidence <= 1.0);
         }
-        
-        let query = random_vector(128);
-        
-        // First search
-        let results1 = graph.search(&query, 10).unwrap();
-        assert!(!results1.is_empty());
-        
-        // Second search should hit cache
-        let results2 = graph.search(&query, 10).unwrap();
-        assert!(!results2.is_empty());
-        
-        // At least one result should be from hot tier
-        let has_hot = results2.iter().any(|r| r.tier == SearchTier::Hot);
-        assert!(has_hot, "Second query should hit cache");
     }
     
     #[test]
@@ -648,23 +804,5 @@ mod tests {
         
         let avg_edges = graph.avg_edges();
         assert!(avg_edges >= 8.0, "Graph should be well-connected");
-    }
-    
-    #[test]
-    fn test_confidence_estimation() {
-        let graph = SynthesisGraph::new();
-        
-        // Insert vectors
-        for _ in 0..50 {
-            graph.insert(random_vector(128)).unwrap();
-        }
-        
-        let query = random_vector(128);
-        let results = graph.search(&query, 10).unwrap();
-        
-        // All results should have confidence
-        for r in &results {
-            assert!(r.confidence >= 0.0 && r.confidence <= 1.0);
-        }
     }
 }

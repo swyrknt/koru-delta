@@ -1,13 +1,10 @@
-//! SNSW Demo - Escalating Adaptive Search
+//! SNSW Demo - Production-Ready Adaptive Search
 //!
-//! Demonstrates the escalating search architecture:
-//! - 🔥 Hot: Semantic cache for repeated/near-identical queries
-//! - 🌤️ Warm-Fast: Quick beam search with confidence check
-//! - 🌤️ Warm-Thorough: Higher-effort beam search if needed
-//! - ❄️ Cold: Exact linear scan when confidence is insufficient
-//!
-//! The key insight: Instead of hardcoded thresholds, the system escalates
-//! based on result confidence (estimated from score distribution).
+//! Demonstrates the production-grade implementation:
+//! - 🔥 Hot: O(1) exact cache match (generation-based, survives insertions)
+//! - 🌤️ Warm-Fast/Thorough: Beam search with adaptive thresholds
+//! - ❄️ Cold: Exact linear scan when needed
+//! - 📊 Adaptive Learning: Thresholds improve from query feedback
 //!
 //! Run: cargo run --example snsw_demo --release
 
@@ -25,129 +22,164 @@ fn random_vector(dimensions: usize) -> Vector {
 
 fn main() {
     println!("{}", "=".repeat(80));
-    println!("SNSW - Escalating Adaptive Search with Confidence");
+    println!("SNSW - Production-Ready Adaptive Search");
     println!("{}", "=".repeat(80));
     println!();
-    println!("Architecture: Escalation based on result confidence");
-    println!();
-    println!("Escalation Stages:");
-    println!("  1. 🔥 Hot:       Semantic cache hit (instant)");
-    println!("  2. 🌤️ Fast:      Beam search with ef=50, check confidence");
-    println!("  3. 🌤️ Thorough:  Beam search with ef=200 if confidence low");
-    println!("  4. ❄️ Cold:      Exact linear scan if still uncertain");
-    println!();
-    println!("Confidence Estimation:");
-    println!("  - High confidence = large gap between top scores");
-    println!("  - Low confidence = similar scores (uncertain ordering)");
+    println!("Key Features:");
+    println!("  • Generation-based cache (survives {} inserts)", 100);
+    println!("  • O(1) exact cache match (no scanning overhead)");
+    println!("  • Adaptive thresholds (learned from query feedback)");
+    println!("  • Confidence verification (vs actual recall)");
     println!();
     
     let dimensions = 128;
     let graph = SynthesisGraph::new();
     
-    // Test across different dataset sizes
-    let test_sizes = vec![100, 500, 1000, 2000, 5000];
+    // Phase 1: Small dataset - cache behavior
+    println!("{}", "-".repeat(80));
+    println!("Phase 1: Cache Behavior (100 vectors)");
+    println!("{}", "-".repeat(80));
     
-    for &target_size in &test_sizes {
-        let target_size: usize = target_size;
-        println!("{}", "-".repeat(80));
-        println!("Dataset Size: {} vectors", target_size);
-        println!("{}", "-".repeat(80));
-        
-        // Insert vectors to reach target size
-        let current = graph.len();
-        let to_insert = target_size.saturating_sub(current);
-        
-        if to_insert > 0 {
-            let insert_start = Instant::now();
-            for _ in 0..to_insert {
-                graph.insert(random_vector(dimensions)).unwrap();
-            }
-            println!("  Inserted {} vectors in {:.2?}", to_insert, insert_start.elapsed());
-        }
-        
-        println!("  Total vectors: {}", graph.len());
-        println!("  Avg edges per node: {:.1}", graph.avg_edges());
-        
-        // Test with fresh queries (cache miss, escalation happens)
-        let fresh_queries: Vec<Vector> = (0..20).map(|_| random_vector(dimensions)).collect();
-        
-        println!("\n  --- Fresh Queries (Escalation Demo) ---");
-        let mut tier_counts: HashMap<SearchTier, usize> = HashMap::new();
-        let mut confidence_sum = 0.0;
-        let mut total_time = 0.0;
-        
-        for query in &fresh_queries {
-            let start = Instant::now();
-            let results = graph.search(query, 10).unwrap();
-            total_time += start.elapsed().as_secs_f64();
-            
-            if let Some(first) = results.first() {
-                *tier_counts.entry(first.tier).or_insert(0) += 1;
-                confidence_sum += first.confidence;
-            }
-        }
-        
-        let avg_time = total_time / fresh_queries.len() as f64 * 1000.0;
-        let avg_confidence = confidence_sum / fresh_queries.len() as f32;
-        
-        println!("  Avg query time: {:.3}ms", avg_time);
-        println!("  Avg confidence: {:.1}%", avg_confidence * 100.0);
-        println!("  Tier distribution:");
-        
-        for (tier, count) in &tier_counts {
-            let pct = *count as f64 / fresh_queries.len() as f64 * 100.0;
-            match tier {
-                SearchTier::Hot => println!("    🔥 Hot (cache):        {} queries ({:.0}%)", count, pct),
-                SearchTier::WarmFast => println!("    🌤️ Warm-Fast:          {} queries ({:.0}%)", count, pct),
-                SearchTier::WarmThorough => println!("    🌤️ Warm-Thorough:      {} queries ({:.0}%)", count, pct),
-                SearchTier::Cold => println!("    ❄️ Cold (exact):       {} queries ({:.0}%)", count, pct),
-            }
-        }
-        
-        // Test with repeated queries (cache hit)
-        println!("\n  --- Repeated Queries (Cache Demo) ---");
-        let repeated_query = fresh_queries[0].clone();
-        
-        // Warm up cache
-        let _ = graph.search(&repeated_query, 10).unwrap();
-        
-        let start = Instant::now();
-        let cached_results = graph.search(&repeated_query, 10).unwrap();
-        let cache_time = start.elapsed().as_secs_f64() * 1000.0;
-        
-        let is_hot = cached_results.iter().all(|r| r.tier == SearchTier::Hot);
-        
-        println!("  Cache hit query time: {:.3}ms", cache_time);
-        println!("  All from Hot tier: {}", if is_hot { "Yes 🔥" } else { "No" });
-        
-        if avg_time > 0.0 {
-            let speedup = avg_time / cache_time;
-            println!("  Cache speedup: {:.1}x", speedup);
-        }
-        
-        // Show cache stats
-        let (cache_size, total_hits) = graph.cache_stats();
-        println!("  Cache entries: {} | Total hits: {}", cache_size, total_hits);
+    let insert_start = Instant::now();
+    for _ in 0..100 {
+        graph.insert(random_vector(dimensions)).unwrap();
+    }
+    println!("Inserted 100 vectors in {:.2?}", insert_start.elapsed());
+    
+    let query = random_vector(dimensions);
+    
+    // First search - cache miss
+    let start = Instant::now();
+    let _results1 = graph.search(&query, 10).unwrap();
+    let time1 = start.elapsed().as_secs_f64() * 1000.0;
+    println!("First search:  {:.3}ms (cache miss)", time1);
+    
+    // Second search - cache hit
+    let start = Instant::now();
+    let results2 = graph.search(&query, 10).unwrap();
+    let time2 = start.elapsed().as_secs_f64() * 1000.0;
+    let is_hot = results2.iter().all(|r| r.tier == SearchTier::Hot);
+    println!("Second search: {:.3}ms (cache {}) {}🔥", 
+        time2, 
+        if is_hot { "HIT" } else { "miss" },
+        if is_hot { "" } else { "NOT " }
+    );
+    
+    if time2 > 0.0 {
+        println!("Cache speedup: {:.1}x", time1 / time2);
     }
     
+    let (cache_size, hits, epoch) = graph.cache_stats();
+    println!("Cache stats: {} entries, {} hits, epoch {}", cache_size, hits, epoch);
+    
+    // Phase 2: Adaptive threshold learning
+    println!("\n{}", "-".repeat(80));
+    println!("Phase 2: Adaptive Threshold Learning");
+    println!("{}", "-".repeat(80));
+    
+    // Insert more vectors
+    for _ in 0..500 {
+        graph.insert(random_vector(dimensions)).unwrap();
+    }
+    println!("Total vectors: {}", graph.len());
+    
+    let (initial_fast, _) = graph.get_thresholds();
+    println!("Initial fast threshold: {:.2}", initial_fast);
+    
+    // Generate feedback through searches
+    println!("\nGenerating query feedback...");
+    for i in 0..30 {
+        let query = random_vector(dimensions);
+        let _ = graph.search(&query, 10).unwrap();
+        
+        if i % 10 == 9 {
+            let (fast, thorough) = graph.get_thresholds();
+            println!("  After {} queries: fast={:.2}, thorough={:.2}", i + 1, fast, thorough);
+        }
+    }
+    
+    // Phase 3: Tier distribution analysis
+    println!("\n{}", "-".repeat(80));
+    println!("Phase 3: Tier Distribution Analysis");
+    println!("{}", "-".repeat(80));
+    
+    // More vectors to trigger different tiers
+    for _ in 0..500 {
+        graph.insert(random_vector(dimensions)).unwrap();
+    }
+    println!("Total vectors: {}\n", graph.len());
+    
+    let test_queries: Vec<Vector> = (0..50).map(|_| random_vector(dimensions)).collect();
+    let mut tier_counts: HashMap<SearchTier, usize> = HashMap::new();
+    let mut total_time = 0.0;
+    let mut total_confidence = 0.0;
+    
+    for query in &test_queries {
+        let start = Instant::now();
+        let results = graph.search(query, 10).unwrap();
+        total_time += start.elapsed().as_secs_f64();
+        
+        if let Some(first) = results.first() {
+            *tier_counts.entry(first.tier).or_insert(0) += 1;
+            total_confidence += first.confidence;
+        }
+    }
+    
+    let avg_time = total_time / test_queries.len() as f64 * 1000.0;
+    let avg_confidence = total_confidence / test_queries.len() as f32;
+    
+    println!("Average query time: {:.3}ms", avg_time);
+    println!("Average confidence: {:.1}%\n", avg_confidence * 100.0);
+    
+    println!("Tier distribution ({} queries):", test_queries.len());
+    let mut tiers: Vec<_> = tier_counts.iter().collect();
+    tiers.sort_by(|a, b| b.1.cmp(a.1));
+    
+    for (tier, count) in tiers {
+        let pct = *count as f64 / test_queries.len() as f64 * 100.0;
+        match tier {
+            SearchTier::Hot => println!("  🔥 Hot (cache):          {:3} queries ({:.0}%)", count, pct),
+            SearchTier::WarmFast => println!("  🌤️ Warm-Fast:           {:3} queries ({:.0}%)", count, pct),
+            SearchTier::WarmThorough => println!("  🌤️ Warm-Thorough:       {:3} queries ({:.0}%)", count, pct),
+            SearchTier::Cold => println!("  ❄️ Cold (exact):        {:3} queries ({:.0}%)", count, pct),
+        }
+    }
+    
+    // Final stats
+    println!("\n{}", "-".repeat(80));
+    println!("Final Statistics");
+    println!("{}", "-".repeat(80));
+    
+    let (cache_size, hits, epoch) = graph.cache_stats();
+    let (fast_thresh, thorough_thresh) = graph.get_thresholds();
+    
+    println!("Graph size:      {} vectors", graph.len());
+    println!("Avg edges:       {:.1}", graph.avg_edges());
+    println!("Cache entries:   {}", cache_size);
+    println!("Cache hits:      {}", hits);
+    println!("Current epoch:   {}", epoch);
+    println!("Fast threshold:  {:.2} (adaptive)", fast_thresh);
+    println!("Thorough thresh: {:.2}", thorough_thresh);
+    
     println!("\n{}", "=".repeat(80));
-    println!("Key Insights");
+    println!("Summary: Production-Ready Features");
     println!("{}", "=".repeat(80));
     println!();
-    println!("1. No Hardcoded Thresholds:");
-    println!("   - System escalates based on result confidence, not vector count");
-    println!("   - Adapts to query difficulty (some queries need more work)");
+    println!("✅ Generation-based cache:");
+    println!("   - Survives {} insertions before invalidation", 100);
+    println!("   - Lazy invalidation (check on access)");
+    println!("   - O(1) exact match only (no scanning)");
     println!();
-    println!("2. Confidence Estimation:");
-    println!("   - Large score gap → High confidence → Stop early (fast)");
-    println!("   - Similar scores → Low confidence → Escalate (thorough)");
+    println!("✅ Adaptive thresholds:");
+    println!("   - Start with reasonable defaults");
+    println!("   - Learn from actual query performance");
+    println!("   - Self-tuning based on observed recall");
     println!();
-    println!("3. Cache Benefits:");
-    println!("   - Repeated queries: Instant response (🔥 Hot tier)");
-    println!("   - Near-identical queries: Detected via similarity threshold");
+    println!("✅ Confidence verification:");
+    println!("   - Compare fast vs thorough results");
+    println!("   - Actual recall measurement");
+    println!("   - Feedback drives threshold adjustments");
     println!();
-    println!("4. Efficiency:");
-    println!("   - Easy queries: Stop at Warm-Fast (low effort)");
-    println!("   - Hard queries: Escalate to Cold (guaranteed accuracy)");
-    println!("   - Never do more work than necessary");
+    println!("The system automatically finds the optimal balance");
+    println!("between speed and accuracy for your specific data.");
 }
