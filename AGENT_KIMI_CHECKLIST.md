@@ -1,8 +1,8 @@
 # KoruDelta: Execution Checklist
 
-**Document Purpose:** Track progress toward v2.5.0 - "The Causal Database"  
+**Document Purpose:** Track progress toward v2.0.0 - "The Causal Database"  
 **Current Version:** 2.0.0 (production-ready causal database)  
-**Target Version:** 2.5.0 (vector search + workspaces)  
+**Target Version:** 2.0.0 (vector search + workspaces)  
 **Last Updated:** 2026-02-06  
 **Owner:** Agent Kimi
 
@@ -65,7 +65,7 @@ Memory tiers → Natural lifecycle
 ### Next Week
 - JS/WASM bindings
 - Web playground
-- v2.5.0 release
+- v2.0.0 release
 
 ---
 
@@ -216,7 +216,7 @@ agent.remember_episode("User asked about Python").await?;
 
 These v2.6 features are included in v2.5 as **preview/beta**:
 
-### v2.5.1 Preview: Enhanced Vector Search
+### v2.1.0 Preview: Enhanced Vector Search
 - [ ] **HNSW Index** (beta) - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
   - [ ] Basic HNSW implementation for 100K-1M vectors
   - [ ] 20x speedup target: 5ms @ 1M (vs 100ms flat)
@@ -225,7 +225,7 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [ ] `similar_at()` API - query similarity at any past timestamp
   - [ ] Unique feature: "What was similar last Tuesday?"
 
-### v2.5.1 Preview: LLM Integrations  
+### v2.1.0 Preview: LLM Integrations  
 - [ ] **LangChain VectorStore** (beta)
   - [ ] `KoruDeltaVectorStore` class
   - [ ] Drop-in replacement for Pinecone/Chroma
@@ -233,13 +233,13 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [ ] Native storage backend
   - [ ] Hybrid search example
 
-### v2.5.1 Preview: Automated Lifecycle
+### v2.1.0 Preview: Automated Lifecycle
 - [ ] **Basic memory consolidation** (preview)
   - [ ] Hot→Warm transition rules
   - [ ] Simple importance scoring
   - [ ] Background jobs framework
 
-### v2.5.2 Research: Distinction-Based Search 🧪 EXPERIMENTAL
+### v2.2.0 Research: Distinction-Based Search 🧪 EXPERIMENTAL
 - [ ] **SNSW (Synthesis-Navigable Small World)** - See [DISTINCTION_BASED_VECTOR_SEARCH.md](bindings/python/docs/DISTINCTION_BASED_VECTOR_SEARCH.md)
   - [ ] Apply distinction calculus to ANN (koru-lambda-core integration)
   - [ ] Content-addressed vectors (automatic deduplication)
@@ -262,7 +262,7 @@ These v2.6 features are included in v2.5 as **preview/beta**:
 - [ ] Deploy to GitHub Pages
 
 ### Day 8-9: Release Prep
-- [ ] Version 2.5.0
+- [ ] Version 2.0.0
 - [ ] Final tests
 - [ ] Security audit
 - [ ] Release notes
@@ -327,7 +327,7 @@ impl AgentContext {
 - [x] 3 use case examples (AI, audit, config) ✅ COMPLETE
 - [ ] Documentation updated
 
-### Week 2: v2.5.0 Release (Current Focus)
+### Week 2: v2.0.0 Release (Current Focus)
 **Theme: "Causal Database with Vector Search"**
 - [x] Vector storage (flat index) - MVP complete
 - [x] Python bindings with 4 wow-factor examples

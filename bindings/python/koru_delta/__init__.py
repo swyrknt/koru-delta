@@ -22,7 +22,7 @@ Example:
 
 from __future__ import annotations
 
-__version__ = "2.5.0"
+__version__ = "2.0.0"
 
 # Import from Rust extension
 from koru_delta._internal import (

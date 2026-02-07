@@ -14,7 +14,7 @@ from typing import Any
 from koru_delta.config import Config
 from koru_delta.agent_memory import AgentMemory
 
-__version__: str = "2.5.0"
+__version__: str = "2.0.0"
 
 class KoruDeltaError(Exception):
     """Base exception for all KoruDelta errors."""

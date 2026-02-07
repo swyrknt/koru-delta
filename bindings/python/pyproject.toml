@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "koru-delta"
-version = "2.5.0"
+version = "2.0.0"
 description = "The database for AI agents - zero-config, causal, edge-ready"
 readme = "README.md"
 license = {text = "MIT OR Apache-2.0"}

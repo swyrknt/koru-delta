@@ -2,7 +2,7 @@
 
 **Concept:** Synthesis-Navigable Small World  
 **Innovation:** Apply distinction calculus to ANN search  
-**Status:** Research/Design Phase  
+**Status:** Research/Design Phase (Target: v2.2.0)  
 **Date:** 2026-02-07
 
 > **⚠️ POTENTIAL BREAKTHROUGH:** This is not an incremental improvement to vector search. It is a paradigm shift that bridges symbolic AI (distinction calculus), connectionist AI (embeddings), and causal reasoning. If validated, this could become semantic memory infrastructure for AGI.
@@ -41,18 +41,18 @@ Treat vectors as **distinctions in a causal semantic graph**:
 
 ### Development Strategy
 
-**Phase 1: Hybrid HNSW+SNSW (v2.5.2)**
+**Phase 1: Hybrid HNSW+SNSW (v2.2.0)**
 - Build on proven HNSW for geometric search
 - Add content-addressing (automatic deduplication)
 - Add synthesis edge overlay (lightweight)
 - Validate synthesis proximity metrics
 
-**Phase 2: Partial SNSW (v2.6)**
+**Phase 2: Partial SNSW (v2.3.0)**
 - Learned synthesis proximity weights
 - Automatic abstraction detection
 - Full causal integration
 
-**Phase 3: Full SNSW (v3.0+)**
+**Phase 3: Full SNSW (v2.4.0+)**
 - Pure distinction-based navigation
 - Cross-modal synthesis (text + image + audio)
 - AGI-ready semantic memory

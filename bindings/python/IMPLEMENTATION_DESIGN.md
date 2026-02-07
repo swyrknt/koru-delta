@@ -324,7 +324,7 @@ from .config import Config
 from .agent_memory import AgentMemory
 from .rag import RAG, Document
 
-__version__ = "2.5.0"
+__version__ = "2.0.0"
 
 class Database:
     """
@@ -382,7 +382,7 @@ build-backend = "maturin"
 
 [project]
 name = "koru-delta"
-version = "2.5.0"
+version = "2.0.0"
 description = "The database for AI agents"
 readme = "README.md"
 license = {text = "MIT OR Apache-2.0"}
@@ -422,7 +422,7 @@ features = ["pyo3/extension-module"]
 # Cargo.toml (in bindings/python/)
 [package]
 name = "koru-delta-python"
-version = "2.5.0"
+version = "2.0.0"
 edition = "2021"
 
 [lib]

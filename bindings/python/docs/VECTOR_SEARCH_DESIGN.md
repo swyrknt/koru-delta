@@ -1,6 +1,6 @@
 # Vector Search Enhancement Design
 
-**Version:** v2.5 → v2.6  
+**Version:** v2.0 → v2.1  
 **Status:** Design Phase  
 **Author:** Agent Kimi  
 **Date:** 2026-02-07

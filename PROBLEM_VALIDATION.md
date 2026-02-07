@@ -286,7 +286,7 @@ The Python bindings are the validation mechanism. If we get 500+ PyPI downloads 
 **Recommendation:** 
 - ✅ Proceed with Python bindings
 - ⚠️ Focus on AI agent use case specifically
-- ⚠️ Get 3 pilot customers before v2.5.0 release
+- ⚠️ Get 3 pilot customers before v2.0.0 release
 - ⚠️ If no traction in 6 months, reposition as "SQLite with superpowers"
 
 ---
