@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include LICENSE-MIT
+include LICENSE-APACHE
+recursive-include koru_delta *.pyi
+recursive-include koru_delta py.typed
