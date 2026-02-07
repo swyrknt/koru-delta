@@ -157,10 +157,10 @@ agent.remember_episode("User asked about Python").await?;
 - Causal chain: See WHO changed WHAT, WHEN, and WHY (immutable)
 - Natural lifecycle: Hot→Warm→Cold→Deep memory tiers
 
-### Hour 7-8: Integration ⏳
-- [ ] End-to-end tests passing
-- [ ] Documentation complete
-- [ ] Ready for PyPI publish
+### Hour 7-8: Integration ✅
+- [x] End-to-end tests passing (360 Rust + 7 Python tests)
+- [x] Documentation complete
+- [x] Ready for PyPI publish
 
 ---
 
