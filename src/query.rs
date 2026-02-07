@@ -632,8 +632,15 @@ fn get_field(value: &JsonValue, field: &str) -> Option<JsonValue> {
 }
 
 /// Compare two JSON values.
+/// Returns ordering with nulls sorting before all other values.
 fn compare_json(a: &JsonValue, b: &JsonValue) -> Option<Ordering> {
     match (a, b) {
+        // Null sorts before everything
+        (JsonValue::Null, JsonValue::Null) => Some(Ordering::Equal),
+        (JsonValue::Null, _) => Some(Ordering::Less),
+        (_, JsonValue::Null) => Some(Ordering::Greater),
+        
+        // Same type comparisons
         (JsonValue::Number(a), JsonValue::Number(b)) => {
             let a_f = a.as_f64()?;
             let b_f = b.as_f64()?;
@@ -641,7 +648,8 @@ fn compare_json(a: &JsonValue, b: &JsonValue) -> Option<Ordering> {
         }
         (JsonValue::String(a), JsonValue::String(b)) => Some(a.cmp(b)),
         (JsonValue::Bool(a), JsonValue::Bool(b)) => Some(a.cmp(b)),
-        (JsonValue::Null, JsonValue::Null) => Some(Ordering::Equal),
+        
+        // Different types - sort by type name for deterministic order
         _ => None,
     }
 }

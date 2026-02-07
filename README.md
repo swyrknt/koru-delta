@@ -101,6 +101,14 @@ REST endpoints:
 - `GET /api/v1/:namespace/:key/at/:timestamp` - Time travel
 - `POST /api/v1/:namespace/query` - Execute queries
 
+### 🗺️ What's Next
+
+See [ROADMAP.md](ROADMAP.md) for upcoming features:
+- **v2.1**: Batch operations (200K+ writes/sec)
+- **v2.2**: Query engine with JOINs and aggregations  
+- **v2.3**: Multi-region with CRDTs
+- **v2.4**: Python, JavaScript, Go bindings
+
 ### 🔐 Self-Sovereign Auth
 
 Built-in authentication with zero configuration. Users own their keys.
@@ -200,6 +208,36 @@ while let Ok(event) = rx.recv().await {
 - **Query engine** - Filter, sort, project, and aggregate data
 - **Materialized views** - Cache query results for instant access
 - **Resource limits** - Configurable memory/disk bounds
+
+## When to Use KoruDelta
+
+### ✅ Perfect For
+
+**Local-First Applications**
+Apps that work offline and sync when online (like Notion or Obsidian). KoruDelta's automatic versioning means conflicts resolve naturally.
+
+**Edge Computing & IoT**
+8MB binary runs on Raspberry Pi. Survives power loss with WAL. Multi-node sync for edge-to-cloud.
+
+**Audit-Heavy Systems**
+Finance, healthcare, compliance. Every change is versioned forever with cryptographic verification.
+
+**Developer Tooling**
+Feature flags, config management, local analytics. No Docker, no services—just `cargo install`.
+
+**AI Agent Memory**
+Hot/Warm/Cold/Deep tiers mirror human memory. Agents naturally "forget" unimportant details while retaining critical patterns.
+
+### ⚠️ Not For (Yet)
+
+See [ROADMAP.md](ROADMAP.md) for planned improvements:
+
+| Use Case | Status | Alternative |
+|----------|--------|-------------|
+| 100K+ writes/sec analytics | Planned v2.1 | ClickHouse, TimescaleDB |
+| Complex SQL JOINs | Planned v2.2 | PostgreSQL |
+| Multi-region geo-distribution | Planned v2.3 | CockroachDB |
+| Python/JS/Go projects | Planned v2.4 | Use via HTTP API for now |
 
 ## CLI Reference
 
