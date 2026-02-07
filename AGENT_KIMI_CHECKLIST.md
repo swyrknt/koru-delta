@@ -171,21 +171,37 @@ agent.remember_episode("User asked about Python").await?;
 - [ ] Jupyter notebook
 - [ ] PyPI upload ready
 
-### Day 2-3: ANN Optimization
-- [ ] HNSW or better index
-- [ ] 1M vectors benchmark
-- [ ] Index persistence
+### Day 2-3: ANN Optimization ⏳ HIGH IMPACT
+- [ ] **HNSW for million-scale ANN** - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
+  - Target: 5ms @ 1M vectors (vs 100ms current)
+  - Maintain causal consistency with versioned index snapshots
+  - Support time-travel vector search (unique feature!)
+- [ ] Multi-tier storage (Hot→HNSW→Disk)
+- [ ] 1M vectors benchmark vs Pinecone/Milvus
+- [ ] Index persistence and background rebuilds
 
-### Day 3: RAG Utilities
-- [ ] Document chunking
-- [ ] Embedding trait
-- [ ] Hybrid search
+### Day 3: Automated Memory Lifecycle ⏳ HIGH IMPACT
+- [ ] **Automated Hot→Warm→Cold→Deep transitions**
+  - Hot: Recent + frequent access (~10K vectors)
+  - Warm: Chronicle with compressed embeddings
+  - Cold: Consolidated summaries
+  - Deep: Genomic/epoch embeddings only
+- [ ] ML-based importance scoring
+- [ ] Access pattern tracking
+- [ ] Background consolidation jobs
 
-### Day 3-4: Multi-Use Examples
-- [ ] AI agent (memory)
-- [ ] RAG pipeline
-- [ ] Audit trail compliance
-- [ ] Config versioning
+### Day 3-4: LLM Framework Integrations ⏳ HIGH IMPACT
+- [ ] **LangChain integration** - `KoruDeltaVectorStore` class
+- [ ] **LlamaIndex integration** - Native storage backend
+- [ ] Document chunking utilities
+- [ ] Hybrid search (vector + causal filters)
+- [ ] Example: Full RAG pipeline with KoruDelta
+
+### Day 4-5: Multi-Use Examples
+- [x] AI agent (memory) ✅ COMPLETE
+- [ ] RAG pipeline (with LangChain)
+- [x] Audit trail compliance ✅ COMPLETE
+- [x] Config versioning ✅ COMPLETE
 
 ### Day 4-5: Documentation
 - [ ] "The Causal Database" guide
@@ -195,6 +211,31 @@ agent.remember_episode("User asked about Python").await?;
 - [ ] API reference
 
 ---
+
+## CHECKLIST: v2.6 Roadmap (High Impact Items)
+
+### Week 3: Vector Search Enhancement
+- [ ] **HNSW Index Implementation**
+  - [ ] Evaluate hnsw_rs vs custom implementation
+  - [ ] Proof-of-concept: 100K vectors
+  - [ ] Benchmark: 1M vectors in <10ms
+  - [ ] Causal-consistent index updates
+  
+- [ ] **Time-Travel Vector Search** (Unique Feature!)
+  - [ ] `similar_at(namespace, query, timestamp)` API
+  - [ ] Versioned index snapshots
+  - [ ] Example: "What was similar to this query last week?"
+
+### Week 4: Production Integrations
+- [ ] **LangChain VectorStore** integration
+- [ ] **LlamaIndex Storage** backend
+- [ ] **Multi-modal embeddings** support (images, audio)
+- [ ] Production deployment guide
+
+### Week 5: Automated Lifecycle
+- [ ] **Memory consolidation daemon**
+- [ ] **Importance scoring** (ML-based)
+- [ ] **Cross-modal memory** linking
 
 ## CHECKLIST: Next Week
 
@@ -274,10 +315,17 @@ impl AgentContext {
 - [ ] 3 use case examples (AI, audit, config)
 - [ ] Documentation updated
 
-### Week 2
-- [ ] v2.5.0 released
+### Week 2: v2.5.0 Release (Current Focus)
+- [x] Vector storage (flat index)
+- [x] Python bindings with examples
+- [ ] v2.5.0 release
 - [ ] PyPI package
 - [ ] Web playground
+
+### Week 3-4: v2.6 Preview (High Impact)
+- [ ] HNSW for million-scale ANN
+- [ ] Automated memory lifecycle
+- [ ] LangChain/LlamaIndex integrations
 
 ### Month 1
 - [ ] 500+ PyPI downloads
