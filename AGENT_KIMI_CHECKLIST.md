@@ -173,24 +173,29 @@ agent.remember_episode("User asked about Python").await?;
 
 ### Day 2-3: ANN Optimization ⏳ HIGH IMPACT
 
-**Two Approaches:**
+**Decision: Go all in on distinction calculus.**
 
-1. **HNSW (Proven)** - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
-   - Standard approach: O(log n) geometric search
-   - Target: 5ms @ 1M vectors (vs 100ms flat)
-   - Multi-tier storage (Hot→HNSW→Disk)
-   - Benchmark vs Pinecone/Milvus
+We're not building another HNSW clone. We're building SNSW (Synthesis-Navigable Small World) - the first distinction-based vector search. See [DISTINCTION_BASED_VECTOR_SEARCH.md](bindings/python/docs/DISTINCTION_BASED_VECTOR_SEARCH.md).
 
-2. **SNSW (Breakthrough)** - See [DISTINCTION_BASED_VECTOR_SEARCH.md](bindings/python/docs/DISTINCTION_BASED_VECTOR_SEARCH.md) 🧪
-   - Novel approach: distinction calculus + synthesis navigation
-   - Content-addressed (automatic deduplication)
-   - Explainable similarity (show WHY vectors relate)
-   - Hybrid: HNSW + synthesis overlay (Phase 1)
+**Core Principles:**
+- Vectors are **distinctions**, not geometric points
+- Identity comes from **content** (hash), not location
+- Relationships come from **synthesis**, not just distance
+- Navigation follows **semantic paths**, not just space
 
-**Shared Features:**
-- [ ] Causal-consistent index snapshots
-- [ ] Time-travel vector search (unique feature!)
-- [ ] Index persistence and background rebuilds
+**Implementation:**
+- [ ] **Content-addressed storage** - Blake3 hash = identity, automatic deduplication
+- [ ] **Synthesis proximity metric** - Combine geometric + semantic + causal factors
+- [ ] **Multi-layer abstraction** - Coarse→fine distinction layers
+- [ ] **Explainable search** - Show synthesis paths (WHY vectors relate)
+- [ ] **Time-travel vector search** - Query similarity at any past timestamp
+- [ ] **Hybrid Phase 1** - HNSW base + synthesis overlay (proven foundation, novel navigation)
+- [ ] **Prototype benchmark** - 10K vectors vs HNSW (prove distinction calculus wins)
+
+**Target:**
+- 5ms @ 1M vectors (with explanation, not just distance)
+- <1.5x memory (deduplication compensates for graph overhead)
+- 95%+ recall (with semantic boosts vs pure geometric)
 
 ### Day 3: Automated Memory Lifecycle ⏳ HIGH IMPACT
 - [ ] **Automated Hot→Warm→Cold→Deep transitions**
