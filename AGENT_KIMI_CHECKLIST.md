@@ -172,12 +172,24 @@ agent.remember_episode("User asked about Python").await?;
 - [x] PyPI upload ready (wheel built, twine check passed)
 
 ### Day 2-3: ANN Optimization ⏳ HIGH IMPACT
-- [ ] **HNSW for million-scale ANN** - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
-  - Target: 5ms @ 1M vectors (vs 100ms current)
-  - Maintain causal consistency with versioned index snapshots
-  - Support time-travel vector search (unique feature!)
-- [ ] Multi-tier storage (Hot→HNSW→Disk)
-- [ ] 1M vectors benchmark vs Pinecone/Milvus
+
+**Two Approaches:**
+
+1. **HNSW (Proven)** - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
+   - Standard approach: O(log n) geometric search
+   - Target: 5ms @ 1M vectors (vs 100ms flat)
+   - Multi-tier storage (Hot→HNSW→Disk)
+   - Benchmark vs Pinecone/Milvus
+
+2. **SNSW (Breakthrough)** - See [DISTINCTION_BASED_VECTOR_SEARCH.md](bindings/python/docs/DISTINCTION_BASED_VECTOR_SEARCH.md) 🧪
+   - Novel approach: distinction calculus + synthesis navigation
+   - Content-addressed (automatic deduplication)
+   - Explainable similarity (show WHY vectors relate)
+   - Hybrid: HNSW + synthesis overlay (Phase 1)
+
+**Shared Features:**
+- [ ] Causal-consistent index snapshots
+- [ ] Time-travel vector search (unique feature!)
 - [ ] Index persistence and background rebuilds
 
 ### Day 3: Automated Memory Lifecycle ⏳ HIGH IMPACT
