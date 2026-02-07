@@ -1,0 +1,54 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "koru-delta"
+version = "2.5.0"
+description = "The database for AI agents - zero-config, causal, edge-ready"
+readme = "README.md"
+license = {text = "MIT OR Apache-2.0"}
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "typing-extensions>=4.0; python_version<'3.10'",
+    "numpy>=1.20",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+rag = ["openai>=1.0", "tiktoken>=0.5"]
+dev = ["pytest", "pytest-asyncio", "mypy", "black", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/swyrknt/koru-delta"
+Documentation = "https://docs.korudelta.dev"
+Repository = "https://github.com/swyrknt/koru-delta"
+Issues = "https://github.com/swyrknt/koru-delta/issues"
+
+[tool.maturin]
+python-source = "."
+module-name = "koru_delta._internal"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
