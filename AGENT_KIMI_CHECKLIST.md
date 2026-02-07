@@ -130,27 +130,41 @@ let results = db.embed_search(Some("docs"), &query,
 ).await?;
 ```
 
-### Hour 3-4: Agent Memory Layer
-- [ ] Create `src/memory/agent.rs` module
-- [ ] `AgentMemory` struct wrapping KoruDelta
-- [ ] Memory types: episodic, semantic, procedural
-- [ ] Relevance scoring (cosine sim of embeddings)
-- [ ] Memory consolidation (compress old memories)
+### Hour 3-4: Agent Memory Layer ✅ COMPLETE
+- [x] Create `src/memory/agent.rs` module (996 lines)
+- [x] `AgentMemory` struct with content-addressed memory IDs
+- [x] Memory types: Episodic, Semantic, Procedural
+- [x] Relevance scoring (importance + recency + frequency + semantic)
+- [x] In-memory cache + persistent storage
+- [x] Natural consolidation (30-day threshold for old memories)
+- [x] Thread-safe with RwLock
+- [x] 11 unit tests, all passing
 
-**Key API:**
+**API Usage:**
 ```rust
-pub struct AgentMemory {
-    db: KoruDelta,
-    agent_id: String,
+let db = KoruDelta::start().await?;
+let agent = db.agent_memory("agent-42");
+
+// Store memories
+agent.remember_episode("User asked about Python", 0.8).await?;
+agent.remember_fact("python_bindings", "KoruDelta has Python bindings", vec!["python"]).await?;
+
+// Recall
+let recalls = agent.recall("Python", RecallOptions::new().limit(5)).await?;
+for recall in recalls {
+    println!("{}: {}", recall.relevance, recall.memory.content);
 }
 
-impl AgentMemory {
-    pub async fn remember_episode(&self, content: &str, importance: f32) -> Result<()>
-    pub async fn remember_fact(&self, key: &str, value: &str) -> Result<()>
-    pub async fn recall(&self, query: &str, limit: usize) -> Result<Vec<Memory>>
-    pub async fn consolidate(&self) -> Result<()>  // compress old memories
-}
+// Consolidate old memories
+let summary = agent.consolidate().await?;
 ```
+
+**Architecture:**
+- Memories stored in `agent_memory:{agent_id}` namespace
+- Embeddings stored in `agent_embeddings:{agent_id}` namespace
+- Content-addressed IDs via SHA256
+- Automatic versioning via CausalStorage
+- Memory tiers handle natural forgetting
 
 ### Hour 4-5: Python Bindings (PyO3)
 - [ ] Create `bindings/python/` directory
@@ -544,24 +558,31 @@ git commit -m "feat: [what was done]"
 ## CURRENT STATUS
 
 **Last Updated:** 2026-02-06  
-**Next Action:** Start Hour 1 - Vector Storage Module  
-**ETA v2.5.0:** ~10 days
+**Next Action:** Hour 4-5 - Python Bindings (PyO3)  
+**ETA v2.5.0:** ~8 days (ahead of schedule)
 
 **Progress:**
-- [ ] Hour 1-2: Vector storage
-- [ ] Hour 2-3: Vector search API
-- [ ] Hour 3-4: Agent memory
+- [x] Hour 1-2: Vector storage (977 lines, 24 tests)
+- [x] Hour 2-3: Vector search API (KoruDelta integration, 11 tests)
+- [x] Hour 3-4: Agent memory (996 lines, 11 tests)
 - [ ] Hour 4-5: Python bindings
-- [ ] Hour 5-6: Integration
-- [ ] Day 2: Python package
-- [ ] Day 2-3: ANN search
+- [ ] Hour 5-6: Integration & docs
+- [ ] Day 2: Python package polish
+- [ ] Day 2-3: ANN search optimization
 - [ ] Day 3: RAG utilities
-- [ ] Day 3-4: Examples
+- [ ] Day 3-4: AI examples
 - [ ] Day 4-5: Documentation
 - [ ] Day 6-7: JS bindings
 - [ ] Day 7-8: Web playground
 - [ ] Day 8-9: Release prep
 - [ ] Day 9-10: Launch
+
+**Stats:**
+- **Total tests:** 367 passing
+- **Code added:** ~2,000 lines
+- **Warnings:** 0
+- **Commits:** 2
+- **Status:** On track, no blockers
 
 ---
 
