@@ -43,6 +43,7 @@ python-source = "."
 module-name = "koru_delta._internal"
 features = ["pyo3/extension-module"]
 # Library name in Cargo.toml (koru_delta_python -> imports as _internal)
+exclude = ["venv", "target", "*.ipynb", "docs/*.md", "../README.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

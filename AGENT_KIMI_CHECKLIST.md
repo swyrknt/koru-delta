@@ -166,10 +166,10 @@ agent.remember_episode("User asked about Python").await?;
 
 ## CHECKLIST: This Week
 
-### Day 2: Python Package Polish
-- [ ] `pip install` works
-- [ ] Jupyter notebook
-- [ ] PyPI upload ready
+### Day 2: Python Package Polish ✅
+- [x] `pip install` works (verified with `pip install -e .`)
+- [x] Jupyter notebook (`examples/koru_delta_tutorial.ipynb`)
+- [x] PyPI upload ready (wheel built, twine check passed)
 
 ### Day 2-3: ANN Optimization ⏳ HIGH IMPACT
 - [ ] **HNSW for million-scale ANN** - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
