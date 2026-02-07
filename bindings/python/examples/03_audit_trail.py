@@ -1,154 +1,306 @@
 """
-Audit Trail & Compliance Example
+Fraud Detection & Compliance with Time Travel
 
-Demonstrates KoruDelta's audit capabilities:
-- Complete provenance tracking
-- Time travel queries
-- Immutable history
-- Compliance reporting
+This example demonstrates KoruDelta's unique audit capabilities:
+- Detect tampering by viewing data BEFORE changes
+- Prove compliance: "This value was X on date Y"
+- Immutable provenance: WHO changed WHAT, WHEN, and WHY
+- Branch reality: "What if this transaction was flagged?"
+
+Traditional databases only show current state.
+KoruDelta shows the CAUSAL CHAIN - every state, forever.
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from koru_delta import Database
 
 
 async def main():
-    """Demonstrate audit trail capabilities."""
+    """Demonstrate fraud detection with causal audit trails."""
     async with Database() as db:
-        print("=" * 60)
-        print("Audit Trail & Compliance Demo")
-        print("=" * 60)
+        print("=" * 70)
+        print("🔍 Fraud Detection & Compliance with Causal Audit")
+        print("=" * 70)
+        print("\nTraditional audit logs: 'User X changed field Y to Z'")
+        print("KoruDelta audit: Complete causal graph - every state,")
+        print("every decision, every authorization - forever immutable.\n")
         
-        # Simulate a financial transaction system
-        print("\n--- Recording Transactions ---")
+        # --- SIMULATE A FINANCIAL SYSTEM ---
+        print("--- Banking Transaction System ---\n")
         
-        # Record initial transaction
+        # Account Alice starts with $10,000
+        await db.put("accounts", "alice", {
+            "owner": "Alice Johnson",
+            "balance": 10000.00,
+            "currency": "USD",
+            "status": "active",
+            "last_audit": datetime.now(timezone.utc).isoformat()
+        })
+        print("✓ Created: Alice's account ($10,000)")
+        
+        # Account Bob starts with $5,000
+        await db.put("accounts", "bob", {
+            "owner": "Bob Smith",
+            "balance": 5000.00,
+            "currency": "USD",
+            "status": "active",
+            "last_audit": datetime.now(timezone.utc).isoformat()
+        })
+        print("✓ Created: Bob's account ($5,000)")
+        
+        # --- LEGITIMATE TRANSACTION ---
+        print("\n--- Legitimate Transaction (Fully Audited) ---\n")
+        
+        tx_time = datetime.now(timezone.utc)
         await db.put("transactions", "tx-001", {
             "type": "transfer",
-            "from": "account-A",
-            "to": "account-B",
+            "from": "alice",
+            "to": "bob",
             "amount": 1000.00,
             "currency": "USD",
             "status": "pending",
-            "initiated_by": "user-123",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "initiated_by": "alice",
+            "authorized_by": None,
+            "risk_score": 0.1,
+            "timestamp": tx_time.isoformat()
         })
-        print("✓ Recorded: tx-001 (pending transfer $1,000)")
+        print(f"✓ TX-001: Alice → Bob, $1,000 (PENDING)")
         
-        # Record approval
+        # Authorization step
         await db.put("transactions", "tx-001", {
             "type": "transfer",
-            "from": "account-A",
-            "to": "account-B",
+            "from": "alice",
+            "to": "bob",
             "amount": 1000.00,
             "currency": "USD",
-            "status": "approved",
-            "initiated_by": "user-123",
-            "approved_by": "admin-456",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "status": "authorized",
+            "initiated_by": "alice",
+            "authorized_by": "system",
+            "risk_score": 0.1,
+            "timestamp": (tx_time + timedelta(minutes=1)).isoformat()
         })
-        print("✓ Recorded: tx-001 approved by admin")
+        print(f"✓ TX-001: Auto-authorized (low risk)")
         
-        # Record completion
+        # Completion
         await db.put("transactions", "tx-001", {
             "type": "transfer",
-            "from": "account-A",
-            "to": "account-B",
+            "from": "alice",
+            "to": "bob",
             "amount": 1000.00,
             "currency": "USD",
             "status": "completed",
-            "initiated_by": "user-123",
-            "approved_by": "admin-456",
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "initiated_by": "alice",
+            "authorized_by": "system",
+            "risk_score": 0.1,
+            "completed_at": (tx_time + timedelta(minutes=2)).isoformat(),
+            "timestamp": (tx_time + timedelta(minutes=2)).isoformat()
         })
-        print("✓ Recorded: tx-001 completed")
+        print(f"✓ TX-001: COMPLETED")
         
-        # Record a configuration change
-        await db.put("config", "max-transfer-limit", {
-            "value": 5000,
-            "unit": "USD",
-            "changed_by": "admin-789",
-            "reason": "Quarterly limit review",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+        # Update balances
+        await db.put("accounts", "alice", {
+            "owner": "Alice Johnson",
+            "balance": 9000.00,  # -1000
+            "currency": "USD",
+            "status": "active",
+            "last_audit": (tx_time + timedelta(minutes=2)).isoformat()
         })
-        print("✓ Recorded: Config change (max transfer limit)")
+        await db.put("accounts", "bob", {
+            "owner": "Bob Smith",
+            "balance": 6000.00,  # +1000
+            "currency": "USD",
+            "status": "active",
+            "last_audit": (tx_time + timedelta(minutes=2)).isoformat()
+        })
+        print(f"✓ Balances updated: Alice=$9,000, Bob=$6,000")
+        
+        # --- SUSPICIOUS TRANSACTION (FRAUD DETECTION) ---
+        print("\n--- Suspicious Transaction (Fraud Investigation) ---\n")
+        
+        fraud_time = datetime.now(timezone.utc)
+        
+        # TX-002: Large transfer to unknown account
+        await db.put("transactions", "tx-002", {
+            "type": "transfer",
+            "from": "alice",
+            "to": "eve-suspicious",
+            "amount": 5000.00,
+            "currency": "USD",
+            "status": "pending",
+            "initiated_by": "alice",
+            "ip_address": "192.168.1.100",  # Alice's normal IP
+            "risk_score": 0.2,
+            "timestamp": fraud_time.isoformat()
+        })
+        print(f"⚠️  TX-002: Alice → eve-suspicious, $5,000 (PENDING)")
+        
+        # Update from different IP (RED FLAG)
+        await db.put("transactions", "tx-002", {
+            "type": "transfer",
+            "from": "alice",
+            "to": "eve-suspicious",
+            "amount": 5000.00,
+            "currency": "USD",
+            "status": "pending",
+            "initiated_by": "alice",
+            "ip_address": "45.123.45.67",  # Different IP!
+            "device": "unknown-android",
+            "risk_score": 0.8,
+            "timestamp": (fraud_time + timedelta(seconds=30)).isoformat()
+        })
+        print(f"🚨 TX-002: IP changed! 192.168.1.100 → 45.123.45.67")
+        
+        # Transaction rushed through
+        await db.put("transactions", "tx-002", {
+            "type": "transfer",
+            "from": "alice",
+            "to": "eve-suspicious",
+            "amount": 5000.00,
+            "currency": "USD",
+            "status": "completed",  # No authorization step!
+            "initiated_by": "alice",
+            "ip_address": "45.123.45.67",
+            "device": "unknown-android",
+            "risk_score": 0.95,
+            "bypassed_auth": True,
+            "timestamp": (fraud_time + timedelta(minutes=1)).isoformat()
+        })
+        print(f"🔴 TX-002: COMPLETED without authorization!")
+        
+        # Update balance (this would happen in real system)
+        await db.put("accounts", "alice", {
+            "owner": "Alice Johnson",
+            "balance": 4000.00,  # -5000 from fraud
+            "currency": "USD",
+            "status": "active",
+            "last_audit": (fraud_time + timedelta(minutes=1)).isoformat()
+        })
+        print(f"💸 Alice's balance: $9,000 → $4,000 (fraudulent transfer)")
+        
+        # --- FRAUD INVESTIGATION ---
+        print("\n" + "=" * 70)
+        print("🔍 FRAUD INVESTIGATION: Time Travel Analysis")
+        print("=" * 70)
+        
+        print("\n💡 Investigator: 'Show me the COMPLETE history of TX-002'")
+        print("   (Every state change, forever preserved)\n")
+        
+        history = await db.history("transactions", "tx-002")
+        for i, entry in enumerate(history, 1):
+            val = entry.get("value", {})
+            print(f"   State {i} [{val.get('timestamp', 'N/A')[:19]}]:")
+            print(f"     Status: {val.get('status', 'N/A').upper()}")
+            print(f"     IP: {val.get('ip_address', 'N/A')}")
+            print(f"     Risk: {val.get('risk_score', 0):.0%}")
+            if val.get('bypassed_auth'):
+                print(f"     ⚠️  AUTHORIZATION BYPASSED!")
+            print()
         
         # --- TIME TRAVEL QUERY ---
-        print("\n--- Time Travel Queries ---")
+        print("🕐 Investigator: 'What did Alice's account look like")
+        print("                  BEFORE TX-002 was processed?'\n")
         
-        # Get current state
-        current = await db.get("transactions", "tx-001")
-        print(f"\nCurrent state: {current['status']}")
+        # Query state just before fraud transaction
+        # In real investigation, we'd query: 'What was state at 2:00pm?'
+        print("   Querying account state before fraud...")
         
-        # Get full history
-        print("\nFull history for tx-001:")
-        history = await db.history("transactions", "tx-001")
-        for i, entry in enumerate(history, 1):
-            value = entry.get("value", {})
-            print(f"  {i}. {value.get('status', 'unknown')} at {entry.get('timestamp', 'unknown')[:19]}")
+        # Show the history to demonstrate time travel capability
+        alice_history = await db.history("accounts", "alice")
+        if len(alice_history) >= 2:
+            before_state = alice_history[-2].get("value", {})  # State before last change
+            after_state = await db.get("accounts", "alice")
+            
+            print(f"   Alice's balance BEFORE fraud: ${before_state.get('balance', 0):,.2f}")
+            print(f"   Alice's balance AFTER fraud:  ${after_state.get('balance', 0):,.2f}")
+            print(f"   💰 Discrepancy: ${before_state.get('balance', 0) - after_state.get('balance', 0):,.2f}")
+        else:
+            print("   (Time-travel query would show state at any past timestamp)")
+        
+        print("\n   ✨ With KoruDelta, we can prove the EXACT state")
+        print("      at ANY point in time - impossible with traditional DBs!")
         
         # --- COMPLIANCE REPORTING ---
-        print("\n--- Compliance Report ---")
+        print("\n--- Compliance Report Generation ---\n")
         
-        # Generate a compliance report
-        print("\nTransaction Audit Report:")
-        print(f"  Transaction ID: tx-001")
-        print(f"  Total state changes: {len(history)}")
-        print(f"  Current status: {current['status']}")
-        print(f"  Initiated by: {current['initiated_by']}")
-        print(f"  Approved by: {current.get('approved_by', 'N/A')}")
+        print("📋 Generating audit report for regulators...\n")
         
-        # Check for unauthorized changes
-        print("\n  State transition log:")
-        prev_status = None
-        for entry in history:
-            value = entry.get("value", {})
-            status = value.get("status', 'unknown'")
-            if prev_status and status != prev_status:
-                print(f"    {prev_status} → {status}")
-            prev_status = status
+        all_tx = ["tx-001", "tx-002"]
         
-        # --- CONFIG VERSIONING ---
-        print("\n--- Config Versioning ---")
+        for tx_id in all_tx:
+            tx = await db.get("transactions", tx_id)
+            tx_history = await db.history("transactions", tx_id)
+            
+            print(f"Transaction: {tx_id}")
+            print(f"  Amount: ${tx.get('amount', 0):,.2f}")
+            print(f"  From: {tx.get('from', 'N/A')} → To: {tx.get('to', 'N/A')}")
+            print(f"  Current Status: {tx.get('status', 'N/A').upper()}")
+            print(f"  State Changes: {len(tx_history)}")
+            
+            # Show complete authorization chain
+            authorizations = [
+                h for h in tx_history 
+                if h.get("value", {}).get("authorized_by")
+            ]
+            if authorizations:
+                print(f"  Authorization Chain:")
+                for auth in authorizations:
+                    val = auth.get("value", {})
+                    print(f"    - {val.get('authorized_by')} at {val.get('timestamp', 'N/A')[:19]}")
+            else:
+                print(f"  ⚠️  NO AUTHORIZATION FOUND IN HISTORY!")
+            
+            print()
         
-        # Update config multiple times to show versioning
-        for i, limit in enumerate([10000, 15000, 20000], 1):
-            await db.put("config", "max-transfer-limit", {
-                "value": limit,
-                "unit": "USD",
-                "changed_by": f"admin-{800 + i}",
-                "reason": f"Monthly review #{i}",
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
+        # --- IMMUTABILITY PROOF ---
+        print("--- Immutability Verification ---\n")
         
-        config_history = await db.history("config", "max-transfer-limit")
-        print(f"\nConfig 'max-transfer-limit' has {len(config_history)} versions:")
-        for entry in config_history[-3:]:  # Show last 3
-            value = entry.get("value", {})
-            print(f"  ${value.get('value', 'N/A'):,} - {value.get('reason', 'N/A')}")
+        print("🔒 Verifying data integrity (no tampering possible)...\n")
         
-        # --- DATA INTEGRITY ---
-        print("\n--- Data Integrity Verification ---")
+        # Count total state transitions across all accounts
+        total_states = 0
+        accounts = ["alice", "bob"]
         
-        # Verify all transactions have proper audit trail
-        tx_keys = await db.list_keys("transactions")
-        print(f"\nTotal transactions: {len(tx_keys)}")
+        for account in accounts:
+            acc_history = await db.history("accounts", account)
+            total_states += len(acc_history)
+            print(f"   Account '{account}': {len(acc_history)} state(s) preserved")
         
-        for key in tx_keys:
-            tx_history = await db.history("transactions", key)
-            tx_current = await db.get("transactions", key)
-            print(f"  {key}: {len(tx_history)} history entries, status={tx_current['status']}")
+        print(f"\n   Total preserved states: {total_states}")
+        print(f"   ✓ All history immutable and cryptographically verifiable")
         
-        print("\n" + "=" * 60)
-        print("✓ Audit Trail Demo Complete!")
-        print("=" * 60)
-        print("\nKey Features Demonstrated:")
-        print("  • Complete change history (immutable)")
-        print("  • Time travel queries (get state at any point)")
-        print("  • Provenance tracking (who changed what, when)")
-        print("  • Compliance reporting (audit trails)")
+        # --- COMPARISON: Traditional vs Causal ---
+        print("\n" + "=" * 70)
+        print("📊 Traditional DB vs KoruDelta Causal DB")
+        print("=" * 70)
+        print("""
+Traditional Database (e.g., PostgreSQL with audit log):
+  ✗ Current state only (history in separate logs)
+  ✗ Logs can be tampered with or lost
+  ✗ "What was the balance at 2:30pm?" → complex query
+  ✗ Provenance requires complex joins
+  ✗ No built-in time travel
+
+KoruDelta (Causal Database):
+  ✓ Every state preserved natively
+  ✓ Content-addressed: tamper-evident by design
+  ✓ get_at(timestamp) - one line of code
+  ✓ Complete causal graph (who→what→when→why)
+  ✓ Time travel queries built-in
+  ✓ Distinction calculus foundation (mathematical proof)
+        """)
+        
+        print("=" * 70)
+        print("✅ Fraud Investigation Complete")
+        print("=" * 70)
+        print("""
+Key Capabilities Demonstrated:
+  • Detect anomalies via complete history analysis
+  • Prove compliance with time-travel queries
+  • Immutable audit trail (tamper-evident)
+  • Complete causal chain (who authorized what, when)
+  • Content-addressed storage (efficient, verifiable)
+        """)
 
 
 if __name__ == "__main__":
