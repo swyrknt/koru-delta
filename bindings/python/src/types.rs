@@ -49,13 +49,13 @@ pub fn pyobject_to_json(obj: &PyAny) -> PyResult<Value> {
     } else if let Ok(s) = obj.extract::<String>() {
         Ok(Value::String(s))
     } else if let Ok(list) = obj.downcast::<PyList>() {
-        let arr: Result<Vec<_>, _> = list.iter().map(|item| pyobject_to_json(&item)).collect();
+        let arr: Result<Vec<_>, _> = list.iter().map(pyobject_to_json).collect();
         Ok(Value::Array(arr?))
     } else if let Ok(dict) = obj.downcast::<PyDict>() {
         let mut map = serde_json::Map::new();
         for (k, v) in dict.iter() {
             let key: String = k.extract()?;
-            let value = pyobject_to_json(&v)?;
+            let value = pyobject_to_json(v)?;
             map.insert(key, value);
         }
         Ok(Value::Object(map))
@@ -70,6 +70,7 @@ pub fn pyobject_to_json(obj: &PyAny) -> PyResult<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_json_roundtrip() {
@@ -77,7 +78,7 @@ mod tests {
         Python::with_gil(|py| {
             let json = json!({"name": "Alice", "age": 30, "active": true});
             let py_obj = json_to_pyobject(py, &json);
-            let back = pyobject_to_json(&py_obj.bind(py)).unwrap();
+            let back = pyobject_to_json(py_obj.as_ref(py)).unwrap();
             assert_eq!(json, back);
         });
     }

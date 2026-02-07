@@ -263,7 +263,7 @@ impl AgentContext {
 - [x] Workspace API complete
 
 ### Week 1
-- [ ] Python bindings work
+- [x] Python bindings work (maturin build, clean clippy, imports successfully)
 - [ ] 3 use case examples (AI, audit, config)
 - [ ] Documentation updated
 

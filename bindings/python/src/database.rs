@@ -268,7 +268,7 @@ impl PyDatabase {
 
     /// String representation
     fn __repr__(&self) -> String {
-        format!("<Database instance>")
+        "<Database instance>".to_string()
     }
 }
 
