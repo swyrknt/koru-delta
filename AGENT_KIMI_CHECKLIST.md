@@ -146,10 +146,16 @@ agent.remember_episode("User asked about Python").await?;
 - [x] Basic usage example verified (runs successfully)
 - [x] PyPI package structure (MANIFEST.in, py.typed, pyproject.toml)
 
-### Hour 6-7: Examples ✅
-- [x] AI agent example (Python) - episodic/semantic/procedural memory
-- [x] Audit trail example - time travel, compliance reporting
-- [x] Config management example - feature flags, rollback
+### Hour 6-7: Examples ✅ (WOW FACTOR)
+- [x] AI agent example - Semantic memory with vectors (find by meaning)
+- [x] Audit trail example - Fraud detection with time-travel investigation
+- [x] Config management example - Incident post-mortem with causal analysis
+
+**Lightbulb Moments:**
+- Semantic search: "financial systems" finds "trading system" (no keyword match)
+- Time-travel: Query exact config state during production incident
+- Causal chain: See WHO changed WHAT, WHEN, and WHY (immutable)
+- Natural lifecycle: Hot→Warm→Cold→Deep memory tiers
 
 ### Hour 7-8: Integration ⏳
 - [ ] End-to-end tests passing
