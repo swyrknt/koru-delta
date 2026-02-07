@@ -37,15 +37,11 @@
 
 mod index;
 pub mod snsw;
-pub mod snsw_advanced;
 mod types;
 
 // Public exports
 pub use index::{AnnIndex, FlatIndex, VectorIndex};
-pub use snsw::{
-    ContentHash, DistinctionNode, FactorScores, SynthesisConfig, SynthesisEdge,
-    SynthesisGraph, SynthesisPathStep, SynthesisSearchResult, SynthesisType,
-};
+pub use snsw::{ContentHash, SearchResult, SynthesisGraph, SynthesisNode};
 pub use types::{Vector, VectorSearchOptions, VectorSearchResult};
 
 // Re-export snsw module for advanced usage
