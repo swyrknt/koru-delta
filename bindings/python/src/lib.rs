@@ -3,6 +3,9 @@
 //! This crate provides Python bindings for the KoruDelta database,
 //! designed for AI agents and edge deployment.
 
+// Suppress non-local impl warnings from PyO3 macros (known issue with newer Rust)
+#![allow(non_local_definitions)]
+
 use pyo3::prelude::*;
 
 mod database;

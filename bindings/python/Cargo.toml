@@ -8,7 +8,7 @@ description = "Python bindings for KoruDelta - the database for AI agents"
 repository = "https://github.com/swyrknt/koru-delta"
 
 [lib]
-name = "koru_delta"
+name = "koru_delta_python"
 crate-type = ["cdylib"]
 
 [dependencies]
