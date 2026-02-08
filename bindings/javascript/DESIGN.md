@@ -54,6 +54,72 @@ self.runtime.spawn(async move {
 
 ---
 
+## Design Validation
+
+This architecture follows the **Hexagonal Architecture** (Ports and Adapters) pattern, the gold standard for cross-platform Rust development (similar to Matrix SDK, Diem/Aptos).
+
+### Key Strengths
+
+1. **Decoupled Architecture**: The Runtime trait moves platform complexity into the implementation layer, keeping core logic "pure" and testable with `MockRuntime` without compiling to WASM.
+
+2. **Standardized Types**: Re-wrapping `JoinHandle`, `Sender`, `Receiver` ensures identical function signatures across platforms.
+
+3. **WASM-Specific Optimizations**: Correct use of `spawn_local` (single-threaded) vs Tokio's work-stealing executor.
+
+### Critical Technical Risks
+
+#### 1. The `Send` / `Sync` Constraint
+
+**Issue**: The trait requires `Send` for Tokio compatibility, but WASM is single-threaded and doesn't require it.
+
+```rust
+fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,  // Required for Tokio
+    F::Output: Send + 'static;
+```
+
+**Impact**: `!Send` types (`Rc`, `RefCell`) inside futures will break the Tokio implementation.
+
+**Mitigation**: 
+- Use `Arc` and `RwLock`/`Mutex` consistently in core logic
+- Add compile-time assertions for `Send` bounds in tests
+- Document: "All futures passed to runtime must be Send"
+
+#### 2. The `Instant` Problem
+
+**Issue**: `performance.now()` returns milliseconds since page load (not monotonic system time).
+
+```rust
+// Native: Monotonic since arbitrary boot point
+std::time::Instant::now()
+
+// WASM: Milliseconds since page load, jittered for security
+performance.now()  // Coarsened to prevent Spectre attacks
+```
+
+**Impact**: Sub-millisecond timing unreliable in WASM; Durations may be off by 1-2ms.
+
+**Mitigation**:
+- Use `Duration` comparisons, not absolute `Instant` values
+- Document: "Timer resolution ~4ms in browsers"
+- Accept jitter for UI-focused operations
+
+#### 3. I/O Performance Gap
+
+| Metric | Native | WASM | Impact |
+|--------|--------|------|--------|
+| Disk I/O | ~10-50µs | ~1-5ms (IndexedDB) | 100× slower |
+| Memory | System total | ~2-4GB browser limit | Large datasets need paging |
+| Concurrency | Multi-threaded | Single-threaded | Core logic must not block |
+
+**Mitigation**:
+- Batch operations to reduce I/O
+- Use in-memory storage with async flush
+- Implement backpressure for large datasets
+
+---
+
 ## Architecture
 
 ### Layer Diagram
@@ -110,12 +176,24 @@ self.runtime.spawn(async move {
 /// Implementations:
 /// - `TokioRuntime`: Native platforms (Linux, macOS, Windows)
 /// - `WasmRuntime`: WebAssembly (browsers, edge compute)
+/// 
+/// # Send/Sync Requirements
+/// 
+/// All futures must be `Send` to satisfy Tokio's multi-threaded executor.
+/// This is a stricter requirement than WASM needs (single-threaded), but
+/// ensures code works on both platforms.
+/// 
+/// ⚠️ **Warning**: Do not use `Rc`, `RefCell`, or other `!Send` types in futures.
+/// Use `Arc` and `Mutex`/`RwLock` instead.
 #[async_trait]
 pub trait Runtime: Send + Sync + Clone + 'static {
     /// Spawn a new task.
     /// 
-    /// On native: Uses tokio::spawn
-    /// On WASM: Uses wasm_bindgen_futures::spawn_local
+    /// On native: Uses tokio::spawn (multi-threaded work-stealing)
+    /// On WASM: Uses wasm_bindgen_futures::spawn_local (single-threaded)
+    /// 
+    /// # Requirements
+    /// Future must be `Send` to work with Tokio's thread pool.
     fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -154,6 +232,43 @@ pub trait Runtime: Send + Sync + Clone + 'static {
         F: Future;
 }
 ```
+
+### Platform-Aliased Default Runtime
+
+Use type aliasing to avoid `Arc<dyn Runtime>` overhead and provide zero-config defaults:
+
+```rust
+/// Default runtime for the current platform.
+/// 
+/// Users can override with custom runtimes, but get sensible defaults automatically.
+#[cfg(not(target_arch = "wasm32"))]
+pub type DefaultRuntime = TokioRuntime;
+
+#[cfg(target_arch = "wasm32")]
+pub type DefaultRuntime = WasmRuntime;
+
+/// KoruDelta with platform-default runtime.
+/// 
+/// Usage:
+/// ```rust
+/// // Native: Uses TokioRuntime
+/// // WASM: Uses WasmRuntime
+/// let db = KoruDelta::new().await?;
+/// ```
+pub type KoruDelta = KoruDeltaGeneric<DefaultRuntime>;
+
+/// Generic KoruDelta that works with any runtime.
+pub struct KoruDeltaGeneric<R: Runtime = DefaultRuntime> {
+    runtime: R,
+    // ... other fields
+}
+```
+
+This provides:
+- **Zero-config**: `KoruDelta::new()` just works on any platform
+- **Testability**: Use `KoruDeltaGeneric<MockRuntime>` for tests
+- **Custom runtimes**: Use `KoruDeltaGeneric<MyRuntime>` for special cases
+- **Zero overhead**: Monomorphization at compile time, no dynamic dispatch
 
 ### Supporting Types
 
@@ -337,6 +452,103 @@ impl Runtime for WasmRuntime {
     }
 }
 ```
+
+### WasmInterval Implementation
+
+The trickiest part of WASM runtime: implementing `Interval` without Tokio's timer infrastructure.
+
+```rust
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use futures::stream::Stream;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+/// WASM-compatible interval implementation.
+/// 
+/// Uses JavaScript's `setInterval` under the hood, bridged to Rust futures.
+pub struct WasmInterval {
+    /// Period between ticks
+    period_ms: i32,
+    /// Next scheduled tick time (from performance.now())
+    next_tick: f64,
+    /// Whether this is the first tick (intervals tick immediately in Tokio)
+    is_first: bool,
+}
+
+impl WasmInterval {
+    fn new(period: Duration) -> Self {
+        let window = web_sys::window().unwrap();
+        let performance = window.performance().unwrap();
+        let now = performance.now();
+        
+        Self {
+            period_ms: period.as_millis() as i32,
+            next_tick: now,  // First tick happens immediately (Tokio behavior)
+            is_first: true,
+        }
+    }
+}
+
+impl Future for WasmInterval {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let window = web_sys::window().unwrap();
+        let performance = window.performance().unwrap();
+        let now = performance.now();
+        
+        // First tick happens immediately (matching Tokio's interval behavior)
+        if self.is_first {
+            self.is_first = false;
+            self.next_tick = now + self.period_ms as f64;
+            return Poll::Ready(());
+        }
+        
+        // Check if it's time for the next tick
+        if now >= self.next_tick {
+            self.next_tick = now + self.period_ms as f64;
+            Poll::Ready(())
+        } else {
+            // Schedule a wake-up using setTimeout
+            let waker = cx.waker().clone();
+            let remaining = (self.next_tick - now) as i32;
+            
+            let closure = Closure::once_into_js(move || {
+                waker.wake();
+            });
+            
+            window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                closure.as_ref().unchecked_ref(),
+                remaining.max(0),
+            ).unwrap();
+            
+            Poll::Pending
+        }
+    }
+}
+
+/// Stream implementation for Interval (enables `while let Some(_) = interval.next().await`)
+impl Stream for WasmInterval {
+    type Item = ();
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Interval stream never ends
+        self.poll(cx).map(Some)
+    }
+}
+```
+
+**Key Implementation Details:**
+
+1. **First Tick Behavior**: Tokio's `interval.tick().await` fires immediately, then waits. WasmInterval matches this.
+
+2. **Cooperative Scheduling**: Instead of blocking, we use `setTimeout` to schedule a wake-up, allowing the browser event loop to process other tasks.
+
+3. **Drift Handling**: We calculate `next_tick` based on the scheduled time, not `now`, to prevent timing drift over multiple intervals.
+
+4. **Memory Safety**: The `Closure` is dropped after `set_timeout` returns, preventing memory leaks.
 
 ---
 
@@ -758,12 +970,30 @@ runTests();
 ### 1. Persistence in Browser
 
 Options:
-- IndexedDB (async, complex API)
-- LocalStorage (sync, 5MB limit)
-- OPFS (Origin Private File System - modern, promising)
-- In-memory only (simplest, data lost on refresh)
+- **OPFS** (Origin Private File System) - 🏆 **Recommended**
+  - Async, high-performance file API
+  - ~100x faster than IndexedDB for raw bytes
+  - Modern browsers only (Chrome 86+, Firefox 111+, Safari 15.2+)
+  
+- **IndexedDB** via `indexed_db_futures` crate
+  - Widely supported, battle-tested
+  - Complex API, slower than OPFS
+  - Good for structured data, not raw bytes
+  
+- ~~LocalStorage~~ - ❌ **Avoid**
+  - Synchronous API blocks main thread
+  - Causes UI "jank" during writes
+  - 5MB limit too small for databases
+  
+- **In-memory only** (simplest)
+  - Fastest option
+  - Data lost on page refresh
+  - Good for ephemeral/session data
 
-**Recommendation**: Start with in-memory, add OPFS later.
+**Recommendation**: 
+- **v2.0.0**: In-memory only (fastest path to release)
+- **v2.1.0**: Add OPFS persistence
+- **Reference**: Look at `redb` or `sled` crates for backend inspiration
 
 ### 2. Vector Search in WASM
 
