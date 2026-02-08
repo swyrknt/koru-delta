@@ -104,3 +104,7 @@ path = "src/bin/kdelta.rs"
 [[bench]]
 name = "core_operations"
 harness = false
+
+[[bench]]
+name = "snsw_vs_hnsw"
+harness = false
