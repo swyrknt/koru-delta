@@ -3,7 +3,7 @@
 **Document Purpose:** Track progress toward v2.2.0 - "Distinction-Based Vector Search"  
 **Current Version:** 2.2.0 (SNSW production-ready)  
 **Target Version:** 2.3.0 (learned synthesis weights + abstraction detection)  
-**Last Updated:** 2026-02-08 (Phase 2 Core Integration - ✅ COMPLETE)  
+**Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 Clustering Hardening - 🚧 IN PROGRESS)  
 **Owner:** Agent Kimi
 
 ---
@@ -77,10 +77,19 @@ Memory tiers → Natural lifecycle
 - [x] WAL persistence with crash recovery
 - [x] 400ns reads, 50µs writes
 - [x] 8MB binary (edge-ready)
-- [x] 360 tests passing
-- [x] Multi-node clustering
+- [x] 421 tests passing
 - [x] CLI with auth commands
 - [x] Query engine (filters, sort, aggregate)
+
+### 🚧 CLUSTERING (Functional - Production Hardening in Progress)
+- [x] Multi-node clustering (basic)
+- [x] Node discovery and join
+- [x] Write broadcast
+- [x] Gossip protocol
+- [ ] Reliable delivery with ACKs
+- [ ] Continuous anti-entropy
+- [ ] Vector clock conflict resolution
+- [ ] Partition handling
 
 ---
 
@@ -389,6 +398,39 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] Clippy clean (no warnings)
 
 **Status:** Phase 2 complete. Native runtime fully functional. WASM library compiles.
+
+### Phase 2.5: Clustering Production Hardening (Week 2) 🚧 CRITICAL
+*Required for v2.0.0 - clustering works but needs edge case handling*
+
+- [ ] **Reliable Broadcast with ACKs**
+  - [ ] Add acknowledgment protocol for write broadcasts
+  - [ ] Implement retry logic for failed deliveries
+  - [ ] Track pending acknowledgments per peer
+  - Currently: fire-and-forget (`cluster.rs:426-432` ignores send result)
+
+- [ ] **Continuous Anti-Entropy**
+  - [ ] Background task for periodic reconciliation
+  - [ ] Integrate existing Merkle tree comparison (`reconciliation/merkle.rs`)
+  - [ ] Bloom filter fallback for large divergences
+  - Currently: reconciliation module exists but not actively running
+
+- [ ] **Proper Conflict Resolution**
+  - [ ] Vector clock implementation for causality tracking
+  - [ ] Replace last-write-wins with causal merge
+  - [ ] Handle concurrent writes to same key
+  - Currently: `storage.rs:100-136` just overwrites
+
+- [ ] **Partition Handling**
+  - [ ] Split-brain detection (quorum-based)
+  - [ ] Automatic reconciliation on partition heal
+  - [ ] Tombstone propagation for deletes
+  - Currently: no network partition awareness
+
+- [ ] **Cluster Test Suite**
+  - [ ] Network partition simulation tests
+  - [ ] Concurrent write conflict tests
+  - [ ] Node failure/recovery tests
+  - [ ] Large cluster (10+ nodes) stress tests
 
 ### Phase 3: Feature Parity & Testing (Week 2)
 - [ ] All core features work on WASM:
