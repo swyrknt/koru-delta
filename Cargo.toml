@@ -108,3 +108,7 @@ harness = false
 [[bench]]
 name = "snsw_vs_hnsw"
 harness = false
+
+[[bench]]
+name = "snsw_strengths"
+harness = false
