@@ -402,11 +402,11 @@ These v2.6 features are included in v2.5 as **preview/beta**:
 ### Phase 2.5: Clustering Production Hardening (Week 2) 🚧 CRITICAL
 *Required for v2.0.0 - clustering works but needs edge case handling*
 
-- [ ] **Reliable Broadcast with ACKs**
-  - [ ] Add acknowledgment protocol for write broadcasts
-  - [ ] Implement retry logic for failed deliveries
-  - [ ] Track pending acknowledgments per peer
-  - Currently: fire-and-forget (`cluster.rs:426-432` ignores send result)
+- [x] **Reliable Broadcast with ACKs**
+  - [x] Add acknowledgment protocol for write broadcasts
+  - [x] Implement retry logic for failed deliveries (3 attempts with exponential backoff)
+  - [x] Handle timeouts and connection failures
+  - Was: fire-and-forget → Now: ACK-based with retries
 
 - [ ] **Continuous Anti-Entropy**
   - [ ] Background task for periodic reconciliation

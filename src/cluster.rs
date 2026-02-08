@@ -301,6 +301,27 @@ impl ClusterNode {
             }
         });
 
+        // Spawn anti-entropy task for continuous reconciliation.
+        let state = Arc::clone(&self.state);
+        let node_id = self.node_id.clone();
+        let storage = Arc::clone(&self.storage);
+        let anti_entropy_interval = Duration::from_secs(30); // Every 30 seconds
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+
+        tokio::spawn(async move {
+            let mut ticker = interval(anti_entropy_interval);
+            loop {
+                tokio::select! {
+                    _ = ticker.tick() => {
+                        run_anti_entropy(&state, &storage, &node_id).await;
+                    }
+                    _ = shutdown_rx.recv() => {
+                        break;
+                    }
+                }
+            }
+        });
+
         Ok(())
     }
 
@@ -692,6 +713,87 @@ async fn send_gossip(state: &Arc<ClusterState>, node_id: &NodeId, bind_addr: Soc
         tokio::spawn(async move {
             if let Ok(mut conn) = Connection::connect(peer.address).await {
                 let _ = conn.send(&message).await;
+            }
+        });
+    }
+}
+
+/// Run anti-entropy reconciliation with all peers.
+async fn run_anti_entropy(
+    state: &Arc<ClusterState>,
+    storage: &Arc<CausalStorage>,
+    node_id: &NodeId,
+) {
+    let peers = state.get_peers();
+    
+    // Only run anti-entropy if we have healthy peers
+    let healthy_peers: Vec<_> = peers
+        .into_iter()
+        .filter(|p| matches!(p.status, PeerStatus::Healthy))
+        .collect();
+    
+    if healthy_peers.is_empty() {
+        return;
+    }
+    
+    tracing::trace!("Running anti-entropy with {} peers", healthy_peers.len());
+    
+    for peer in healthy_peers {
+        let storage = Arc::clone(storage);
+        let node_id = node_id.clone();
+        
+        tokio::spawn(async move {
+            // Get our current key set with version info
+            let mut keys_to_check = HashMap::new();
+            
+            // Get all namespaces and keys
+            // TODO: Optimize this to only check recently changed keys
+            let namespaces = storage.list_namespaces();
+            for ns in namespaces {
+                let keys = storage.list_keys(&ns);
+                for key in keys {
+                    let full_key = FullKey::new(&ns, &key);
+                    // Get latest version ID for this key
+                    let version = storage
+                        .get(&ns, &key)
+                        .ok()
+                        .map(|v| v.write_id().to_string());
+                    keys_to_check.insert(full_key, version);
+                }
+            }
+            
+            // Send sync request to peer
+            match Connection::connect(peer.address).await {
+                Ok(mut conn) => {
+                    let request = Message::SyncRequest {
+                        node_id: node_id.clone(),
+                        keys: keys_to_check,
+                    };
+                    
+                    match conn.request(&request).await {
+                        Ok(Message::SyncResponse { updates, .. }) => {
+                            // Apply updates from peer
+                            for (key, versions) in updates {
+                                for version in versions {
+                                    // TODO: Use vector clock merge instead of blind put
+                                    if let Err(e) = storage.put(&key.namespace, &key.key, (*version.value).clone()) {
+                                        tracing::debug!("Failed to apply anti-entropy update: {}", e);
+                                    }
+                                }
+                            }
+                            tracing::trace!("Anti-entropy completed with {}", peer.node_id);
+                        }
+                        Ok(_) => {
+                            tracing::debug!("Unexpected response from {} during anti-entropy", peer.node_id);
+                        }
+                        Err(e) => {
+                            tracing::debug!("Anti-entropy failed with {}: {}", peer.node_id, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to connect to {} for anti-entropy: {}", peer.node_id, e);
+                }
             }
         });
     }
