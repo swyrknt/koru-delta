@@ -54,6 +54,7 @@ use tokio::sync::RwLock;
 
 use crate::auth::{AuthConfig, AuthManager};
 use crate::error::DeltaResult;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::lifecycle::{LifecycleConfig, LifecycleManager};
 use crate::memory::{ColdMemory, DeepMemory, HotConfig, HotMemory, WarmMemory};
 use crate::processes::ProcessRunner;
@@ -210,7 +211,8 @@ pub struct KoruDelta {
     reconciliation: Arc<RwLock<ReconciliationManager>>,
     /// Auth manager
     auth: Arc<AuthManager>,
-    /// Lifecycle manager for memory consolidation
+    /// Lifecycle manager for memory consolidation (non-WASM only)
+    #[cfg(not(target_arch = "wasm32"))]
     lifecycle: Arc<LifecycleManager>,
     /// Vector index for similarity search
     vector_index: VectorIndex,
@@ -308,7 +310,8 @@ impl KoruDelta {
         // Initialize subscriptions
         let subscriptions = Arc::new(SubscriptionManager::new());
 
-        // Initialize lifecycle manager
+        // Initialize lifecycle manager (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
 
         // Shutdown channel
@@ -326,6 +329,7 @@ impl KoruDelta {
             process_runner: None,
             reconciliation,
             auth,
+            #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
             views,
             subscriptions,
@@ -336,7 +340,8 @@ impl KoruDelta {
             shutdown_rx,
         };
 
-        // Start background processes if enabled
+        // Start background processes if enabled (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         if db.config.processes.enabled {
             db.start_background_processes().await;
         }
@@ -371,7 +376,8 @@ impl KoruDelta {
         // Initialize subscriptions
         let subscriptions = Arc::new(SubscriptionManager::new());
 
-        // Initialize lifecycle manager
+        // Initialize lifecycle manager (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
 
         // Shutdown channel
@@ -389,6 +395,7 @@ impl KoruDelta {
             process_runner: None,
             reconciliation,
             auth,
+            #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
             views,
             subscriptions,
@@ -399,7 +406,8 @@ impl KoruDelta {
             shutdown_rx,
         };
 
-        // Start background processes if enabled
+        // Start background processes if enabled (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         if db.config.processes.enabled {
             db.start_background_processes().await;
         }
@@ -417,6 +425,7 @@ impl KoruDelta {
     }
 
     /// Start background processes (consolidation, distillation, genome update).
+    #[cfg(not(target_arch = "wasm32"))]
     async fn start_background_processes(&self) {
         let hot = Arc::clone(&self.hot);
         let warm = Arc::clone(&self.warm);
@@ -631,7 +640,8 @@ impl KoruDelta {
         // Initialize subscriptions
         let subscriptions = Arc::new(SubscriptionManager::new());
 
-        // Initialize lifecycle manager
+        // Initialize lifecycle manager (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
 
         // Shutdown channel
@@ -649,6 +659,7 @@ impl KoruDelta {
             process_runner: None,
             reconciliation,
             auth,
+            #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
             views,
             subscriptions,
@@ -710,11 +721,14 @@ impl KoruDelta {
             trace!("Value promoted to hot memory");
         }
 
-        // Auto-refresh views (fire and forget)
-        let views = Arc::clone(&self.views);
-        tokio::spawn(async move {
-            let _ = views.refresh_stale(chrono::Duration::seconds(0));
-        });
+        // Auto-refresh views (fire and forget, non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let views = Arc::clone(&self.views);
+            tokio::spawn(async move {
+                let _ = views.refresh_stale(chrono::Duration::seconds(0));
+            });
+        }
 
         info!(version = %version_id, "Put operation completed");
         Ok(versioned)
@@ -1219,10 +1233,11 @@ impl KoruDelta {
         &self.auth
     }
 
-    /// Get lifecycle manager for memory consolidation.
+    /// Get lifecycle manager for memory consolidation (non-WASM only).
     ///
     /// The lifecycle manager handles automatic Hot→Warm→Cold→Deep
     /// transitions based on access patterns and importance scores.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn lifecycle(&self) -> &LifecycleManager {
         &self.lifecycle
     }

@@ -1,0 +1,40 @@
+{
+  "name": "koru-delta",
+  "version": "2.0.0",
+  "description": "The causal database for JavaScript - content-addressed storage with time-travel queries",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "koru_delta_bg.wasm",
+    "koru_delta_bg.wasm.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "wasm-pack build ../../ --target web --out-dir bindings/javascript --no-default-features --features wasm",
+    "build:node": "wasm-pack build ../../ --target nodejs --out-dir bindings/javascript/pkg-node --no-default-features --features wasm",
+    "test": "npm run build:node && node test.js",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/swyrknt/koru-delta.git"
+  },
+  "keywords": [
+    "database",
+    "causal",
+    "time-travel",
+    "content-addressed",
+    "wasm",
+    "browser",
+    "edge"
+  ],
+  "author": "Sawyer Kent <sawyerkent.me@gmail.com>",
+  "license": "MIT OR Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/swyrknt/koru-delta/issues"
+  },
+  "homepage": "https://github.com/swyrknt/koru-delta#readme"
+}

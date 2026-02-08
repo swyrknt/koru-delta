@@ -26,8 +26,7 @@ anyhow = "1.0"
 # Concurrency
 dashmap = "6.0"
 
-# Async runtime (minimal features for WASM compatibility)
-tokio = { version = "1.0", features = ["macros", "time"], default-features = false }
+# Async runtime - only for non-WASM targets (WASM uses wasm_bindgen_futures)
 
 # Hashing & Crypto
 sha2 = "0.10"
@@ -92,7 +91,7 @@ http = ["axum", "tower", "reqwest"]
 
 # Platform-specific dependencies for non-WASM targets
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1.0", features = ["rt-multi-thread", "fs", "net", "io-util", "sync", "signal"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "fs", "net", "io-util", "sync", "signal", "macros", "time"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

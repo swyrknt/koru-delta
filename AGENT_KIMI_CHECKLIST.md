@@ -337,29 +337,94 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] **Bonus**: Semantic navigation API (`NavigationOp::Add/Subtract/Toward`) for concept composition (king - man + woman = queen)
   - [x] **Quality**: 304 tests passing, 0 warnings, zero clippy errors
 
-## CHECKLIST: Next Week
+## CHECKLIST: JavaScript Bindings v2.0.0
 
-### Day 6-7: JavaScript Bindings
-- [ ] WASM build
-- [ ] TypeScript definitions
-- [ ] npm package
+### Architecture Decision ✅ COMPLETE
+- [x] **Design Document**: Comprehensive runtime abstraction strategy
+  - [x] Runtime trait definition (`src/runtime/mod.rs`)
+  - [x] TokioRuntime implementation (native platforms)
+  - [x] WasmRuntime implementation (browser/edge)
+  - [x] 4-week migration strategy
+  - [x] JavaScript API specification
+  - [x] Build configuration
+  - [x] Testing strategy
+  - [x] See `bindings/javascript/DESIGN.md` (22KB comprehensive design)
 
-### Day 7-8: Web Playground
-- [ ] Interactive demos
-- [ ] Time travel visualization
-- [ ] Deploy to GitHub Pages
+### Phase 1: Runtime Abstraction Layer (Week 1)
+- [ ] Create `src/runtime/mod.rs` with Runtime trait
+  - [ ] `spawn()` - Task spawning
+  - [ ] `sleep()` - Async delays
+  - [ ] `interval()` - Periodic tasks
+  - [ ] `channel()` - Message passing
+  - [ ] `now()` - Time access
+  - [ ] `timeout()` - Timeout wrapper
+- [ ] Implement `TokioRuntime` for native platforms
+- [ ] Implement `WasmRuntime` for WASM targets
+- [ ] Supporting types (JoinHandle, Interval, Sender, Receiver, Instant)
+- [ ] Unit tests for both runtimes
 
-### Day 8-9: Release Prep
-- [ ] Version 2.0.0
-- [ ] Final tests
-- [ ] Security audit
-- [ ] Release notes
+### Phase 2: Core Integration (Week 1-2)
+- [ ] Update `KoruDelta` struct to accept `Runtime` generic
+- [ ] Migrate `core.rs` from direct tokio calls to Runtime trait
+- [ ] Migrate `lifecycle/mod.rs` to Runtime trait
+- [ ] Migrate `views.rs` (background refresh)
+- [ ] Feature-gate platform-specific modules properly
+- [ ] Ensure clean build with `--features wasm --no-default-features`
 
-### Day 9-10: Launch
-- [ ] GitHub release
-- [ ] PyPI publish
-- [ ] npm publish
-- [ ] Community posts
+### Phase 3: Feature Parity & Testing (Week 2)
+- [ ] All core features work on WASM:
+  - [ ] put/get operations
+  - [ ] history/time-travel
+  - [ ] namespace management
+  - [ ] vector search (SNSW)
+- [ ] Native-only features properly disabled on WASM:
+  - [ ] Clustering (requires TCP)
+  - [ ] Lifecycle background tasks (can work, but optional)
+  - [ ] File persistence (use IndexedDB later)
+- [ ] Comprehensive test suite:
+  - [ ] Unit tests with MockRuntime
+  - [ ] Integration tests with TokioRuntime
+  - [ ] WASM tests with wasm_bindgen_test
+
+### Phase 4: JavaScript Bindings (Week 3)
+- [ ] Update `src/wasm.rs` to use `WasmRuntime`
+- [ ] Generate TypeScript definitions (wasm-bindgen)
+- [ ] Create `package.json` with proper exports
+- [ ] Build configurations:
+  - [ ] `wasm-pack build --target web` (browser)
+  - [ ] `wasm-pack build --target nodejs` (Node.js)
+  - [ ] `wasm-pack build --target bundler` (webpack/vite)
+- [ ] Examples:
+  - [ ] Browser example (HTML)
+  - [ ] Node.js example
+  - [ ] Cloudflare Worker example
+  - [ ] Deno example
+
+### Phase 5: Documentation & Release (Week 4)
+- [ ] JavaScript API documentation
+- [ ] Migration guide (native → WASM)
+- [ ] Performance benchmarks (JS vs native)
+- [ ] npm package publication
+- [ ] GitHub release with WASM assets
+
+### Deferred to v2.1.0
+- [ ] IndexedDB persistence for browser
+- [ ] WebGL-accelerated vector search
+- [ ] Multi-tab synchronization
+- [ ] Service Worker integration
+
+---
+
+## ESTIMATED TIMELINE
+
+| Phase | Duration | Deliverable |
+|-------|----------|-------------|
+| Phase 1 | 3-4 days | Runtime trait + implementations |
+| Phase 2 | 4-5 days | Core module migration |
+| Phase 3 | 3-4 days | Feature parity + tests |
+| Phase 4 | 3-4 days | JS bindings + examples |
+| Phase 5 | 2-3 days | Docs + release |
+| **Total** | **15-20 days** | **Full WASM support** |
 
 ---
 
