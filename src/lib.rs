@@ -144,6 +144,9 @@ pub mod cluster;
 #[cfg(all(not(target_arch = "wasm32"), feature = "http"))]
 pub mod http;
 
+// Runtime abstraction layer
+pub mod runtime;
+
 // WASM bindings (only when wasm feature is enabled)
 #[cfg(feature = "wasm")]
 pub mod wasm;
