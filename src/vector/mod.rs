@@ -35,11 +35,15 @@
 //! }
 //! ```
 
+mod causal_index;
+mod hnsw;
 mod index;
 pub mod snsw;
 mod types;
 
 // Public exports
+pub use causal_index::{CausalIndexConfig, CausalVectorIndex, IndexSnapshot, SnapshotStats};
+pub use hnsw::{HnswConfig, HnswIndex};
 pub use index::{AnnIndex, FlatIndex, VectorIndex};
 pub use snsw::{ContentHash, SearchResult, SynthesisGraph, SynthesisNode};
 pub use types::{Vector, VectorSearchOptions, VectorSearchResult};

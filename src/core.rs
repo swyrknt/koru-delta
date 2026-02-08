@@ -977,6 +977,114 @@ impl KoruDelta {
         Ok(results)
     }
 
+    /// Search for similar vectors at a specific point in time.
+    ///
+    /// This is a unique feature of KoruDelta - you can query what vectors
+    /// were similar at any historical timestamp.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace to search (optional - searches all if None)
+    /// * `query` - The query vector
+    /// * `timestamp` - ISO 8601 timestamp to search at (e.g., "2026-02-07T12:00:00Z")
+    /// * `options` - Search options (top_k, threshold, model_filter)
+    ///
+    /// # Returns
+    ///
+    /// A vector of search results as they would have appeared at that time.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // What was similar to my query last Tuesday?
+    /// let results = db.similar_at(
+    ///     Some("docs"),
+    ///     &query,
+    ///     "2026-02-01T10:00:00Z",
+    ///     VectorSearchOptions::new().top_k(5)
+    /// ).await?;
+    /// ```
+    pub async fn similar_at(
+        &self,
+        namespace: Option<&str>,
+        query: &Vector,
+        timestamp: &str,
+        options: VectorSearchOptions,
+    ) -> DeltaResult<Vec<VectorSearchResult>> {
+        use crate::vector::{HnswConfig, HnswIndex};
+        
+        // Parse timestamp
+        let target_time = timestamp.parse::<DateTime<Utc>>()
+            .map_err(|e| crate::error::DeltaError::InvalidData {
+                reason: format!("Invalid timestamp '{}': {}", timestamp, e),
+            })?;
+        
+        // Get all keys in the namespace(s)
+        let namespaces_to_search: Vec<String> = match namespace {
+            Some(ns) => vec![ns.to_string()],
+            None => self.storage.list_namespaces(),
+        };
+        
+        // Build temporary index with vectors that existed at that time
+        let temp_index = HnswIndex::new(HnswConfig::default());
+        let mut vector_count = 0;
+        
+        for ns in &namespaces_to_search {
+            let keys = self.storage.list_keys(ns);
+            for key in keys {
+                // Try to get the value at that timestamp
+                match self.storage.get_at(ns, &key, target_time) {
+                    Ok(versioned) => {
+                        // Check if it's a valid vector
+                        if let Some(vector) = crate::vector::json_to_vector(versioned.value()) {
+                            // Check model filter
+                            if let Some(ref filter) = options.model_filter {
+                                if vector.model() != filter {
+                                    continue;
+                                }
+                            }
+                            
+                            let full_key = FullKey::new(ns.clone(), key);
+                            let _ = temp_index.add(full_key.to_canonical_string(), vector);
+                            vector_count += 1;
+                        }
+                    }
+                    Err(_) => {
+                        // Key didn't exist at that time, skip
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        debug!(
+            vectors = vector_count,
+            timestamp = %timestamp,
+            "Time-travel vector search"
+        );
+        
+        if vector_count == 0 {
+            return Ok(Vec::new());
+        }
+        
+        // Search the temporary index
+        let results = temp_index.search(query, options.top_k, 50);
+        
+        // Filter by namespace and threshold
+        let mut filtered: Vec<VectorSearchResult> = results
+            .into_iter()
+            .filter(|r| {
+                // Namespace filter already applied during construction
+                r.score >= options.threshold
+            })
+            .collect();
+        
+        // Apply top_k
+        filtered.truncate(options.top_k);
+        
+        Ok(filtered)
+    }
+
     /// Get a stored vector by key.
     ///
     /// Returns None if the key doesn't exist or if the stored value

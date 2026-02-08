@@ -201,6 +201,56 @@ impl PyDatabase {
         })
     }
 
+    /// Search for similar vectors at a specific point in time (time-travel search).
+    ///
+    /// This unique feature allows you to query what vectors were similar
+    /// at any historical timestamp.
+    #[pyo3(signature = (namespace, query, timestamp, top_k = 10, threshold = 0.0, model_filter = None))]
+    fn similar_at<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: Option<&str>,
+        query: Vec<f32>,
+        timestamp: &str,
+        top_k: usize,
+        threshold: f32,
+        model_filter: Option<String>,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let query_vec = Vector::new(query, "query");
+        let ts = timestamp.to_string();
+        let ns = namespace.map(|s| s.to_string());
+        
+        let opts = VectorSearchOptions::new()
+            .top_k(top_k)
+            .threshold(threshold);
+        
+        let opts = if let Some(filter) = model_filter {
+            opts.model_filter(filter)
+        } else {
+            opts
+        };
+
+        future_into_py(py, async move {
+            let results = db
+                .similar_at(ns.as_deref(), &query_vec, &ts, opts)
+                .await
+                .map_err(to_python_error)?;
+            
+            Python::with_gil(|py| {
+                let list = PyList::new(py, Vec::<PyObject>::new());
+                for result in results {
+                    let dict = PyDict::new(py);
+                    dict.set_item("namespace", &result.namespace).ok();
+                    dict.set_item("key", &result.key).ok();
+                    dict.set_item("score", result.score).ok();
+                    list.append(dict).ok();
+                }
+                Ok(list.to_object(py))
+            })
+        })
+    }
+
     /// List all keys in a namespace
     fn list_keys<'py>(
         &self,

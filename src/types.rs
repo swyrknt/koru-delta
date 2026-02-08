@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 
+/// A version identifier for causal tracking.
+pub type VersionId = u64;
+
 /// A fully-qualified key combining namespace and key.
 ///
 /// KoruDelta organizes data into namespaces (similar to tables or collections)

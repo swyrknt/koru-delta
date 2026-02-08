@@ -319,6 +319,49 @@ class Database:
         db = self._check_initialized()
         return await db.similar(namespace, query, top_k, threshold, model_filter)
     
+    async def similar_at(
+        self,
+        namespace: str | None,
+        query: list[float],
+        timestamp: str,
+        top_k: int = 10,
+        threshold: float = 0.0,
+        model_filter: str | None = None,
+    ) -> list[dict]:
+        """
+        Search for similar vectors at a specific point in time.
+        
+        This unique feature allows you to query what vectors were similar
+        at any historical timestamp. This is the "What was similar last
+        Tuesday?" feature.
+        
+        Args:
+            namespace: Namespace to search (None = search all)
+            query: Query vector
+            timestamp: ISO 8601 timestamp (e.g., "2026-02-07T12:00:00Z")
+            top_k: Maximum results to return
+            threshold: Minimum similarity score (0.0 to 1.0)
+            model_filter: Only return vectors from this model
+        
+        Returns:
+            List of results as they would have appeared at that time,
+            each with:
+                - namespace: Where the vector was found
+                - key: Vector identifier
+                - score: Similarity score
+        
+        Example:
+            >>> # What was similar to my query last week?
+            >>> results = await db.similar_at(
+            ...     "documents",
+            ...     query=[0.1, 0.2, 0.3, ...],
+            ...     timestamp="2026-01-31T12:00:00Z",
+            ...     top_k=5
+            ... )
+        """
+        db = self._check_initialized()
+        return await db.similar_at(namespace, query, timestamp, top_k, threshold, model_filter)
+    
     async def stats(self) -> dict:
         """
         Get database statistics.
