@@ -38,6 +38,15 @@ from koru_delta._internal import (
 from koru_delta.config import Config
 from koru_delta.agent_memory import AgentMemory
 
+# Integration imports (always available base utilities)
+from koru_delta.integrations import (
+    chunk_document,
+    ChunkingConfig,
+    HybridSearcher,
+    HybridSearchResult,
+    CausalFilter,
+)
+
 __all__ = [
     "Database",
     "Config",
@@ -47,6 +56,12 @@ __all__ = [
     "SerializationError",
     "ValidationError",
     "DatabaseClosedError",
+    # Integrations (available when dependencies installed)
+    "chunk_document",
+    "ChunkingConfig",
+    "HybridSearcher",
+    "HybridSearchResult",
+    "CausalFilter",
 ]
 
 

@@ -104,6 +104,7 @@ mod types;
 
 // v2.0: Distinction-driven modules
 pub mod causal_graph;
+pub mod lifecycle;
 pub mod reference_graph;
 pub mod memory;
 pub mod processes;
