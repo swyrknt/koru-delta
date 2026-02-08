@@ -54,6 +54,7 @@ use tokio::sync::RwLock;
 
 use crate::auth::{AuthConfig, AuthManager};
 use crate::error::DeltaResult;
+use crate::lifecycle::{LifecycleConfig, LifecycleManager};
 use crate::memory::{ColdMemory, DeepMemory, HotConfig, HotMemory, WarmMemory};
 use crate::processes::ProcessRunner;
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
@@ -209,6 +210,8 @@ pub struct KoruDelta {
     reconciliation: Arc<RwLock<ReconciliationManager>>,
     /// Auth manager
     auth: Arc<AuthManager>,
+    /// Lifecycle manager for memory consolidation
+    lifecycle: Arc<LifecycleManager>,
     /// Vector index for similarity search
     vector_index: VectorIndex,
     /// Cluster node for distributed operation (optional)
@@ -305,6 +308,9 @@ impl KoruDelta {
         // Initialize subscriptions
         let subscriptions = Arc::new(SubscriptionManager::new());
 
+        // Initialize lifecycle manager
+        let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
+
         // Shutdown channel
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
@@ -320,6 +326,7 @@ impl KoruDelta {
             process_runner: None,
             reconciliation,
             auth,
+            lifecycle,
             views,
             subscriptions,
             vector_index: VectorIndex::new_flat(),
@@ -364,6 +371,9 @@ impl KoruDelta {
         // Initialize subscriptions
         let subscriptions = Arc::new(SubscriptionManager::new());
 
+        // Initialize lifecycle manager
+        let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
+
         // Shutdown channel
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
@@ -379,6 +389,7 @@ impl KoruDelta {
             process_runner: None,
             reconciliation,
             auth,
+            lifecycle,
             views,
             subscriptions,
             vector_index: VectorIndex::new_flat(),
@@ -620,6 +631,9 @@ impl KoruDelta {
         // Initialize subscriptions
         let subscriptions = Arc::new(SubscriptionManager::new());
 
+        // Initialize lifecycle manager
+        let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
+
         // Shutdown channel
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
@@ -635,6 +649,7 @@ impl KoruDelta {
             process_runner: None,
             reconciliation,
             auth,
+            lifecycle,
             views,
             subscriptions,
             vector_index: VectorIndex::new_flat(),
@@ -1202,6 +1217,14 @@ impl KoruDelta {
     /// Get auth manager.
     pub fn auth(&self) -> &AuthManager {
         &self.auth
+    }
+
+    /// Get lifecycle manager for memory consolidation.
+    ///
+    /// The lifecycle manager handles automatic Hot→Warm→Cold→Deep
+    /// transitions based on access patterns and importance scores.
+    pub fn lifecycle(&self) -> &LifecycleManager {
+        &self.lifecycle
     }
 
     /// Create a workspace.

@@ -218,32 +218,40 @@ We're not building another HNSW clone. We're building SNSW (Synthesis-Navigable 
 **Status:** ✅ Complete. Distinction calculus earns its place.
 
 ### Day 3: Automated Memory Lifecycle ✅ COMPLETE
-- [x] **Automated Hot→Warm→Cold→Deep transitions**
+- [x] **Automated Hot→Warm→Cold→Deep transitions** ✅
   - Hot: Recent + frequent access (~10K vectors)
-  - Warm: Chronicle with compressed embeddings
+  - Warm: Chronicle with compressed embeddings  
   - Cold: Consolidated summaries
   - Deep: Genomic/epoch embeddings only
-- [x] ML-based importance scoring
-- [x] Access pattern tracking
-- [x] Background consolidation jobs
+- [x] **Simple importance scoring** ✅ (heuristic + ML-based)
+- [x] **Access pattern tracking** ✅ (frequency, recency, time-of-day)
+- [x] **Background jobs framework** ✅ (check, consolidate, genome tasks)
 
 **Implementation:**
 ```rust
-// New lifecycle module in src/lifecycle/
+// Lifecycle module in src/lifecycle/
 pub struct LifecycleManager {
     access_tracker: AccessTracker,      // Tracks access patterns
     importance_scorer: ImportanceScorer, // ML/heuristic scoring
     transition_planner: TransitionPlanner, // Plans tier moves
 }
 
-// Features:
-// - Tracks frequency, recency, time-of-day, sequences
-// - ML model predicts future importance
-// - Automatic transitions based on scores
-// - Background tasks: check (5min), consolidate (1hr), genome (24hr)
+// Integrated into KoruDelta:
+let db = KoruDelta::start().await?;
+let stats = db.lifecycle().stats().await;
 ```
 
-**Tests:** 24 new tests, all passing
+**Features:**
+- ✅ Hot→Warm transition rules based on importance thresholds
+- ✅ Simple importance scoring (heuristic fallback + ML)
+- ✅ Background jobs framework (5min/1hr/24hr intervals)
+- ✅ Access tracking (frequency, recency, time-of-day, sequences)
+- ✅ 24 tests passing, integrated into core database
+
+**Integration:**
+- LifecycleManager integrated into KoruDelta core
+- Accessible via `db.lifecycle()`
+- Runs background tasks automatically
 
 ### Day 3-4: LLM Framework Integrations ✅ COMPLETE
 - [x] **LangChain integration** - `KoruDeltaVectorStore` class
