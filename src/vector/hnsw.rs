@@ -524,6 +524,12 @@ impl HnswIndex {
 
     /// Remove a vector from the index.
     pub fn remove(&self, id: &str) {
+        // First, check if we need to update the entry point
+        let needs_ep_update = {
+            let ep_guard = self.entry_point.read().unwrap();
+            ep_guard.as_ref().map(|ep| ep == id).unwrap_or(false)
+        };
+
         if let Some((_, node)) = self.nodes.remove(id) {
             // Remove edges at all layers
             for layer in 0..=node.max_layer {
@@ -537,22 +543,20 @@ impl HnswIndex {
             }
         }
 
-        // Update entry point if needed
-        if let Some(ref ep) = *self.entry_point.read().unwrap() {
-            if ep == id {
-                // Find new entry point (highest layer node)
-                let mut max_layer = 0;
-                let mut new_ep = None;
-                for entry in self.nodes.iter() {
-                    if entry.value().max_layer >= max_layer {
-                        max_layer = entry.value().max_layer;
-                        new_ep = Some(entry.key().clone());
-                    }
+        // Update entry point if needed (after releasing all other locks)
+        if needs_ep_update {
+            // Find new entry point (highest layer node)
+            let mut max_layer = 0;
+            let mut new_ep = None;
+            for entry in self.nodes.iter() {
+                if entry.value().max_layer >= max_layer {
+                    max_layer = entry.value().max_layer;
+                    new_ep = Some(entry.key().clone());
                 }
-                *self.entry_point.write().unwrap() = new_ep;
-                self.max_layer
-                    .store(max_layer, std::sync::atomic::Ordering::Relaxed);
             }
+            *self.entry_point.write().unwrap() = new_ep;
+            self.max_layer
+                .store(max_layer, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -743,7 +747,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Potential deadlock - needs investigation"]
     fn test_hnsw_remove() {
         let index = HnswIndex::new(HnswConfig::default());
 
