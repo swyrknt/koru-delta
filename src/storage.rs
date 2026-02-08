@@ -14,7 +14,7 @@ use crate::causal_graph::CausalGraph;
 use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
 use crate::reference_graph::ReferenceGraph;
-use crate::types::{FullKey, HistoryEntry, VersionedValue};
+use crate::types::{FullKey, HistoryEntry, VectorClock, VersionedValue};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use koru_lambda_core::DistinctionEngine;
@@ -148,7 +148,8 @@ impl CausalStorage {
             timestamp, 
             write_id.clone(), // unique per write
             distinction_id,   // content hash for deduplication
-            previous_version
+            previous_version,
+            VectorClock::new(), // Initialize empty vector clock for new writes
         );
 
         // Store in version store (for history and time travel)

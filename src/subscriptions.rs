@@ -28,7 +28,7 @@
 /// ```
 use crate::error::{DeltaError, DeltaResult};
 use crate::query::Filter;
-use crate::types::VersionedValue;
+use crate::types::{VectorClock, VersionedValue};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -513,7 +513,8 @@ mod tests {
             Utc::now(), 
             "test-version".to_string(), // write_id
             "test-version".to_string(), // distinction_id
-            None
+            None,
+            VectorClock::new(),
         )
     }
 

@@ -25,7 +25,7 @@
 /// - Epoch N: Newest, less compressed
 /// - Each epoch has an index for fast lookup
 use crate::causal_graph::DistinctionId;
-use crate::types::{FullKey, VersionedValue};
+use crate::types::{FullKey, VectorClock, VersionedValue};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use std::collections::HashMap;
@@ -391,6 +391,7 @@ mod tests {
             id.to_string(),           // write_id
             id.to_string(),           // distinction_id (same for tests)
             None,
+            VectorClock::new(),
         )
     }
 

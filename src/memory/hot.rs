@@ -21,7 +21,7 @@
 /// - Recent access = hot
 /// - Low reference count + old access = evict to Warm
 use crate::causal_graph::DistinctionId;
-use crate::types::{FullKey, VersionedValue};
+use crate::types::{FullKey, VectorClock, VersionedValue};
 use dashmap::DashMap;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -340,6 +340,7 @@ mod tests {
             id.to_string(),  // write_id
             id.to_string(),  // distinction_id
             None,
+            VectorClock::new(),
         )
     }
 

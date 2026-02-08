@@ -7,7 +7,7 @@
 /// Like sleep consolidating memories from short-term to long-term.
 use crate::causal_graph::DistinctionId;
 use crate::memory::{ColdMemory, HotMemory, WarmMemory};
-use crate::types::{FullKey, VersionedValue};
+use crate::types::{FullKey, VectorClock, VersionedValue};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Consolidation configuration.
@@ -107,6 +107,7 @@ impl ConsolidationProcess {
                     id.clone(), // write_id
                     id.clone(), // distinction_id
                     None,
+                    VectorClock::new(),
                 );
                 
                 // Consolidate to Cold
@@ -153,6 +154,7 @@ impl ConsolidationProcess {
                 id.clone(), // write_id
                 id,         // distinction_id
                 None,
+                VectorClock::new(),
             );
             
             hot.put(key, versioned);
@@ -210,6 +212,7 @@ mod tests {
             id.to_string(), // write_id
             id.to_string(), // distinction_id
             None,
+            VectorClock::new(),
         )
     }
 

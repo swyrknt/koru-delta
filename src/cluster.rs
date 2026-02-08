@@ -17,7 +17,7 @@
 use crate::error::{DeltaError, DeltaResult};
 use crate::network::{Connection, Listener, Message, NodeId, PeerInfo, PeerStatus, DEFAULT_PORT};
 use crate::storage::CausalStorage;
-use crate::types::{FullKey, VersionedValue};
+use crate::types::{FullKey, VectorClock, VersionedValue};
 use chrono::Utc;
 use dashmap::DashMap;
 use koru_lambda_core::DistinctionEngine;
@@ -561,6 +561,7 @@ fn handle_message(
                                     entry.version_id.clone(), // write_id
                                     entry.version_id,        // distinction_id
                                     None,
+                                    VectorClock::new(),
                                 )
                             })
                             .collect(),
@@ -573,6 +574,7 @@ fn handle_message(
                                     entry.version_id.clone(), // write_id
                                     entry.version_id,        // distinction_id
                                     None,
+                                    VectorClock::new(),
                                 )
                             })
                             .collect(),

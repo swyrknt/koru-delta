@@ -6,10 +6,96 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// A version identifier for causal tracking.
 pub type VersionId = u64;
+
+/// Vector clock for causal ordering in distributed systems.
+///
+/// A vector clock tracks the happens-before relationship between events
+/// across multiple nodes. Each node maintains a monotonic counter, and
+/// the vector is updated on every write.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VectorClock {
+    /// Node ID -> Logical timestamp mapping
+    pub clocks: HashMap<String, u64>,
+}
+
+impl VectorClock {
+    /// Create a new empty vector clock.
+    pub fn new() -> Self {
+        Self {
+            clocks: HashMap::new(),
+        }
+    }
+
+    /// Increment the clock for a specific node.
+    pub fn increment(&mut self, node_id: &str) {
+        let entry = self.clocks.entry(node_id.to_string()).or_insert(0);
+        *entry += 1;
+    }
+
+    /// Merge another vector clock into this one (taking max of each clock).
+    pub fn merge(&mut self, other: &VectorClock) {
+        for (node_id, timestamp) in &other.clocks {
+            let entry = self.clocks.entry(node_id.clone()).or_insert(0);
+            *entry = (*entry).max(*timestamp);
+        }
+    }
+
+    /// Compare two vector clocks.
+    ///
+    /// Returns:
+    /// - `Some(Ordering::Less)` if self happened before other
+    /// - `Some(Ordering::Greater)` if self happened after other
+    /// - `Some(Ordering::Equal)` if they're the same
+    /// - `None` if they're concurrent (conflict)
+    pub fn compare(&self, other: &VectorClock) -> Option<std::cmp::Ordering> {
+        let all_nodes: std::collections::HashSet<_> = self
+            .clocks
+            .keys()
+            .chain(other.clocks.keys())
+            .collect();
+
+        let mut has_less = false;
+        let mut has_greater = false;
+
+        for node_id in all_nodes {
+            let self_val = self.clocks.get(node_id).copied().unwrap_or(0);
+            let other_val = other.clocks.get(node_id).copied().unwrap_or(0);
+
+            match self_val.cmp(&other_val) {
+                std::cmp::Ordering::Less => has_less = true,
+                std::cmp::Ordering::Greater => has_greater = true,
+                std::cmp::Ordering::Equal => {}
+            }
+        }
+
+        match (has_less, has_greater) {
+            (true, true) => None,     // Concurrent (conflict)
+            (true, false) => Some(std::cmp::Ordering::Less),
+            (false, true) => Some(std::cmp::Ordering::Greater),
+            (false, false) => Some(std::cmp::Ordering::Equal),
+        }
+    }
+
+    /// Check if this clock dominates (happened after) another.
+    pub fn dominates(&self, other: &VectorClock) -> bool {
+        matches!(self.compare(other), Some(std::cmp::Ordering::Greater))
+    }
+
+    /// Check if this clock is dominated by (happened before) another.
+    pub fn is_dominated_by(&self, other: &VectorClock) -> bool {
+        matches!(self.compare(other), Some(std::cmp::Ordering::Less))
+    }
+
+    /// Check if clocks are concurrent (conflict).
+    pub fn is_concurrent_with(&self, other: &VectorClock) -> bool {
+        self.compare(other).is_none()
+    }
+}
 
 /// A fully-qualified key combining namespace and key.
 ///
@@ -53,6 +139,7 @@ impl FullKey {
 /// - `write_id`: Unique identifier for this specific write event (includes timestamp)
 /// - `distinction_id`: Content hash of the value (same content = same distinction_id)
 /// - `previous_version`: The write_id of the previous version of this key
+/// - `vector_clock`: Causal ordering for distributed conflict resolution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionedValue {
     /// The actual data stored (Arc-wrapped for deduplication)
@@ -69,6 +156,8 @@ pub struct VersionedValue {
     pub distinction_id: String,
     /// ID of the previous version (for causal chain)
     pub previous_version: Option<String>,
+    /// Vector clock for causal ordering in distributed systems
+    pub vector_clock: VectorClock,
 }
 
 /// Serialize Arc<JsonValue> as plain JsonValue
@@ -96,6 +185,7 @@ impl VersionedValue {
         write_id: String,
         distinction_id: String,
         previous_version: Option<String>,
+        vector_clock: VectorClock,
     ) -> Self {
         Self {
             value,
@@ -103,6 +193,7 @@ impl VersionedValue {
             write_id,
             distinction_id,
             previous_version,
+            vector_clock,
         }
     }
 
@@ -114,6 +205,7 @@ impl VersionedValue {
         write_id: String,
         distinction_id: String,
         previous_version: Option<String>,
+        vector_clock: VectorClock,
     ) -> Self {
         Self {
             value: Arc::new(value),
@@ -121,6 +213,7 @@ impl VersionedValue {
             write_id,
             distinction_id,
             previous_version,
+            vector_clock,
         }
     }
 
@@ -223,6 +316,7 @@ mod tests {
             "write_1".to_string(),  // write_id (unique per write)
             "dist_abc".to_string(), // distinction_id (content hash)
             Some("write_0".to_string()),
+            VectorClock::new(),
         );
 
         assert_eq!(versioned.value(), &value);
@@ -242,7 +336,8 @@ mod tests {
             now, 
             "write_v1".to_string(), // write_id
             "dist_xyz".to_string(), // distinction_id
-            None
+            None,
+            VectorClock::new(),
         );
 
         let entry: HistoryEntry = (&versioned).into();

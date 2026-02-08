@@ -45,7 +45,7 @@
 /// ```
 use crate::error::{DeltaError, DeltaResult};
 use crate::storage::CausalStorage;
-use crate::types::{FullKey, VersionedValue};
+use crate::types::{FullKey, VersionedValue, VectorClock};
 use chrono::{DateTime, Utc};
 use koru_lambda_core::DistinctionEngine;
 use serde::{Deserialize, Serialize};
@@ -421,6 +421,7 @@ async fn replay_segment(
                     write_id,                      // unique write_id for replay
                     entry.value_hash.clone(),      // distinction_id = content hash
                     entry.prev_hash.clone(),       // previous version
+                    VectorClock::new(),            // Initialize empty vector clock
                 );
 
                 // Store in storage using direct insert to preserve original IDs
@@ -752,6 +753,7 @@ mod tests {
             "hash123".to_string(),  // write_id
             "hash123".to_string(),  // distinction_id (same for test)
             None,
+            VectorClock::new(),     // Initialize empty vector clock
         );
 
         // Append write
