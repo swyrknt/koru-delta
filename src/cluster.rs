@@ -415,20 +415,72 @@ impl ClusterNode {
         Ok(())
     }
 
-    /// Broadcast a write to all peers.
+    /// Broadcast a write to all peers with ACK tracking.
     pub async fn broadcast_write(&self, key: FullKey, value: VersionedValue) {
         let message = Message::WriteEvent {
             node_id: self.node_id.clone(),
-            key,
-            value,
+            key: key.clone(),
+            value: value.clone(),
         };
+        let version_id = value.write_id.clone();
 
         for peer in self.state.get_peers() {
+            let _node_id = self.node_id.clone();
             let message = message.clone();
+            let version_id = version_id.clone();
+            let key = key.clone();
+            
             tokio::spawn(async move {
-                if let Ok(mut conn) = Connection::connect(peer.address).await {
-                    let _ = conn.send(&message).await;
+                let mut attempts = 0;
+                let max_attempts = 3;
+                
+                while attempts < max_attempts {
+                    attempts += 1;
+                    
+                    match Connection::connect(peer.address).await {
+                        Ok(mut conn) => {
+                            // Send the write event
+                            if let Err(e) = conn.send(&message).await {
+                                tracing::debug!("Failed to send write to {}: {}", peer.node_id, e);
+                                continue;
+                            }
+                            
+                            // Wait for ACK with timeout
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(5),
+                                conn.receive()
+                            ).await {
+                                Ok(Ok(Message::WriteAck { node_id: ack_node_id, key: ack_key, version_id: ack_version })) => {
+                                    if ack_node_id == peer.node_id 
+                                        && ack_key == key 
+                                        && ack_version == version_id {
+                                        tracing::trace!("Received ACK from {} for {}", peer.node_id, version_id);
+                                        return; // Success!
+                                    }
+                                }
+                                Ok(Ok(_)) => {
+                                    tracing::debug!("Unexpected response from {}", peer.node_id);
+                                }
+                                Ok(Err(e)) => {
+                                    tracing::debug!("Failed to receive ACK from {}: {}", peer.node_id, e);
+                                }
+                                Err(_) => {
+                                    tracing::debug!("Timeout waiting for ACK from {}", peer.node_id);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!("Failed to connect to {}: {}", peer.node_id, e);
+                        }
+                    }
+                    
+                    // Exponential backoff before retry
+                    if attempts < max_attempts {
+                        tokio::time::sleep(std::time::Duration::from_millis(100 * attempts as u64)).await;
+                    }
                 }
+                
+                tracing::warn!("Failed to broadcast write to {} after {} attempts", peer.node_id, max_attempts);
             });
         }
     }
