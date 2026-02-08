@@ -36,6 +36,7 @@
 //! ```
 
 mod causal_index;
+mod distinction_integration;
 mod hnsw;
 mod index;
 pub mod snsw;
@@ -43,9 +44,14 @@ mod types;
 
 // Public exports
 pub use causal_index::{CausalIndexConfig, CausalVectorIndex, IndexSnapshot, SnapshotStats};
+pub use distinction_integration::{DistinctionBackedSNSW, DistinctionVector};
 pub use hnsw::{HnswConfig, HnswIndex};
 pub use index::{AnnIndex, FlatIndex, VectorIndex};
-pub use snsw::{ContentHash, SearchResult, SynthesisGraph, SynthesisNode};
+pub use snsw::{
+    ContentHash, DistinctionOverlap, ExplainableResult, NavigationOp, ProximityWeights,
+    SearchResult, SearchTier, SynthesisEdge, SynthesisExplanation, SynthesisGraph, SynthesisNode,
+    SynthesisPath, SynthesisProximity, SynthesisType,
+};
 pub use types::{Vector, VectorSearchOptions, VectorSearchResult};
 
 // Re-export snsw module for advanced usage

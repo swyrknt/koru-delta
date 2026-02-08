@@ -434,13 +434,13 @@ mod tests {
     #[test]
     fn test_model_update() {
         let mut model = ImportanceModel::new();
-        let initial_weights = model.weights.clone();
+        let initial_weights = model.weights;
 
         let score = ImportanceScore::new("test".to_string(), 0.8, 0.9);
         model.update_weights(&score, true);
 
         // Weights should have changed slightly
-        let updated_weights = model.weights.clone();
+        let updated_weights = model.weights;
         assert_ne!(initial_weights.recency, updated_weights.recency);
     }
 }
