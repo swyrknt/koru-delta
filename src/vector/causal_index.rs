@@ -274,8 +274,7 @@ impl CausalVectorIndex {
     pub async fn search(&self, query: &Vector, k: usize) -> Vec<VectorSearchResult> {
         // Search the current index (which already has all vectors)
         let current = self.current.read().await;
-        let results = current.search(query, k, self.config.ef_search);
-        results
+        current.search(query, k, self.config.ef_search)
     }
 
     /// Search at a specific version (time-travel search).

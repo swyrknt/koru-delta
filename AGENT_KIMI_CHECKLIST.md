@@ -472,14 +472,15 @@ impl AgentContext {
 - None
 
 **Stats:**
-- 413+ tests passing (282 Rust + 21 Python integration + 110+ existing)
+- 414+ tests passing (288 Rust + 21 Python integration + 105+ existing)
 - 0 warnings, clippy clean
 - ~9,400 lines of code total
 - Python bindings: Complete
 - LLM Framework Integrations: Complete
 - Documentation: Complete (39,465 lines)
-- HNSW Index: Complete (831 lines, 8 tests)
+- HNSW Index: Complete (831 lines, 9 tests)
 - Time-Travel Vector Search: Complete
+- **All tests passing, 0 ignored**
 
 **Next Action:** v2.0.0 release preparation (final tests, security audit, release notes)
 
