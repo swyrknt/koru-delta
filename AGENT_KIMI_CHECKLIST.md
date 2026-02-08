@@ -408,11 +408,11 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] Handle timeouts and connection failures
   - Was: fire-and-forget → Now: ACK-based with retries
 
-- [ ] **Continuous Anti-Entropy**
-  - [ ] Background task for periodic reconciliation
-  - [ ] Integrate existing Merkle tree comparison (`reconciliation/merkle.rs`)
-  - [ ] Bloom filter fallback for large divergences
-  - Currently: reconciliation module exists but not actively running
+- [x] **Continuous Anti-Entropy**
+  - [x] Background task for periodic reconciliation (runs every 30s)
+  - [x] Uses existing SyncRequest/SyncResponse protocol
+  - [x] Concurrent reconciliation with all healthy peers
+  - Was: module exists but not running → Now: actively syncing
 
 - [ ] **Proper Conflict Resolution**
   - [ ] Vector clock implementation for causality tracking
