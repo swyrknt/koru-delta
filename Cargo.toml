@@ -56,6 +56,7 @@ regex = "1.10"
 
 # Async traits
 async-trait = "0.1"
+futures = "0.3"
 
 # Observability
 tracing = "0.1"
@@ -71,6 +72,7 @@ wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["Window", "Performance"] }
 console_error_panic_hook = { version = "0.1", optional = true }
 getrandom = { version = "0.2", features = ["js"], optional = true }
 
@@ -86,7 +88,7 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 
 [features]
 default = ["http"]
-wasm = ["wasm-bindgen", "wasm-bindgen-futures", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook", "getrandom"]
+wasm = ["wasm-bindgen", "wasm-bindgen-futures", "serde-wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook", "getrandom"]
 http = ["axum", "tower", "reqwest"]
 
 # Platform-specific dependencies for non-WASM targets

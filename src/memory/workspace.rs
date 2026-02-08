@@ -51,9 +51,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace};
 
 use crate::error::{DeltaError, DeltaResult};
+use crate::runtime::Runtime;
 use crate::types::VersionedValue;
 use crate::vector::Vector;
-use crate::KoruDelta;
+use crate::core::KoruDeltaGeneric;
 
 /// Memory patterns for organizing workspace data.
 ///
@@ -368,14 +369,14 @@ impl Default for SearchOptions {
 /// config.store("api.timeout", "30s", MemoryPattern::Reference).await?;
 /// let timeout = config.get_at("api.timeout", yesterday).await?; // Time travel
 /// ```
-pub struct Workspace {
-    db: KoruDelta,
+pub struct Workspace<R: Runtime> {
+    db: KoruDeltaGeneric<R>,
     name: String,
 }
 
-impl Workspace {
+impl<R: Runtime> Workspace<R> {
     /// Create a new workspace.
-    pub fn new(db: KoruDelta, name: impl Into<String>) -> Self {
+    pub fn new(db: KoruDeltaGeneric<R>, name: impl Into<String>) -> Self {
         Self {
             db,
             name: name.into(),
@@ -560,7 +561,7 @@ impl Workspace {
     }
 }
 
-impl Clone for Workspace {
+impl<R: Runtime> Clone for Workspace<R> {
     fn clone(&self) -> Self {
         Self {
             db: self.db.clone(),
@@ -607,13 +608,13 @@ pub struct WorkspaceStats {
 /// agent.remember_episode("User asked about Python").await?;
 /// agent.remember_fact("python_bindings", "KoruDelta has Python bindings").await?;
 /// ```
-pub struct AgentContext {
-    workspace: Workspace,
+pub struct AgentContext<R: Runtime> {
+    workspace: Workspace<R>,
 }
 
-impl AgentContext {
+impl<R: Runtime> AgentContext<R> {
     /// Create an AI agent context from a workspace.
-    pub fn new(workspace: Workspace) -> Self {
+    pub fn new(workspace: Workspace<R>) -> Self {
         Self { workspace }
     }
 

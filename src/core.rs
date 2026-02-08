@@ -46,21 +46,23 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use futures::FutureExt;
 use koru_lambda_core::DistinctionEngine;
 use serde::Serialize;
 use tracing::{debug, error, info, trace, warn};
 
-use tokio::sync::RwLock;
-
 use crate::auth::{AuthConfig, AuthManager};
+use crate::runtime::sync::RwLock;
 use crate::error::DeltaResult;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::lifecycle::{LifecycleConfig, LifecycleManager};
 use crate::memory::{ColdMemory, DeepMemory, HotConfig, HotMemory, WarmMemory};
+use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
 use crate::processes::ProcessRunner;
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
 use crate::reconciliation::ReconciliationManager;
 use crate::storage::CausalStorage;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionId, SubscriptionManager};
 use crate::types::{FullKey, HistoryEntry, VersionedValue};
 use crate::views::{ViewDefinition, ViewInfo, ViewManager};
@@ -184,8 +186,16 @@ impl Default for ReconciliationConfig {
 ///
 /// KoruDelta is fully thread-safe and can be cloned cheaply to share
 /// across threads (uses Arc internally).
+///
+/// # Runtime
+///
+/// KoruDelta is generic over the async runtime. Use `KoruDelta` for the
+/// default runtime (Tokio on native, WASM in browsers), or `KoruDeltaGeneric<R>`
+/// for a custom runtime.
 #[derive(Clone)]
-pub struct KoruDelta {
+pub struct KoruDeltaGeneric<R: Runtime> {
+    /// Async runtime for spawning tasks
+    runtime: R,
     /// Configuration
     config: CoreConfig,
     /// Database path for persistence (None = in-memory only)
@@ -196,7 +206,8 @@ pub struct KoruDelta {
     engine: Arc<DistinctionEngine>,
     /// View manager for materialized views
     views: Arc<ViewManager>,
-    /// Subscription manager for change notifications
+    /// Subscription manager for change notifications (non-WASM only)
+    #[cfg(not(target_arch = "wasm32"))]
     subscriptions: Arc<SubscriptionManager>,
     /// Memory tiers
     hot: Arc<RwLock<HotMemory>>,
@@ -220,11 +231,17 @@ pub struct KoruDelta {
     #[cfg(not(target_arch = "wasm32"))]
     cluster: Option<Arc<ClusterNode>>,
     /// Shutdown signal
-    shutdown_tx: tokio::sync::watch::Sender<bool>,
-    shutdown_rx: tokio::sync::watch::Receiver<bool>,
+    shutdown_tx: WatchSender<bool>,
+    shutdown_rx: WatchReceiver<bool>,
 }
 
-impl std::fmt::Debug for KoruDelta {
+/// Type alias for KoruDelta with the default runtime.
+///
+/// On native platforms: uses TokioRuntime
+/// On WASM: uses WasmRuntime
+pub type KoruDelta = KoruDeltaGeneric<DefaultRuntime>;
+
+impl<R: Runtime> std::fmt::Debug for KoruDeltaGeneric<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("KoruDelta")
             .field("storage", &self.storage)
@@ -233,13 +250,14 @@ impl std::fmt::Debug for KoruDelta {
     }
 }
 
-impl KoruDelta {
+impl<R: Runtime> KoruDeltaGeneric<R> {
     /// Start a new KoruDelta instance with default configuration.
     ///
     /// This is the zero-configuration entry point (in-memory only).
     pub async fn start() -> DeltaResult<Self> {
         info!("Starting KoruDelta in-memory instance");
-        let db = Self::new(CoreConfig::default()).await?;
+        let runtime = R::new();
+        let db = Self::new_with_runtime(CoreConfig::default(), runtime).await?;
         info!("KoruDelta in-memory instance started");
         Ok(db)
     }
@@ -263,6 +281,7 @@ impl KoruDelta {
         info!(db_path = %path_display, "Starting KoruDelta with persistence");
         
         let config = CoreConfig::default();
+        let runtime = R::new();
         
         // Acquire lock and check for unclean shutdown
         let lock_state = persistence::acquire_lock(&path).await?;
@@ -307,17 +326,19 @@ impl KoruDelta {
         // Initialize views
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
 
-        // Initialize subscriptions
+        // Initialize subscriptions (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         let subscriptions = Arc::new(SubscriptionManager::new());
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
         let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
 
-        // Shutdown channel
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        // Shutdown channel using runtime
+        let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
 
         let db = Self {
+            runtime,
             config,
             db_path: Some(path),
             storage,
@@ -332,6 +353,7 @@ impl KoruDelta {
             #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
             views,
+            #[cfg(not(target_arch = "wasm32"))]
             subscriptions,
             vector_index: VectorIndex::new_flat(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -351,6 +373,12 @@ impl KoruDelta {
 
     /// Create a new KoruDelta with the given configuration.
     pub async fn new(config: CoreConfig) -> DeltaResult<Self> {
+        let runtime = R::new();
+        Self::new_with_runtime(config, runtime).await
+    }
+
+    /// Create a new KoruDelta with the given configuration and runtime.
+    pub async fn new_with_runtime(config: CoreConfig, runtime: R) -> DeltaResult<Self> {
         let engine = Arc::new(DistinctionEngine::new());
         let storage = Arc::new(CausalStorage::new(Arc::clone(&engine)));
 
@@ -373,17 +401,19 @@ impl KoruDelta {
         // Initialize views
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
 
-        // Initialize subscriptions
+        // Initialize subscriptions (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         let subscriptions = Arc::new(SubscriptionManager::new());
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
         let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
 
-        // Shutdown channel
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        // Shutdown channel using runtime
+        let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
 
         let db = Self {
+            runtime,
             config,
             db_path: None,
             storage,
@@ -398,6 +428,7 @@ impl KoruDelta {
             #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
             views,
+            #[cfg(not(target_arch = "wasm32"))]
             subscriptions,
             vector_index: VectorIndex::new_flat(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -433,26 +464,26 @@ impl KoruDelta {
         let deep = Arc::clone(&self.deep);
         let storage = Arc::clone(&self.storage);
         let mut shutdown = self.shutdown_rx.clone();
+        let runtime = self.runtime.clone();
         
         let consolidation_interval = self.config.processes.consolidation_interval;
         let distillation_interval = self.config.processes.distillation_interval;
         let genome_interval = self.config.processes.genome_interval;
 
         // Spawn consolidation task
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(consolidation_interval);
+        let runtime_clone = runtime.clone();
+        runtime.spawn(async move {
+            let mut interval = runtime_clone.interval(consolidation_interval);
             loop {
-                tokio::select! {
-                    _ = interval.tick() => {
+                futures::select! {
+                    _ = interval.tick().fuse() => {
                         // Consolidation: Move data between tiers
                         Self::run_consolidation(
                             &hot, &warm, &cold, &deep, &storage
                         ).await;
                     }
-                    _ = shutdown.changed() => {
-                        if *shutdown.borrow() {
-                            break;
-                        }
+                    _ = Self::watch_shutdown(&mut shutdown).fuse() => {
+                        break;
                     }
                 }
             }
@@ -464,21 +495,20 @@ impl KoruDelta {
         let cold = Arc::clone(&self.cold);
         let storage = Arc::clone(&self.storage);
         let mut shutdown = self.shutdown_rx.clone();
+        let runtime_clone = runtime.clone();
         
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(distillation_interval);
+        runtime.spawn(async move {
+            let mut interval = runtime_clone.interval(distillation_interval);
             loop {
-                tokio::select! {
-                    _ = interval.tick() => {
+                futures::select! {
+                    _ = interval.tick().fuse() => {
                         // Distillation: Remove noise, keep essence
                         Self::run_distillation(
                             &hot, &warm, &cold, &storage
                         ).await;
                     }
-                    _ = shutdown.changed() => {
-                        if *shutdown.borrow() {
-                            break;
-                        }
+                    _ = Self::watch_shutdown(&mut shutdown).fuse() => {
+                        break;
                     }
                 }
             }
@@ -487,23 +517,36 @@ impl KoruDelta {
         // Spawn genome update task
         let deep = Arc::clone(&self.deep);
         let mut shutdown = self.shutdown_rx.clone();
+        let runtime_clone = runtime.clone();
         
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(genome_interval);
+        runtime.spawn(async move {
+            let mut interval = runtime_clone.interval(genome_interval);
             loop {
-                tokio::select! {
-                    _ = interval.tick() => {
+                futures::select! {
+                    _ = interval.tick().fuse() => {
                         // Genome update: Extract causal topology
                         Self::run_genome_update(&deep).await;
                     }
-                    _ = shutdown.changed() => {
-                        if *shutdown.borrow() {
-                            break;
-                        }
+                    _ = Self::watch_shutdown(&mut shutdown).fuse() => {
+                        break;
                     }
                 }
             }
         });
+    }
+
+    /// Helper to watch for shutdown signal.
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn watch_shutdown(shutdown: &mut WatchReceiver<bool>) {
+        loop {
+            if let Ok(()) = shutdown.changed().await {
+                if shutdown.borrow_and_update() {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
     }
 
     /// Run consolidation: Move data between memory tiers.
@@ -616,6 +659,19 @@ impl KoruDelta {
     ///
     /// This is primarily used for persistence testing and recovery scenarios.
     pub fn from_storage(storage: Arc<CausalStorage>, engine: Arc<DistinctionEngine>) -> Self {
+        let runtime = R::new();
+        Self::from_storage_with_runtime(storage, engine, runtime)
+    }
+
+    /// Create a KoruDelta from existing storage, engine, and runtime.
+    ///
+    /// This is primarily used for persistence testing and recovery scenarios
+    /// where a specific runtime is needed.
+    pub fn from_storage_with_runtime(
+        storage: Arc<CausalStorage>,
+        engine: Arc<DistinctionEngine>,
+        runtime: R,
+    ) -> Self {
         let config = CoreConfig::default();
 
         // Initialize memory tiers
@@ -637,17 +693,19 @@ impl KoruDelta {
         // Initialize views
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
 
-        // Initialize subscriptions
+        // Initialize subscriptions (non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
         let subscriptions = Arc::new(SubscriptionManager::new());
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
         let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
 
-        // Shutdown channel
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        // Shutdown channel using runtime
+        let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
 
         Self {
+            runtime,
             config: CoreConfig::default(),
             db_path: None,
             storage,
@@ -662,6 +720,7 @@ impl KoruDelta {
             #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
             views,
+            #[cfg(not(target_arch = "wasm32"))]
             subscriptions,
             vector_index: VectorIndex::new_flat(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -1185,8 +1244,7 @@ impl KoruDelta {
 
         // Check hot first
         {
-            let hot = self.hot.try_read();
-            if let Ok(hot) = hot {
+            if let Some(hot) = self.hot.try_read() {
                 if hot.contains_key(&full_key) {
                     return true;
                 }
@@ -1264,7 +1322,7 @@ impl KoruDelta {
     /// let audit = db.workspace("audit-2026");
     /// audit.store("tx-123", transaction, MemoryPattern::Event).await?;
     /// ```
-    pub fn workspace(&self, name: impl Into<String>) -> crate::memory::Workspace {
+    pub fn workspace(&self, name: impl Into<String>) -> crate::memory::Workspace<R> {
         crate::memory::Workspace::new(self.clone(), name)
     }
 
@@ -1313,10 +1371,11 @@ impl KoruDelta {
     }
 
     // =========================================================================
-    // Subscriptions API
+    // Subscriptions API (non-WASM only)
     // =========================================================================
 
     /// Subscribe to changes.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn subscribe(
         &self,
         subscription: Subscription,
@@ -1325,21 +1384,25 @@ impl KoruDelta {
     }
 
     /// Unsubscribe from changes.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn unsubscribe(&self, id: SubscriptionId) -> DeltaResult<()> {
         self.subscriptions.unsubscribe(id)
     }
 
     /// List all subscriptions.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn list_subscriptions(&self) -> Vec<crate::subscriptions::SubscriptionInfo> {
         self.subscriptions.list_subscriptions()
     }
 
     /// Get subscription manager.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn subscription_manager(&self) -> &Arc<SubscriptionManager> {
         &self.subscriptions
     }
 
-    /// Store a value and notify subscribers.
+    /// Store a value and notify subscribers (non-WASM only).
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn put_notify<T: Serialize>(
         &self,
         namespace: impl Into<String>,

@@ -31,10 +31,10 @@
 
 use super::hnsw::{HnswConfig, HnswIndex};
 use super::types::{Vector, VectorSearchResult};
+use crate::runtime::sync::RwLock;
 use crate::types::VersionId;
 use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// A snapshot of the vector index at a specific version.
 #[derive(Debug)]

@@ -91,7 +91,8 @@ pub async fn mine_identity(
 
         nonce += 1;
 
-        // Yield periodically to avoid blocking async runtime
+        // Yield periodically to avoid blocking async runtime (native only)
+        #[cfg(not(target_arch = "wasm32"))]
         if hashes_computed.is_multiple_of(10000) {
             tokio::task::yield_now().await;
         }
