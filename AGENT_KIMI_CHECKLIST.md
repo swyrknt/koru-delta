@@ -318,11 +318,11 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] Native storage backend
   - [x] Hybrid search example
 
-### v2.1.0 Preview: Automated Lifecycle
-- [ ] **Basic memory consolidation** (preview)
-  - [ ] Hot→Warm transition rules
-  - [ ] Simple importance scoring
-  - [ ] Background jobs framework
+### v2.1.0 Preview: Automated Lifecycle ✅ COMPLETE
+- [x] **Basic memory consolidation** (preview)
+  - [x] Hot→Warm transition rules ✅
+  - [x] Simple importance scoring ✅
+  - [x] Background jobs framework ✅
 
 ### v2.2.0 Research: Distinction-Based Search 🧪 EXPERIMENTAL
 - [ ] **SNSW (Synthesis-Navigable Small World)** - See [DISTINCTION_BASED_VECTOR_SEARCH.md](bindings/python/docs/DISTINCTION_BASED_VECTOR_SEARCH.md)
