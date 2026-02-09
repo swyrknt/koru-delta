@@ -9,34 +9,45 @@
 //! - Vector embedding storage and similarity search
 //! - Query engine with filters and aggregation
 //! - Views for materialized queries
+//! - **IndexedDB persistence** for data survival across page reloads
 //!
 //! # Usage
 //! ```javascript
 //! import init, { KoruDeltaWasm } from 'koru-delta';
 //!
 //! await init();
+//! 
+//! // Memory-only database (data lost on refresh)
 //! const db = await KoruDeltaWasm.new();
-//!
+//! 
+//! // Persistent database (data survives refresh)
+//! const db = await KoruDeltaWasm.newPersistent();
+//! 
 //! await db.put('users', 'alice', { name: 'Alice', age: 30 });
 //! const user = await db.get('users', 'alice');
 //! ```
+
+mod storage;
 
 use crate::vector::{Vector, VectorSearchOptions};
 use crate::{DeltaError, HistoryEntry, KoruDelta, VersionedValue, ViewDefinition};
 use serde_json::Value as JsonValue;
 use wasm_bindgen::prelude::*;
+use storage::{IndexedDbStorage, is_indexeddb_supported};
 
 /// WASM-friendly wrapper around KoruDelta
 #[wasm_bindgen]
 pub struct KoruDeltaWasm {
     db: KoruDelta,
+    storage: Option<IndexedDbStorage>,
 }
 
 #[wasm_bindgen]
 impl KoruDeltaWasm {
-    /// Create a new KoruDelta database instance
+    /// Create a new in-memory KoruDelta database instance
     ///
-    /// Returns a Promise that resolves to a new database instance.
+    /// Data will be lost when the page is refreshed. For persistent storage,
+    /// use `newPersistent()` instead.
     ///
     /// # Example (JavaScript)
     /// ```javascript
@@ -47,7 +58,112 @@ impl KoruDeltaWasm {
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to start database: {}", e)))?;
 
-        Ok(KoruDeltaWasm { db })
+        Ok(KoruDeltaWasm { db, storage: None })
+    }
+
+    /// Create a new persistent KoruDelta database instance with IndexedDB
+    ///
+    /// Data will be automatically saved to IndexedDB and loaded on startup.
+    /// Falls back to memory-only if IndexedDB is unavailable.
+    ///
+    /// # Example (JavaScript)
+    /// ```javascript
+    /// const db = await KoruDeltaWasm.newPersistent();
+    /// 
+    /// // Check if persistence is working
+    /// if (db.isPersistent()) {
+    ///   console.log("Data will survive page refreshes!");
+    /// }
+    /// ```
+    #[wasm_bindgen(js_name = newPersistent)]
+    pub async fn new_persistent() -> Result<KoruDeltaWasm, JsValue> {
+        let db = KoruDelta::start()
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to start database: {}", e)))?;
+
+        // Initialize IndexedDB storage
+        let storage = IndexedDbStorage::new().await?;
+
+        let mut wasm_db = KoruDeltaWasm { db, storage: Some(storage) };
+
+        // Load existing data from IndexedDB
+        wasm_db.load_from_storage().await?;
+
+        Ok(wasm_db)
+    }
+
+    /// Check if the database is using IndexedDB persistence
+    #[wasm_bindgen(js_name = isPersistent)]
+    pub fn is_persistent(&self) -> bool {
+        self.storage.as_ref().map(|s| s.is_persistent()).unwrap_or(false)
+    }
+
+    /// Check if IndexedDB is supported in the current environment
+    #[wasm_bindgen(js_name = isIndexedDbSupported)]
+    pub fn is_indexeddb_supported_js() -> bool {
+        is_indexeddb_supported()
+    }
+
+    /// Clear all persisted data from IndexedDB
+    ///
+    /// This will delete all data stored in IndexedDB. Use with caution!
+    #[wasm_bindgen(js_name = clearPersistence)]
+    pub async fn clear_persistence(&self) -> Result<(), JsValue> {
+        if let Some(storage) = &self.storage {
+            storage.clear_all().await?;
+            web_sys::console::log_1(&"IndexedDB: All data cleared".into());
+        }
+        Ok(())
+    }
+
+    /// Load data from IndexedDB storage
+    async fn load_from_storage(&mut self) -> Result<(), JsValue> {
+        let storage = match &self.storage {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+
+        let records = storage.load_all_records().await?;
+        let record_count = records.len();
+
+        for (namespace, key, value, _timestamp, _version_id, _previous_version) in records {
+            // Restore the data to the database
+            // We use put without triggering persistence to avoid recursion
+            let _ = self.db.put(&namespace, &key, value).await;
+        }
+
+        if storage.is_persistent() {
+            web_sys::console::log_1(&format!("Loaded {} records from IndexedDB", record_count).into());
+        }
+
+        Ok(())
+    }
+
+    /// Save a record to IndexedDB (called after successful put)
+    async fn save_to_storage(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: &serde_json::Value,
+    ) -> Result<(), JsValue> {
+        let storage = match &self.storage {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+
+        // Get the latest version info from the database
+        if let Ok(versioned) = self.db.get(namespace, key).await {
+            storage.save_record(
+                namespace,
+                key,
+                value,
+                &versioned.timestamp(),
+                versioned.version_id(),
+                versioned.previous_version(),
+            ).await?;
+        }
+
+        Ok(())
     }
 
     /// Store a value in the database
@@ -71,9 +187,15 @@ impl KoruDeltaWasm {
 
         let versioned = self
             .db
-            .put(namespace, key, json_value)
+            .put(namespace, key, json_value.clone())
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to store value: {}", e)))?;
+
+        // Auto-save to IndexedDB if persistence is enabled
+        if let Err(e) = self.save_to_storage(namespace, key, &json_value).await {
+            web_sys::console::warn_1(&format!("Failed to save to IndexedDB: {:?}", e).into());
+            // Don't fail the put if IndexedDB save fails - data is still in memory
+        }
 
         versioned_to_js(&versioned)
     }
@@ -192,12 +314,22 @@ impl KoruDeltaWasm {
     }
 
     /// Delete a key
+    ///
+    /// Also removes the key from IndexedDB if persistence is enabled.
     #[wasm_bindgen(js_name = delete)]
     pub async fn delete_js(&self, namespace: &str, key: &str) -> Result<(), JsValue> {
         self.db
             .delete(namespace, key)
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to delete: {}", e)))?;
+
+        // Also delete from IndexedDB if persistence is enabled
+        if let Some(storage) = &self.storage {
+            if let Err(e) = storage.delete_record(namespace, key).await {
+                web_sys::console::warn_1(&format!("Failed to delete from IndexedDB: {:?}", e).into());
+            }
+        }
+
         Ok(())
     }
 
