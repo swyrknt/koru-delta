@@ -249,6 +249,56 @@ impl VersionedValue {
     pub fn previous_version(&self) -> Option<&str> {
         self.previous_version.as_deref()
     }
+
+    /// Get the vector clock for causal ordering.
+    pub fn vector_clock(&self) -> &VectorClock {
+        &self.vector_clock
+    }
+}
+
+/// Result of a causal write operation.
+#[derive(Debug, Clone)]
+pub enum CausalWriteResult {
+    /// The write was successfully applied (causally later than current).
+    Applied(VersionedValue),
+    /// The write was rejected (causally earlier than current).
+    Rejected(VersionedValue),
+    /// The write is a duplicate (same vector clock as current).
+    Duplicate(VersionedValue),
+    /// There's a conflict requiring merge strategy.
+    Conflict {
+        /// The existing value at this key.
+        existing: VersionedValue,
+        /// The incoming vector clock that conflicts.
+        incoming_clock: VectorClock,
+    },
+}
+
+impl CausalWriteResult {
+    /// Check if the write was applied.
+    pub fn is_applied(&self) -> bool {
+        matches!(self, CausalWriteResult::Applied(_))
+    }
+
+    /// Check if the write was rejected.
+    pub fn is_rejected(&self) -> bool {
+        matches!(self, CausalWriteResult::Rejected(_))
+    }
+
+    /// Check if there's a conflict.
+    pub fn is_conflict(&self) -> bool {
+        matches!(self, CausalWriteResult::Conflict { .. })
+    }
+
+    /// Get the versioned value if applied or duplicate.
+    pub fn value(&self) -> Option<&VersionedValue> {
+        match self {
+            CausalWriteResult::Applied(v) => Some(v),
+            CausalWriteResult::Duplicate(v) => Some(v),
+            CausalWriteResult::Rejected(v) => Some(v),
+            CausalWriteResult::Conflict { existing, .. } => Some(existing),
+        }
+    }
 }
 
 /// A history entry representing a single change to a key.

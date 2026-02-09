@@ -14,7 +14,7 @@ use crate::causal_graph::CausalGraph;
 use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
 use crate::reference_graph::ReferenceGraph;
-use crate::types::{FullKey, HistoryEntry, VectorClock, VersionedValue};
+use crate::types::{CausalWriteResult, FullKey, HistoryEntry, VectorClock, VersionedValue};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use koru_lambda_core::DistinctionEngine;
@@ -201,6 +201,193 @@ impl CausalStorage {
             .insert(full_key.clone(), versioned);
 
         Ok(())
+    }
+
+    /// Store a value with vector clock-based causal merge.
+    ///
+    /// This method is used for writes received from other nodes in a cluster.
+    /// It performs causal ordering checks and handles concurrent writes.
+    ///
+    /// # Returns
+    /// - `Ok(versioned)` if the write was applied (causally later)
+    /// - `Ok(existing)` if the write was rejected (causally earlier)
+    /// - `Err(DeltaError::ConcurrentWrite)` if there's a conflict requiring merge
+    pub fn put_causal(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        incoming_value: JsonValue,
+        incoming_clock: VectorClock,
+    ) -> DeltaResult<CausalWriteResult> {
+        let full_key = FullKey::new(namespace, key);
+        let timestamp = Utc::now();
+
+        // Check if there's an existing value
+        if let Some(existing) = self.current_state.get(&full_key) {
+            let existing_clock = &existing.vector_clock;
+            
+            // Compare vector clocks
+            match incoming_clock.compare(existing_clock) {
+                Some(std::cmp::Ordering::Less) => {
+                    // Incoming write is causally earlier - reject it
+                    tracing::debug!(
+                        "Rejecting incoming write for {:?} - causally earlier than current",
+                        full_key
+                    );
+                    return Ok(CausalWriteResult::Rejected(existing.clone()));
+                }
+                Some(std::cmp::Ordering::Greater) => {
+                    // Incoming write is causally later - apply it
+                    tracing::trace!(
+                        "Applying incoming write for {:?} - causally later than current",
+                        full_key
+                    );
+                }
+                Some(std::cmp::Ordering::Equal) => {
+                    // Same vector clock - already have this write
+                    tracing::trace!(
+                        "Ignoring incoming write for {:?} - already have this version",
+                        full_key
+                    );
+                    return Ok(CausalWriteResult::Duplicate(existing.clone()));
+                }
+                None => {
+                    // Concurrent writes - conflict detected
+                    tracing::warn!(
+                        "Concurrent write conflict for {:?} - requires merge strategy",
+                        full_key
+                    );
+                    return Ok(CausalWriteResult::Conflict {
+                        existing: existing.clone(),
+                        incoming_clock,
+                    });
+                }
+            }
+        }
+
+        // Apply the write (either no existing value or causally later)
+        let previous_version = self
+            .current_state
+            .get(&full_key)
+            .map(|v| v.write_id.clone());
+
+        // Compute distinction
+        let distinction = DocumentMapper::json_to_distinction(&incoming_value, &self.engine)?;
+        let distinction_id = DocumentMapper::store_distinction_id(&distinction);
+        let write_id = format!("{}_{}", distinction_id, timestamp.timestamp_nanos_opt().unwrap_or(0));
+
+        // Capture in causal graph
+        self.causal_graph.add_node(write_id.clone());
+        if let Some(ref parent_id) = previous_version {
+            self.causal_graph.add_edge(parent_id.clone(), write_id.clone());
+        }
+
+        // Capture in reference graph
+        self.reference_graph.add_node(write_id.clone());
+
+        // Get or create shared value
+        let shared_value = self
+            .value_store
+            .entry(distinction_id.clone())
+            .or_insert_with(|| Arc::new(incoming_value))
+            .clone();
+
+        // Create versioned value with incoming vector clock
+        let versioned = VersionedValue::new(
+            shared_value,
+            timestamp,
+            write_id.clone(),
+            distinction_id,
+            previous_version,
+            incoming_clock,
+        );
+
+        // Store in version store and current state
+        self.version_store
+            .insert(write_id.clone(), versioned.clone());
+        self.current_state
+            .insert(full_key.clone(), versioned.clone());
+
+        Ok(CausalWriteResult::Applied(versioned))
+    }
+
+    /// Merge concurrent writes using last-write-wins strategy.
+    ///
+    /// This is a simple merge strategy that uses timestamp ordering.
+    /// In the future, this could be extended to support:
+    /// - CRDT-based merges for specific data types
+    /// - Application-defined merge strategies
+    /// - Multi-value storage (keeping both branches)
+    pub fn merge_concurrent_writes(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        existing: &VersionedValue,
+        incoming_value: JsonValue,
+        incoming_clock: VectorClock,
+    ) -> DeltaResult<VersionedValue> {
+        let full_key = FullKey::new(namespace, key);
+        let timestamp = Utc::now();
+
+        // Merge vector clocks (take maximum of each node's clock)
+        let mut merged_clock = existing.vector_clock.clone();
+        merged_clock.merge(&incoming_clock);
+
+        // Increment our local clock to mark this merge event
+        // TODO: Use actual node ID from cluster configuration
+        merged_clock.increment("local");
+
+        // For last-write-wins: use the incoming value if its timestamp is newer
+        // Otherwise keep existing (but still update the vector clock)
+        let (final_value, is_incoming) = if timestamp > existing.timestamp {
+            (Arc::new(incoming_value), true)
+        } else {
+            (existing.value.clone(), false)
+        };
+
+        // Generate write ID
+        let previous_version = Some(existing.write_id.clone());
+        let distinction = DocumentMapper::json_to_distinction(&final_value, &self.engine)?;
+        let distinction_id = DocumentMapper::store_distinction_id(&distinction);
+        let write_id = format!("merge_{}_{}", distinction_id, timestamp.timestamp_nanos_opt().unwrap_or(0));
+
+        // Capture in causal graph
+        self.causal_graph.add_node(write_id.clone());
+        self.causal_graph.add_edge(existing.write_id.clone(), write_id.clone());
+
+        // Capture in reference graph
+        self.reference_graph.add_node(write_id.clone());
+
+        // Store value
+        let shared_value = self
+            .value_store
+            .entry(distinction_id.clone())
+            .or_insert_with(|| final_value.clone())
+            .clone();
+
+        // Create merged version
+        let versioned = VersionedValue::new(
+            shared_value,
+            timestamp,
+            write_id.clone(),
+            distinction_id,
+            previous_version,
+            merged_clock,
+        );
+
+        // Store in version store and current state
+        self.version_store
+            .insert(write_id.clone(), versioned.clone());
+        self.current_state
+            .insert(full_key.clone(), versioned.clone());
+
+        tracing::info!(
+            "Merged concurrent write for {:?}: kept {} value",
+            full_key,
+            if is_incoming { "incoming" } else { "existing" }
+        );
+
+        Ok(versioned)
     }
 
     /// Get the current (latest) value for a key.

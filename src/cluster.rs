@@ -605,14 +605,60 @@ fn handle_message(
             key,
             value,
         } => {
-            // Apply the write locally.
-            storage.put(&key.namespace, &key.key, (*value.value).clone())?;
-
-            Ok(Some(Message::WriteAck {
-                node_id: node_id.clone(),
-                key,
-                version_id: value.version_id().to_string(),
-            }))
+            // Apply the write with causal ordering check.
+            match storage.put_causal(&key.namespace, &key.key, (*value.value).clone(), value.vector_clock.clone())? {
+                crate::types::CausalWriteResult::Applied(_) | crate::types::CausalWriteResult::Duplicate(_) => {
+                    // Successfully applied or already had it
+                    Ok(Some(Message::WriteAck {
+                        node_id: node_id.clone(),
+                        key,
+                        version_id: value.write_id.clone(),
+                    }))
+                }
+                crate::types::CausalWriteResult::Rejected(_) => {
+                    // Causally earlier than current - still acknowledge to stop retries
+                    Ok(Some(Message::WriteAck {
+                        node_id: node_id.clone(),
+                        key,
+                        version_id: value.write_id.clone(),
+                    }))
+                }
+                crate::types::CausalWriteResult::Conflict { existing, incoming_clock } => {
+                    // Concurrent write conflict - merge using last-write-wins
+                    tracing::warn!(
+                        "Concurrent write conflict for {:?}: existing={}, incoming={}. Merging...",
+                        key,
+                        existing.write_id,
+                        value.write_id
+                    );
+                    
+                    // Attempt to merge the concurrent writes
+                    match storage.merge_concurrent_writes(
+                        &key.namespace,
+                        &key.key,
+                        &existing,
+                        (*value.value).clone(),
+                        incoming_clock,
+                    ) {
+                        Ok(merged) => {
+                            Ok(Some(Message::WriteAck {
+                                node_id: node_id.clone(),
+                                key,
+                                version_id: merged.write_id.clone(),
+                            }))
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to merge concurrent writes: {}", e);
+                            // Still acknowledge to prevent infinite retries
+                            Ok(Some(Message::WriteAck {
+                                node_id: node_id.clone(),
+                                key,
+                                version_id: value.write_id.clone(),
+                            }))
+                        }
+                    }
+                }
+            }
         }
 
         Message::SyncRequest { node_id: _, keys } => {

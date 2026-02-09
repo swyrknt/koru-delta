@@ -154,7 +154,7 @@ pub mod wasm;
 // Public API exports
 pub use core::{CoreConfig, DatabaseStats, KoruDelta, MemoryConfig};
 pub use error::{DeltaError, DeltaResult};
-pub use types::{FullKey, HistoryEntry, VersionedValue};
+pub use types::{CausalWriteResult, FullKey, HistoryEntry, VectorClock, VersionedValue};
 
 // Query exports
 pub use query::{
