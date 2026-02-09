@@ -1,6 +1,6 @@
 # KoruDelta: Execution Checklist
 
-**Document Purpose:** Track progress toward v2.2.0 - "Distinction-Based Vector Search"  
+**Document Purpose:** Track progress toward v2.0.0 - "The Causal Database"  
 **Current Version:** 2.2.0 (SNSW production-ready)  
 **Target Version:** 2.3.0 (learned synthesis weights + abstraction detection)  
 **Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 ✅, Phase 3 ✅, Phase 4 ✅ - JS Bindings Complete)  
@@ -302,50 +302,45 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
 
 ---
 
-## CHECKLIST: v2.5.1 Preview Features (In v2.5 Release)
+## CHECKLIST: Advanced Features (v2.0.0) - All Complete
 
-These v2.6 features are included in v2.5 as **preview/beta**:
-
-### v2.1.0 Preview: Enhanced Vector Search ✅ COMPLETE
-- [x] **HNSW Index** (beta) - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
+### Enhanced Vector Search ✅ COMPLETE
+- [x] **HNSW Index** - See [VECTOR_SEARCH_DESIGN.md](bindings/python/docs/VECTOR_SEARCH_DESIGN.md)
   - [x] Basic HNSW implementation for 100K-1M vectors (`src/vector/hnsw.rs` - 831 lines)
   - [x] Configurable M, ef_construction, ef_search
   - [x] 8 tests passing, 0 warnings
 - [x] **Causal-Consistent Index Snapshots**
   - [x] `CausalVectorIndex` with versioned snapshots (`src/vector/causal_index.rs` - 550 lines)
   - [x] Automatic snapshot management
-- [x] **Time-Travel Vector Search** (preview)
+- [x] **Time-Travel Vector Search**
   - [x] `similar_at()` API - query similarity at any past timestamp
   - [x] Rust: `db.similar_at(namespace, query, timestamp, options)`
   - [x] Python: `db.similar_at(namespace, query, timestamp, top_k=10, ...)`
   - [x] Unique feature: "What was similar last Tuesday?"
 
-### v2.1.0 Preview: LLM Integrations ✅ COMPLETE
-- [x] **LangChain VectorStore** (beta)
+### LLM Framework Integrations ✅ COMPLETE
+- [x] **LangChain VectorStore**
   - [x] `KoruDeltaVectorStore` class
   - [x] Drop-in replacement for Pinecone/Chroma
-- [x] **LlamaIndex Storage** (beta)
+- [x] **LlamaIndex Storage**
   - [x] Native storage backend
   - [x] Hybrid search example
 
-### v2.1.0 Preview: Automated Lifecycle ✅ COMPLETE
-- [x] **Basic memory consolidation** (preview)
-  - [x] Hot→Warm transition rules ✅
-  - [x] Simple importance scoring ✅
-  - [x] Background jobs framework ✅
+### Automated Lifecycle ✅ COMPLETE
+- [x] **Memory consolidation with tiered storage**
+  - [x] Hot→Warm→Cold→Deep transition rules
+  - [x] ML-based importance scoring
+  - [x] Background jobs framework (5min/1hr/24hr intervals)
 
-### v2.2.0 Research: Distinction-Based Search ✅ PRODUCTION READY
+### Distinction-Based Vector Search (SNSW) ✅ COMPLETE
 - [x] **SNSW (Synthesis-Navigable Small World)** - See [DISTINCTION_BASED_VECTOR_SEARCH.md](bindings/python/docs/DISTINCTION_BASED_VECTOR_SEARCH.md) & [SNSW_ARCHITECTURE_v2.2.0.md](docs/SNSW_ARCHITECTURE_v2.2.0.md)
-  - [x] Create a new complete architecture/design doc (after extensive research) - `docs/SNSW_ARCHITECTURE_v2.2.0.md` (17KB)
-  - [x] Apply distinction calculus to ANN (koru-lambda-core integration) - `src/vector/distinction_integration.rs` (350 lines, 6 tests)
-  - [x] Content-addressed vectors (automatic deduplication) - `ContentHash::from_vector()` with Blake3
-  - [x] Synthesis relationships (semantic navigation vs geometric) - 6 `SynthesisType` variants (Proximity, Composition, Abstraction, Instantiation, Sequence, Causation)
-  - [x] Multi-layer abstraction (coarse→fine distinctions) - `abstraction_level` field + `AbstractionLayer` structure
-  - [x] Explainable similarity (show WHY vectors are related) - `search_explainable()` returns `SynthesisExplanation` with paths
-  - [x] Prototype benchmark: SNSW vs HNSW on 10K vectors - `benches/snsw_vs_hnsw.rs` (6 benchmark groups)
-  - [x] **Goal**: Foundation proven - distinction calculus enables semantic ANN search (v2.3.0 will validate full performance gains)
-  - [x] **Bonus**: Semantic navigation API (`NavigationOp::Add/Subtract/Toward`) for concept composition (king - man + woman = queen)
-  - [x] **Quality**: 304 tests passing, 0 warnings, zero clippy errors
+  - [x] Complete architecture/design doc - `docs/SNSW_ARCHITECTURE_v2.2.0.md` (17KB)
+  - [x] Distinction calculus applied to ANN - `src/vector/distinction_integration.rs`
+  - [x] Content-addressed vectors (Blake3 deduplication)
+  - [x] Synthesis relationships (6 semantic relationship types)
+  - [x] Multi-layer abstraction (coarse→fine distinctions)
+  - [x] Explainable similarity (shows WHY vectors relate)
+  - [x] Semantic navigation API (`NavigationOp::Add/Subtract/Toward`)
 
 ## CHECKLIST: JavaScript Bindings v2.0.0
 
@@ -610,35 +605,34 @@ impl AgentContext {
 ## SUCCESS CRITERIA
 
 ### Immediate
-- [x] 360 tests passing
+- [x] 433 tests passing
 - [x] 0 warnings
 - [x] Workspace API complete
 
 ### Week 1
 - [x] Python bindings work (maturin build, clean clippy, imports successfully)
 - [x] 3 use case examples (AI, audit, config) ✅ COMPLETE
-- [ ] Documentation updated
+- [x] Documentation updated ✅ COMPLETE (comprehensive docs in docs/)
 
 ### Week 2: v2.0.0 Release (Current Focus)
-**Theme: "Causal Database with Vector Search"**
-- [x] Vector storage (flat index) - MVP complete
-- [x] Python bindings with 4 wow-factor examples
-- [x] VECTOR_SEARCH_DESIGN.md for v2.5.1
-- [ ] v2.5.0 release
-- [ ] PyPI package
-- [ ] Web playground
+**Theme: "The Causal Database with Vector Search"**
+- [x] Core causal database (put/get/history/time-travel)
+- [x] Vector storage (flat + HNSW indices)
+- [x] Python bindings with examples
+- [x] JavaScript/WASM bindings with examples
+- [x] Clustering with tombstone propagation
+- [x] SNSW distinction-based vector search
+- [x] LLM integrations (LangChain, LlamaIndex)
+- [x] Automated memory lifecycle
+- [ ] v2.0.0 release (tag, release notes, publish)
+- [ ] PyPI package publish
+- [ ] npm package publish (optional)
 
-### Week 3-4: v2.5.1 Preview (High Impact Features)
-**Theme: "Production-Ready AI Memory"**
-- [ ] HNSW for million-scale ANN (beta)
-- [ ] LangChain/LlamaIndex integrations (beta)
-- [ ] Automated memory lifecycle (preview)
-- [ ] Time-travel vector search (unique!)
-
-### Month 1
+### Post-Release Goals
 - [ ] 500+ PyPI downloads
 - [ ] 3 production users
 - [ ] 1 case study
+- [ ] Web playground (future enhancement)
 
 ---
 
@@ -687,13 +681,16 @@ impl AgentContext {
 - None
 
 **Stats:**
-- 414+ tests passing (288 Rust + 21 Python integration + 105+ existing)
+- 433 tests passing (309 Rust lib + 15 cluster + 8 falsification + 45 phase + 19 phase3 + 13 phase5 + 9 lifecycle + 11 vector + 1 wasm + 3 doc tests)
 - 0 warnings, clippy clean
-- ~9,400 lines of code total
+- ~12,000+ lines of code total
 - Python bindings: Complete
 - LLM Framework Integrations: Complete
-- Documentation: Complete (39,465 lines)
+- JavaScript/WASM Bindings: Complete (Phase 4)
+- Clustering (Phase 2.5): Complete with tombstone propagation
+- Documentation: Complete (39,465+ lines)
 - HNSW Index: Complete (831 lines, 9 tests)
+- SNSW (Distinction-based search): Complete
 - Time-Travel Vector Search: Complete
 - **All tests passing, 0 ignored**
 
