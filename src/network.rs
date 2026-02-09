@@ -17,7 +17,7 @@
 /// All network operations are designed to be async and can be used with
 /// Tokio's multi-threaded runtime.
 use crate::error::{DeltaError, DeltaResult};
-use crate::types::{FullKey, VersionedValue};
+use crate::types::{FullKey, Tombstone, VectorClock, VersionedValue};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -175,6 +175,8 @@ pub enum Message {
         node_id: NodeId,
         /// Keys and their latest known version IDs.
         keys: HashMap<FullKey, Option<String>>,
+        /// Known tombstones with their vector clocks (for tombstone propagation).
+        tombstones: HashMap<FullKey, VectorClock>,
     },
 
     /// Response with updated values for requested keys.
@@ -182,6 +184,8 @@ pub enum Message {
         node_id: NodeId,
         /// Updated values since the requested versions.
         updates: Vec<(FullKey, Vec<VersionedValue>)>,
+        /// Tombstones that the requester may be missing.
+        tombstones: Vec<Tombstone>,
     },
 
     // ─────────────────────────────────────────────────────────────────────

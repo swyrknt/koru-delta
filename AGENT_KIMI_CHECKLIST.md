@@ -3,7 +3,7 @@
 **Document Purpose:** Track progress toward v2.2.0 - "Distinction-Based Vector Search"  
 **Current Version:** 2.2.0 (SNSW production-ready)  
 **Target Version:** 2.3.0 (learned synthesis weights + abstraction detection)  
-**Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 Clustering Hardening - 95% Complete ✅)  
+**Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 Clustering Hardening - 100% Complete ✅)  
 **Owner:** Agent Kimi
 
 ---
@@ -81,15 +81,16 @@ Memory tiers → Natural lifecycle
 - [x] CLI with auth commands
 - [x] Query engine (filters, sort, aggregate)
 
-### 🚧 CLUSTERING (Functional - Production Hardening in Progress)
+### ✅ CLUSTERING (Production Ready)
 - [x] Multi-node clustering (basic)
 - [x] Node discovery and join
 - [x] Write broadcast
 - [x] Gossip protocol
-- [ ] Reliable delivery with ACKs
-- [ ] Continuous anti-entropy
-- [ ] Vector clock conflict resolution
-- [ ] Partition handling
+- [x] Reliable delivery with ACKs (3 retries, exponential backoff)
+- [x] Continuous anti-entropy (30s interval)
+- [x] Vector clock conflict resolution (causal merge, LWW)
+- [x] Partition handling (quorum-based)
+- [x] Tombstone propagation for distributed deletes
 
 ---
 
@@ -426,8 +427,17 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] Split-brain detection (quorum-based) (`cluster.rs:86-114`)
   - [x] Automatic state transitions (Healthy → Partitioned → Recovering)
   - [x] is_write_allowed() for quorum enforcement
-  - [ ] Tombstone propagation for deletes (deferred to v2.1)
   - Status: ✅ Core partition handling complete
+
+- [x] **Tombstone Propagation**
+  - [x] Tombstone type with vector clock (`types.rs:Tombstone`)
+  - [x] delete_causal() with tombstone creation (`storage.rs:399-475`)
+  - [x] get_tombstone(), has_tombstone(), get_all_tombstones() queries
+  - [x] insert_tombstone() for remote sync
+  - [x] SyncRequest/SyncResponse include tombstone vectors
+  - [x] Anti-entropy handles tombstone exchange
+  - [x] Prevents deleted keys from resurrecting during sync
+  - Status: ✅ Complete
 
 - [ ] **Cluster Test Suite**
   - [ ] Network partition simulation tests

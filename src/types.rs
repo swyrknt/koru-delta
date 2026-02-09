@@ -126,6 +126,34 @@ impl FullKey {
     }
 }
 
+/// A tombstone marking a deleted key.
+///
+/// Tombstones are crucial for distributed systems to ensure deletes
+/// are propagated and don't get "resurrected" during anti-entropy sync.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tombstone {
+    /// The key that was deleted.
+    pub key: FullKey,
+    /// When the deletion occurred.
+    pub deleted_at: DateTime<Utc>,
+    /// Vector clock at time of deletion.
+    pub vector_clock: VectorClock,
+    /// Node that performed the deletion.
+    pub deleted_by: String,
+}
+
+impl Tombstone {
+    /// Create a new tombstone.
+    pub fn new(key: FullKey, deleted_by: impl Into<String>, vector_clock: VectorClock) -> Self {
+        Self {
+            key,
+            deleted_at: Utc::now(),
+            vector_clock,
+            deleted_by: deleted_by.into(),
+        }
+    }
+}
+
 /// A versioned value with metadata.
 ///
 /// Every write in KoruDelta creates a new version. This structure captures

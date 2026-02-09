@@ -731,10 +731,29 @@ fn handle_message(
             }
         }
 
-        Message::SyncRequest { node_id: _, keys } => {
+        Message::SyncRequest { node_id: _, keys, tombstones: known_tombstones } => {
             let mut updates = Vec::new();
+            let mut tombstones_to_send = Vec::new();
 
             for (key, last_version) in keys {
+                // Check if this key has a tombstone
+                if let Some(tombstone) = storage.get_tombstone(&key.namespace, &key.key) {
+                    // Check if the peer already knows about this tombstone
+                    let peer_knows = known_tombstones
+                        .get(&key)
+                        .map(|peer_clock| {
+                            // If our tombstone clock dominates peer's, they need update
+                            tombstone.vector_clock.compare(peer_clock)
+                                != Some(std::cmp::Ordering::Less)
+                        })
+                        .unwrap_or(true); // If peer doesn't have this tombstone, send it
+                    
+                    if peer_knows {
+                        tombstones_to_send.push(tombstone);
+                    }
+                    continue; // Skip checking for updates on deleted keys
+                }
+
                 if let Ok(history) = storage.history(&key.namespace, &key.key) {
                     // Find updates since the last known version.
                     let new_versions: Vec<_> = match last_version {
@@ -775,9 +794,17 @@ fn handle_message(
                 }
             }
 
+            // Send tombstones for keys the peer knows about but we have deleted
+            for tombstone in storage.get_all_tombstones() {
+                if !known_tombstones.contains_key(&tombstone.key) {
+                    tombstones_to_send.push(tombstone);
+                }
+            }
+
             Ok(Some(Message::SyncResponse {
                 node_id: node_id.clone(),
                 updates,
+                tombstones: tombstones_to_send,
             }))
         }
 
@@ -898,18 +925,32 @@ async fn run_anti_entropy(
                 }
             }
             
+            // Get our known tombstones for tombstone propagation
+            let our_tombstones: HashMap<FullKey, VectorClock> = storage
+                .get_all_tombstones()
+                .into_iter()
+                .map(|t| (t.key.clone(), t.vector_clock))
+                .collect();
+            
             // Send sync request to peer
             match Connection::connect(peer.address).await {
                 Ok(mut conn) => {
                     let request = Message::SyncRequest {
                         node_id: node_id.clone(),
                         keys: keys_to_check,
+                        tombstones: our_tombstones,
                     };
                     
                     match conn.request(&request).await {
-                        Ok(Message::SyncResponse { updates, .. }) => {
+                        Ok(Message::SyncResponse { updates, tombstones, .. }) => {
                             // Apply updates from peer
                             for (key, versions) in updates {
+                                // Skip if we have a tombstone for this key
+                                if storage.has_tombstone(&key.namespace, &key.key) {
+                                    tracing::trace!("Skipping update for deleted key {:?}", key);
+                                    continue;
+                                }
+                                
                                 for version in versions {
                                     // TODO: Use vector clock merge instead of blind put
                                     if let Err(e) = storage.put(&key.namespace, &key.key, (*version.value).clone()) {
@@ -917,6 +958,43 @@ async fn run_anti_entropy(
                                     }
                                 }
                             }
+                            
+                            // Apply tombstones from peer
+                            for tombstone in tombstones {
+                                // Check if we already have this key
+                                if let Ok(existing) = storage.get(&tombstone.key.namespace, &tombstone.key.key) {
+                                    // Check if the peer's tombstone causally supersedes our value
+                                    match tombstone.vector_clock.compare(existing.vector_clock()) {
+                                        Some(std::cmp::Ordering::Greater) => {
+                                            // Peer has newer tombstone, delete our value
+                                            if let Err(e) = storage.delete_causal(
+                                                &tombstone.key.namespace,
+                                                &tombstone.key.key,
+                                                tombstone.vector_clock.clone(),
+                                                &tombstone.deleted_by,
+                                            ) {
+                                                tracing::debug!("Failed to apply tombstone: {}", e);
+                                            } else {
+                                                tracing::info!(
+                                                    "Applied tombstone for {:?} from peer",
+                                                    tombstone.key
+                                                );
+                                            }
+                                        }
+                                        _ => {
+                                            // Our value is newer or concurrent, keep it
+                                            tracing::trace!(
+                                                "Skipping tombstone for {:?} - local value is newer",
+                                                tombstone.key
+                                            );
+                                        }
+                                    }
+                                } else if !storage.has_tombstone(&tombstone.key.namespace, &tombstone.key.key) {
+                                    // We don't have this key and don't have a tombstone - record the tombstone
+                                    storage.insert_tombstone(tombstone);
+                                }
+                            }
+                            
                             tracing::trace!("Anti-entropy completed with {}", peer.node_id);
                         }
                         Ok(_) => {

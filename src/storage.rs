@@ -14,7 +14,7 @@ use crate::causal_graph::CausalGraph;
 use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
 use crate::reference_graph::ReferenceGraph;
-use crate::types::{CausalWriteResult, FullKey, HistoryEntry, VectorClock, VersionedValue};
+use crate::types::{CausalWriteResult, FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use koru_lambda_core::DistinctionEngine;
@@ -67,6 +67,11 @@ pub struct CausalStorage {
     /// Maps version_id → Arc<JsonValue>
     /// Same values share the same Arc allocation
     value_store: DashMap<String, Arc<JsonValue>>,
+
+    /// Tombstones for deleted keys
+    /// Maps FullKey → Tombstone
+    /// Prevents deleted keys from reappearing during sync
+    tombstones: DashMap<FullKey, Tombstone>,
 }
 
 impl CausalStorage {
@@ -82,6 +87,7 @@ impl CausalStorage {
             current_state: DashMap::new(),
             version_store: DashMap::new(),
             value_store: DashMap::new(),
+            tombstones: DashMap::new(),
         }
     }
 
@@ -388,6 +394,128 @@ impl CausalStorage {
         );
 
         Ok(versioned)
+    }
+
+    /// Delete a key with causal tracking for distributed consistency.
+    ///
+    /// Creates a tombstone record with vector clock for proper propagation
+    /// across the cluster. Tombstones are necessary to ensure deletes are
+    /// not resurrected during anti-entropy synchronization.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace containing the key
+    /// * `key` - The key to delete
+    /// * `deletion_clock` - Vector clock at time of deletion
+    /// * `deleted_by` - Node ID that performed the deletion
+    ///
+    /// # Returns
+    ///
+    /// Returns the tombstone record, or error if key not found.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut clock = VectorClock::new();
+    /// clock.increment("node1");
+    /// let tombstone = storage.delete_causal("users", "alice", clock, "node1")?;
+    /// ```
+    pub fn delete_causal(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        mut deletion_clock: VectorClock,
+        deleted_by: impl Into<String>,
+    ) -> DeltaResult<Tombstone> {
+        let full_key = FullKey::new(namespace, key);
+        let timestamp = Utc::now();
+
+        // Get existing value to establish causality
+        let previous_version = self
+            .current_state
+            .get(&full_key)
+            .map(|v| {
+                // Merge with existing vector clock to maintain causality
+                deletion_clock.merge(&v.vector_clock);
+                v.write_id.clone()
+            });
+
+        // Remove from current state (tombstone)
+        self.current_state.remove(&full_key);
+
+        // Increment our clock to mark this deletion event
+        deletion_clock.increment("local");
+
+        // Generate write ID for tombstone
+        let write_id = format!("tombstone_{:?}_{}", full_key, timestamp.timestamp_nanos_opt().unwrap_or(0));
+
+        // Create versioned tombstone value
+        let tombstone_value = Arc::new(serde_json::Value::Null);
+        let versioned_tombstone = VersionedValue::new(
+            tombstone_value,
+            timestamp,
+            write_id.clone(),
+            "tombstone".to_string(),
+            previous_version,
+            deletion_clock.clone(),
+        );
+
+        // Store in version store for history/audit
+        self.version_store.insert(write_id, versioned_tombstone);
+
+        // Create and store tombstone record
+        let deleted_by = deleted_by.into();
+        let tombstone = Tombstone::new(full_key.clone(), deleted_by.clone(), deletion_clock);
+        self.tombstones.insert(full_key.clone(), tombstone.clone());
+
+        tracing::info!(
+            key = ?full_key,
+            deleted_by = %deleted_by,
+            "Created tombstone with vector clock"
+        );
+
+        Ok(tombstone)
+    }
+
+    /// Get a tombstone record for a deleted key.
+    ///
+    /// Returns None if the key is not deleted (still exists or never existed).
+    pub fn get_tombstone(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+    ) -> Option<Tombstone> {
+        let full_key = FullKey::new(namespace, key);
+        self.tombstones.get(&full_key).map(|t| t.clone())
+    }
+
+    /// Check if a key has a tombstone (was deleted).
+    pub fn has_tombstone(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+    ) -> bool {
+        let full_key = FullKey::new(namespace, key);
+        self.tombstones.contains_key(&full_key)
+    }
+
+    /// Get all tombstones for anti-entropy synchronization.
+    ///
+    /// Returns a vector of all tombstone records that need to be
+    /// propagated to other nodes in the cluster.
+    pub fn get_all_tombstones(&self) -> Vec<Tombstone> {
+        self.tombstones
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
+    }
+
+    /// Insert a tombstone directly (used during anti-entropy sync).
+    ///
+    /// This method allows recording a tombstone from a remote node
+    /// without performing a local deletion.
+    pub fn insert_tombstone(&self, tombstone: Tombstone) {
+        self.tombstones.insert(tombstone.key.clone(), tombstone);
     }
 
     /// Get the current (latest) value for a key.

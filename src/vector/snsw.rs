@@ -205,7 +205,7 @@ pub struct DistinctionOverlap {
 /// navigation.
 ///
 /// # Formula
-/// ```
+/// ```text
 /// synthesis_proximity = w1 * geometric + w2 * semantic + w3 * causal
 /// ```
 ///
