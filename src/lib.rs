@@ -154,7 +154,7 @@ pub mod wasm;
 // Public API exports
 pub use core::{CoreConfig, DatabaseStats, KoruDelta, MemoryConfig};
 pub use error::{DeltaError, DeltaResult};
-pub use types::{CausalWriteResult, FullKey, HistoryEntry, VectorClock, VersionedValue};
+pub use types::{CausalWriteResult, FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue};
 
 // Query exports
 pub use query::{
@@ -183,7 +183,7 @@ pub use subscriptions::{
 
 // Cluster exports (non-WASM only)
 #[cfg(not(target_arch = "wasm32"))]
-pub use cluster::{ClusterConfig, ClusterNode, ClusterStatus};
+pub use cluster::{ClusterConfig, ClusterNode, ClusterStatus, PartitionState};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use network::{NodeId, PeerInfo, PeerStatus};

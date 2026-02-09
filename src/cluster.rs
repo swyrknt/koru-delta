@@ -91,7 +91,7 @@ struct ClusterState {
 
 /// State of the cluster from a partition perspective.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PartitionState {
+pub enum PartitionState {
     /// Normal operation - have quorum.
     Healthy,
     /// Partition detected - lost quorum.
@@ -260,7 +260,12 @@ impl ClusterNode {
     }
 
     /// Get the current partition state.
-    pub async fn partition_state(&self) -> &'static str {
+    pub async fn partition_state(&self) -> PartitionState {
+        self.state.partition_state().await
+    }
+    
+    /// Get the current partition state as a string.
+    pub async fn partition_state_str(&self) -> &'static str {
         match self.state.partition_state().await {
             PartitionState::Healthy => "healthy",
             PartitionState::Partitioned => "partitioned",
