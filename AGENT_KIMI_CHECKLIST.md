@@ -3,7 +3,7 @@
 **Document Purpose:** Track progress toward v2.2.0 - "Distinction-Based Vector Search"  
 **Current Version:** 2.2.0 (SNSW production-ready)  
 **Target Version:** 2.3.0 (learned synthesis weights + abstraction detection)  
-**Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 Clustering Hardening - 🚧 IN PROGRESS)  
+**Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 Clustering Hardening - 80% Complete)  
 **Owner:** Agent Kimi
 
 ---
@@ -414,11 +414,12 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] Concurrent reconciliation with all healthy peers
   - Was: module exists but not running → Now: actively syncing
 
-- [ ] **Proper Conflict Resolution**
-  - [ ] Vector clock implementation for causality tracking
-  - [ ] Replace last-write-wins with causal merge
-  - [ ] Handle concurrent writes to same key
-  - Currently: `storage.rs:100-136` just overwrites
+- [x] **Proper Conflict Resolution (Foundation)**
+  - [x] Vector clock implementation for causality tracking (`types.rs:15-130`)
+  - [x] Vector clock field added to VersionedValue
+  - [ ] Vector clock merge on write (next: integrate with storage.put)
+  - [ ] Causal merge strategy (next: implement merge logic)
+  - Status: Foundation complete, integration pending
 
 - [ ] **Partition Handling**
   - [ ] Split-brain detection (quorum-based)
