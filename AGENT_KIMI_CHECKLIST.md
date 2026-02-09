@@ -414,12 +414,13 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] Concurrent reconciliation with all healthy peers
   - Was: module exists but not running → Now: actively syncing
 
-- [x] **Proper Conflict Resolution (Foundation)**
+- [x] **Proper Conflict Resolution**
   - [x] Vector clock implementation for causality tracking (`types.rs:15-130`)
   - [x] Vector clock field added to VersionedValue
-  - [ ] Vector clock merge on write (next: integrate with storage.put)
-  - [ ] Causal merge strategy (next: implement merge logic)
-  - Status: Foundation complete, integration pending
+  - [x] Vector clock merge on write (`storage.rs:166-270` put_causal)
+  - [x] Causal merge strategy (`storage.rs:271-348` merge_concurrent_writes)
+  - [x] Last-write-wins merge with vector clock merging
+  - Status: ✅ Complete
 
 - [ ] **Partition Handling**
   - [ ] Split-brain detection (quorum-based)

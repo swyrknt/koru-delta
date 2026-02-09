@@ -41,6 +41,11 @@ pub struct ClusterConfig {
     pub gossip_interval: Duration,
     /// Timeout for peer connections (default: 5 seconds).
     pub connection_timeout: Duration,
+    /// Minimum number of peers required for quorum (default: 1).
+    /// Set to (expected_cluster_size / 2) + 1 for majority quorum.
+    pub quorum_size: usize,
+    /// Whether to require quorum for writes (default: false).
+    pub require_quorum_for_writes: bool,
 }
 
 impl Default for ClusterConfig {
@@ -51,6 +56,8 @@ impl Default for ClusterConfig {
             heartbeat_interval: Duration::from_secs(5),
             gossip_interval: Duration::from_secs(10),
             connection_timeout: Duration::from_secs(5),
+            quorum_size: 1,                    // Default: single node is sufficient
+            require_quorum_for_writes: false,  // Default: allow writes without quorum
         }
     }
 }
@@ -78,13 +85,49 @@ impl ClusterConfig {
 struct ClusterState {
     /// Known peers in the cluster.
     peers: DashMap<NodeId, PeerInfo>,
+    /// Partition state tracking.
+    partition_state: RwLock<PartitionState>,
+}
+
+/// State of the cluster from a partition perspective.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PartitionState {
+    /// Normal operation - have quorum.
+    Healthy,
+    /// Partition detected - lost quorum.
+    Partitioned,
+    /// Recovering from partition - reconciling with peers.
+    Recovering,
 }
 
 impl ClusterState {
     fn new(_advertised_addr: SocketAddr) -> Self {
         Self {
             peers: DashMap::new(),
+            partition_state: RwLock::new(PartitionState::Healthy),
         }
+    }
+    
+    /// Check if we have quorum based on peer count.
+    fn has_quorum(&self, quorum_size: usize) -> bool {
+        // Count healthy peers + ourselves
+        let healthy_peers = self.peers
+            .iter()
+            .filter(|p| matches!(p.status, PeerStatus::Healthy))
+            .count();
+        let total_nodes = healthy_peers + 1; // +1 for ourselves
+        total_nodes >= quorum_size
+    }
+    
+    /// Get current partition state.
+    async fn partition_state(&self) -> PartitionState {
+        *self.partition_state.read().await
+    }
+    
+    /// Update partition state.
+    async fn set_partition_state(&self, state: PartitionState) {
+        let mut guard = self.partition_state.write().await;
+        *guard = state;
     }
 
     /// Add or update a peer.
@@ -199,6 +242,32 @@ impl ClusterNode {
         *self.running.read().await
     }
 
+    /// Check if the cluster has quorum (enough healthy peers).
+    pub async fn has_quorum(&self) -> bool {
+        self.state.has_quorum(self.config.quorum_size)
+    }
+
+    /// Check if writes should be allowed based on quorum requirements.
+    ///
+    /// Returns `true` if:
+    /// - Quorum is not required for writes, OR
+    /// - Quorum is required and we have it
+    pub async fn is_write_allowed(&self) -> bool {
+        if !self.config.require_quorum_for_writes {
+            return true;
+        }
+        self.has_quorum().await
+    }
+
+    /// Get the current partition state.
+    pub async fn partition_state(&self) -> &'static str {
+        match self.state.partition_state().await {
+            PartitionState::Healthy => "healthy",
+            PartitionState::Partitioned => "partitioned",
+            PartitionState::Recovering => "recovering",
+        }
+    }
+
     /// Start the cluster node.
     ///
     /// This starts the network listener and background tasks for:
@@ -264,6 +333,7 @@ impl ClusterNode {
         let state = Arc::clone(&self.state);
         let node_id = self.node_id.clone();
         let heartbeat_interval = self.config.heartbeat_interval;
+        let quorum_size = self.config.quorum_size;
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         tokio::spawn(async move {
@@ -271,7 +341,7 @@ impl ClusterNode {
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
-                        send_heartbeats(&state, &node_id).await;
+                        send_heartbeats(&state, &node_id, quorum_size).await;
                     }
                     _ = shutdown_rx.recv() => {
                         break;
@@ -716,7 +786,7 @@ fn handle_message(
 }
 
 /// Send heartbeat pings to all peers.
-async fn send_heartbeats(state: &Arc<ClusterState>, node_id: &NodeId) {
+async fn send_heartbeats(state: &Arc<ClusterState>, node_id: &NodeId, quorum_size: usize) {
     let peers = state.get_peers();
 
     for peer in peers {
@@ -743,6 +813,26 @@ async fn send_heartbeats(state: &Arc<ClusterState>, node_id: &NodeId) {
 
     // Prune stale peers.
     state.prune_stale_peers(Duration::from_secs(60));
+    
+    // Check partition state after updating peer statuses
+    let current_state = state.partition_state().await;
+    let has_quorum = state.has_quorum(quorum_size);
+    
+    match (current_state, has_quorum) {
+        (PartitionState::Healthy, false) => {
+            // Lost quorum - entering partitioned state
+            tracing::warn!("Lost quorum! Entering partitioned state (healthy peers < {})", quorum_size);
+            state.set_partition_state(PartitionState::Partitioned).await;
+        }
+        (PartitionState::Partitioned, true) => {
+            // Regained quorum - entering recovery
+            tracing::info!("Regained quorum! Entering recovery state");
+            state.set_partition_state(PartitionState::Recovering).await;
+        }
+        _ => {
+            // State unchanged
+        }
+    }
 }
 
 /// Send gossip announcements to all peers.
