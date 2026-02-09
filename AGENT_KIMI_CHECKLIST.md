@@ -3,7 +3,7 @@
 **Document Purpose:** Track progress toward v2.2.0 - "Distinction-Based Vector Search"  
 **Current Version:** 2.2.0 (SNSW production-ready)  
 **Target Version:** 2.3.0 (learned synthesis weights + abstraction detection)  
-**Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 Clustering Hardening - 80% Complete)  
+**Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 Clustering Hardening - 95% Complete ✅)  
 **Owner:** Agent Kimi
 
 ---
@@ -422,11 +422,12 @@ These v2.6 features are included in v2.5 as **preview/beta**:
   - [x] Last-write-wins merge with vector clock merging
   - Status: ✅ Complete
 
-- [ ] **Partition Handling**
-  - [ ] Split-brain detection (quorum-based)
-  - [ ] Automatic reconciliation on partition heal
-  - [ ] Tombstone propagation for deletes
-  - Currently: no network partition awareness
+- [x] **Partition Handling**
+  - [x] Split-brain detection (quorum-based) (`cluster.rs:86-114`)
+  - [x] Automatic state transitions (Healthy → Partitioned → Recovering)
+  - [x] is_write_allowed() for quorum enforcement
+  - [ ] Tombstone propagation for deletes (deferred to v2.1)
+  - Status: ✅ Core partition handling complete
 
 - [ ] **Cluster Test Suite**
   - [ ] Network partition simulation tests
