@@ -1,8 +1,8 @@
 # KoruDelta: Execution Checklist
 
 **Document Purpose:** Track progress toward v2.0.0 - "The Causal Database"  
-**Current Version:** 2.2.0 (SNSW production-ready)  
-**Target Version:** 2.3.0 (learned synthesis weights + abstraction detection)  
+**Current Version:** 2.0.0-rc (release candidate)  
+**Target Version:** 2.0.0 (The Causal Database - complete)  
 **Last Updated:** 2026-02-08 (Phase 2 ✅, Phase 2.5 ✅, Phase 3 ✅, Phase 4 ✅ - JS Bindings Complete)  
 **Owner:** Agent Kimi
 
@@ -534,18 +534,34 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
   - [x] `examples/README.md` - Platform-specific usage guide
   - [x] Inline code documentation in `src/wasm.rs`
 
-### Phase 5: Documentation & Release (Week 4)
+### Phase 4.5: Browser Enhancements (2-3 days)
+**Essential features for production browser usage**
+
+- [ ] **IndexedDB Persistence**
+  - [ ] Implement WASM storage adapter using IndexedDB
+  - [ ] Auto-save on changes
+  - [ ] Auto-load on startup
+  - [ ] Graceful fallback to memory-only if IndexedDB unavailable
+  - Status: 🚧 Not started - 1-2 days work
+
+- [ ] **Multi-Tab Synchronization**
+  - [ ] BroadcastChannel API for cross-tab communication
+  - [ ] Sync changes between tabs automatically
+  - [ ] Handle tab focus/blur for lifecycle management
+  - Status: 🚧 Not started - 4-6 hours work
+
+### Phase 5: Documentation & Release (2-3 days)
 - [ ] JavaScript API documentation
 - [ ] Migration guide (native → WASM)
 - [ ] Performance benchmarks (JS vs native)
 - [ ] npm package publication
 - [ ] GitHub release with WASM assets
+- [ ] v2.0.0 tag and release notes
 
-### Deferred to v2.1.0
-- [ ] IndexedDB persistence for browser
-- [ ] WebGL-accelerated vector search
-- [ ] Multi-tab synchronization
-- [ ] Service Worker integration
+### Future (v2.1.0+)
+- [ ] WebGL-accelerated vector search (complex, niche use case)
+- [ ] Service Worker integration (can start as example)
+- [ ] Web playground interactive demo
 
 ---
 
@@ -555,10 +571,12 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
 |-------|----------|-------------|
 | Phase 1 | 3-4 days | Runtime trait + implementations |
 | Phase 2 | 4-5 days | Core module migration |
-| Phase 3 | 3-4 days | Feature parity + tests |
+| Phase 2.5 | 3-4 days | Clustering hardening (tombstones, vector clocks) |
+| Phase 3 | 3-4 days | WASM feature parity + tests |
 | Phase 4 | 3-4 days | JS bindings + examples |
+| Phase 4.5 | 2-3 days | IndexedDB persistence + multi-tab sync |
 | Phase 5 | 2-3 days | Docs + release |
-| **Total** | **15-20 days** | **Full WASM support** |
+| **Total** | **20-25 days** | **Full v2.0.0 release** |
 
 ---
 
