@@ -320,10 +320,10 @@ impl IndexedDbStorage {
             // Create object stores if they don't exist
             let store_names = db.object_store_names();
             let has_data_store = (0..store_names.length()).any(|i| {
-                store_names.get(i).map_or(false, |name| name == STORE_DATA)
+                store_names.get(i).is_some_and(|name| name == STORE_DATA)
             });
             let has_meta_store = (0..store_names.length()).any(|i| {
-                store_names.get(i).map_or(false, |name| name == STORE_METADATA)
+                store_names.get(i).is_some_and(|name| name == STORE_METADATA)
             });
 
             if !has_data_store {
@@ -368,10 +368,8 @@ impl IndexedDbStorage {
                     }
                 }
                 // Check for error
-                if let Ok(error) = req.error() {
-                    if let Some(err) = error {
-                        return Err(JsValue::from_str(&format!("IndexedDB error: {:?}", err)));
-                    }
+                if let Ok(Some(err)) = req.error() {
+                    return Err(JsValue::from_str(&format!("IndexedDB error: {:?}", err)));
                 }
             }
         }
