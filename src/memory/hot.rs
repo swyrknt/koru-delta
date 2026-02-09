@@ -21,7 +21,9 @@
 /// - Recent access = hot
 /// - Low reference count + old access = evict to Warm
 use crate::causal_graph::DistinctionId;
-use crate::types::{FullKey, VectorClock, VersionedValue};
+use crate::types::{FullKey, VersionedValue};
+#[cfg(test)]
+use crate::types::VectorClock;
 use dashmap::DashMap;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};

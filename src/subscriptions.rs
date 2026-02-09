@@ -28,7 +28,9 @@
 /// ```
 use crate::error::{DeltaError, DeltaResult};
 use crate::query::Filter;
-use crate::types::{VectorClock, VersionedValue};
+use crate::types::VersionedValue;
+#[cfg(test)]
+use crate::types::VectorClock;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};

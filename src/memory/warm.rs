@@ -22,7 +22,9 @@
 /// Warm memory is disk-backed. Chronicle files are append-only
 /// for durability. Index is in memory for fast lookup.
 use crate::causal_graph::DistinctionId;
-use crate::types::{FullKey, VectorClock, VersionedValue};
+use crate::types::{FullKey, VersionedValue};
+#[cfg(test)]
+use crate::types::VectorClock;
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use std::collections::VecDeque;
