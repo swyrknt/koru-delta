@@ -11,6 +11,11 @@
 ///   kdelta list [namespace]               - List namespaces or keys
 ///   kdelta start [--join <addr>]          - Start a cluster node
 ///   kdelta peers                          - Show peer nodes
+
+// This binary is not supported on WASM targets
+#[cfg(target_arch = "wasm32")]
+compile_error!("The kdelta CLI binary is not supported on WASM targets. Use the library API instead.");
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};

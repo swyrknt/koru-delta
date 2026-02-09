@@ -218,7 +218,6 @@ pub use native_impl::TokioRuntime;
 mod wasm_impl {
     use super::*;
     use futures::channel::{mpsc, oneshot};
-    use futures::SinkExt;
     use std::sync::{Arc, Mutex};
     use wasm_bindgen::prelude::*;
 
@@ -434,11 +433,13 @@ mod wasm_impl {
     }
 
     /// Simple watch channel implementation for WASM
+    #[allow(dead_code)]
     pub struct WasmWatch<T> {
         value: Arc<Mutex<T>>,
         version: Arc<Mutex<u64>>,
     }
 
+    #[allow(dead_code)]
     impl<T: Clone> WasmWatch<T> {
         fn new(initial: T) -> Self {
             Self {

@@ -46,10 +46,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+#[cfg(not(target_arch = "wasm32"))]
 use futures::FutureExt;
 use koru_lambda_core::DistinctionEngine;
 use serde::Serialize;
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::{debug, error, info, trace, warn};
+#[cfg(target_arch = "wasm32")]
+use tracing::{debug, info, trace};
 
 use crate::auth::{AuthConfig, AuthManager};
 use crate::runtime::sync::RwLock;
@@ -195,10 +199,13 @@ impl Default for ReconciliationConfig {
 #[derive(Clone)]
 pub struct KoruDeltaGeneric<R: Runtime> {
     /// Async runtime for spawning tasks
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     runtime: R,
     /// Configuration
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     config: CoreConfig,
     /// Database path for persistence (None = in-memory only)
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     db_path: Option<PathBuf>,
     /// The underlying storage engine
     storage: Arc<CausalStorage>,
@@ -232,6 +239,7 @@ pub struct KoruDeltaGeneric<R: Runtime> {
     cluster: Option<Arc<ClusterNode>>,
     /// Shutdown signal
     shutdown_tx: WatchSender<bool>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     shutdown_rx: WatchReceiver<bool>,
 }
 
@@ -553,6 +561,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ///
     /// This is the "heartbeat" of the memory system - continuously
     /// moves data based on temperature (access patterns).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     async fn run_consolidation(
         hot: &Arc<RwLock<HotMemory>>,
         warm: &Arc<RwLock<WarmMemory>>,
@@ -607,6 +616,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ///
     /// Natural selection for data - high-fitness distinctions survive,
     /// low-fitness (noise) gets marked for garbage collection.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     async fn run_distillation(
         _hot: &Arc<RwLock<HotMemory>>,
         warm: &Arc<RwLock<WarmMemory>>,
@@ -638,6 +648,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ///
     /// Creates a minimal "DNA" representation of the causal graph
     /// that can regenerate the full system state.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     async fn run_genome_update(
         deep: &Arc<RwLock<DeepMemory>>,
     ) {
