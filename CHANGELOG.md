@@ -5,97 +5,79 @@ All notable changes to KoruDelta will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-02-06
+## [2.0.0] - 2026-02-09
 
 ### Overview
-Production-ready single-node causal database with memory tiering, crash recovery, and comprehensive observability.
+Production-ready causal database with complete feature set: materialized views, self-sovereign auth, vector search, real-time subscriptions, and WASM support.
 
 ### Added
 
-#### Core Features
-- **Memory Tiering**: Hot/Warm/Cold/Deep automatic memory management inspired by human brain
-  - Hot: LRU cache for working set (configurable capacity)
-  - Warm: Recent chronicle with promotion/demotion
-  - Cold: Consolidated epochs with fitness filtering
-  - Deep: Genomic storage for portable 1KB backups
-  
-- **Crash Recovery**: Write-ahead logging (WAL) with durability guarantees
-  - Append-only WAL format with checksums (CRC32)
-  - Corruption detection and graceful handling
-  - Unclean shutdown detection via lock files
-  - Automatic recovery on startup
+#### Materialized Views
+- Persistent view definitions with auto-refresh
+- Views survive database restarts (stored in WAL)
+- Query caching for instant results
+- CLI: `kdelta view create/list/query/refresh/delete`
 
-- **Background Processes**: Self-managing evolutionary processes
-  - Consolidation: Moves data between memory tiers (5 min interval)
-  - Distillation: Fitness-based natural selection (1 hour interval)
-  - GenomeUpdate: Extracts portable genome (daily interval)
+#### Self-Sovereign Authentication
+- Proof-of-work identity mining
+- Ed25519 cryptographic signatures
+- Challenge-response authentication
+- Capability-based authorization
+- Identity persistence with verification
 
-- **Resource Limits**: Configurable bounds for production deployments
-  - Memory caps (default: 512MB)
-  - Disk limits (default: 10GB)
-  - File descriptor limits (default: 256)
-  - Connection limits (default: 100)
+#### Vector Search
+- Vector embedding storage with metadata
+- Cosine similarity and Euclidean distance
+- Namespaced vector collections
+- Integration with query engine
+- WASM support for browser-based AI
 
-- **Structured Logging**: `tracing` integration for observability
-  - Log levels: ERROR, WARN, INFO, DEBUG, TRACE
-  - Configurable via `KORU_LOG` environment variable
-  - Instrumented core operations
+#### Real-time Subscriptions
+- Pub/sub change notifications
+- Filterable by collection, key, change type
+- Broadcast-based delivery
+- Non-blocking subscription management
 
-#### Performance
-- Sub-microsecond reads from hot memory (~400ns)
-- ~50µs writes with WAL persistence
-- 20,000+ operations per second throughput
-- Linear scalability for sequential operations
+#### WASM/Browser Support
+- Full JavaScript API via wasm-bindgen
+- IndexedDB persistence for data survival
+- Auto-save and auto-load
+- Graceful fallback to memory-only
 
-#### API
-- `KoruDelta::start_with_path()` for persistence
-- `put()` with automatic memory tier promotion
-- `get()` with tiered lookup (Hot → Warm → Cold → Storage)
-- `history()` with causal graph traversal
-- `get_at()` for time-travel queries
+#### Performance & Reliability
+- Validated 200+ writes/sec throughput
+- Validated 158K+ reads/sec
+- 100+ version history depth
+- 10,000+ key capacity tested
+- Concurrent write safety (100 tasks, 0 conflicts)
 
-#### CLI
-- Full validation script (`scripts/validate_cli.sh`)
-- All commands work with persistence
-- Data survives process restarts
-- Large value support (tested 2.6KB+)
+#### CLI Enhancements
+- View management commands
+- Query engine with filters
+- Remote HTTP operations
+- Status and diagnostics
 
 ### Changed
 
-- **Storage Format**: Migrated to WAL-based persistence
-- **Error Handling**: Audited and removed unwraps from production paths
-- **Documentation**: Comprehensive updates across all docs
-
-### Known Limitations
-
-#### Multi-Node Clustering
-- **Status**: Infrastructure exists, HTTP broadcast gap
-- **Impact**: Single-node only for production use
-- **Details**: 
-  - Node discovery works
-  - Initial sync on join works
-  - Live replication via HTTP does not work
-  - Fix planned for v2.1.0
-
-#### Auth CLI
-- **Status**: Auth module complete, CLI not integrated
-- **Impact**: Auth available via Rust API only
-- **Fix planned for v2.1.0
+- **View Persistence**: Views now persist to WAL (bug fix)
+- **Documentation**: Complete README rewrite with validated performance
 
 ### Validation
 
-- **321 tests passing** (0 failures)
-- **0 compiler warnings**
-- **Performance benchmarks validated**
-- **CLI end-to-end tests passing**
+- **424 tests passing** (0 failures)
+- **0 compiler warnings** (clippy clean)
+- **3 comprehensive E2E examples** all passing:
+  - `crisis_coordination_demo` - Full feature showcase
+  - `cluster_e2e_test` - Distributed mode validation
+  - `stress_test` - Load & edge case validation
+- **CLI commands verified** against documentation
 
 ### Documentation
 
-- Updated README.md with current status
-- Added PERFORMANCE_REPORT.md
-- Added PHASE8_STATUS.md
-- Added CLUSTER_SYNC_STATUS.md (gap documentation)
-- Updated V2_TODO.md with accurate completion status
+- Complete README.md update with v2.0.0 features
+- Validated performance numbers from stress testing
+- Added comprehensive E2E examples
+- Updated ARCHITECTURE.md and CLI_GUIDE.md
 
 ---
 

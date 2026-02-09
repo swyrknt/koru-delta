@@ -551,13 +551,60 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
 - [x] **Multi-Tab Synchronization** (Deferred - not critical for v2.0)
   - Status: ⏸️ Deferred to v2.1 - lower priority
 
-### Phase 5: Documentation & Release (2-3 days)
-- [ ] JavaScript API documentation
-- [ ] Migration guide (native → WASM)
-- [ ] Performance benchmarks (JS vs native)
-- [ ] npm package publication
-- [ ] GitHub release with WASM assets
-- [ ] v2.0.0 tag and release notes
+### Phase 5: Documentation Cleanup & Release (2-3 days)
+
+**5.1 Core Documentation Updates**
+- [ ] Update README.md for v2.0.0:
+  - Final feature list (views, auth, vectors, subscriptions, WASM)
+  - Current performance numbers
+  - Quickstart with `cargo install`
+  - Links to comprehensive examples
+  - Clear "single-node production ready" messaging
+- [ ] Verify ARCHITECTURE.md accuracy with current code
+- [ ] Verify CLI_GUIDE.md - test all commands still work
+- [ ] Write CHANGELOG.md v2.0.0 release notes
+
+**5.2 JavaScript/WASM Documentation**
+- [ ] JS_API.md - Document all wasm_bindgen methods
+- [ ] WASM_QUICKSTART.md - Browser usage guide
+- [ ] Build and publish npm package:
+  ```bash
+  wasm-pack build --target web --out-dir pkg
+  cd pkg && npm publish
+  ```
+
+**5.3 Repository Documentation Cleanup**
+- [ ] Delete progress/status documentation (outdated):
+  - All PHASE*.md files (PHASE6_*, PHASE7_*, PHASE8_*)
+  - All *_ASSESSMENT.md, *_REPORT.md, *_STATUS.md
+  - *_CHECKLIST.md (except AGENT_KIMI_CHECKLIST.md)
+  - CLUSTER_SYNC_STATUS.md, DIRECTION_CHECK.md
+  - IMPLEMENTATION_ROADMAP.md, REMAINING_WORK.md
+  - PROBLEM_VALIDATION.md, PRODUCT_ASSESSMENT.md
+  - REALITY_CHECK.md, STAKEHOLDER_VISION.md
+  - CORE_IDENTITY.md (redundant with DESIGN.md)
+  - ROADMAP.md (replace with CHANGELOG.md reference)
+- [ ] Consolidate if needed: Merge CORE_IDENTITY insights into DESIGN.md
+
+**5.4 GitHub Release**
+- [ ] Tag: `v2.0.0`
+- [ ] Release binaries: macOS (Intel/ARM), Linux, Windows
+- [ ] Release npm package: `koru-delta`
+- [ ] Comprehensive release notes
+
+**Final Documentation Structure:**
+```
+README.md           # Main entry point
+DESIGN.md           # Design philosophy
+ARCHITECTURE.md     # Technical architecture
+CLI_GUIDE.md        # Command reference
+CONTRIBUTING.md     # Contributor guidelines
+CHANGELOG.md        # Version history
+AGENT_KIMI_CHECKLIST.md  # This checklist
+LICENSE*            # Legal
+bindings/python/README.md  # Python bindings
+bindings/javascript/README.md  # JS bindings
+```
 
 ### Future (v2.1.0+)
 - [ ] WebGL-accelerated vector search (complex, niche use case)

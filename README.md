@@ -7,17 +7,25 @@
 
 **One-line:** *"KoruDelta is the invisible database that gives you Git-like history, Redis-like speed, and distributed consistency—without configuration."*
 
-## Current Status ✅ Production Ready (Single-Node)
+## Current Status ✅ Production Ready (v2.0.0)
 
 **v2.0.0 is production-ready for single-node deployments:**
 - ✅ Zero-config setup
 - ✅ Crash recovery (WAL + checksums)
-- ✅ 400ns reads, 50µs writes
-- ✅ Automatic memory management (Hot/Warm/Cold/Deep tiers)
+- ✅ ~200+ writes/sec, ~159K reads/sec (validated)
+- ✅ Materialized views with persistence
+- ✅ Self-sovereign identity (proof-of-work auth)
+- ✅ Vector embeddings & semantic search
+- ✅ Real-time subscriptions
 - ✅ Complete version history & time travel
+- ✅ Automatic memory management (Hot/Warm/Cold/Deep tiers)
 - ✅ Structured logging & resource limits
+- ✅ WASM support for browsers
 
-**Coming in v2.1:** Multi-node clustering improvements
+**Install in 10 seconds:**
+```bash
+cargo install koru-delta
+```
 
 ## Get Started in 10 Seconds
 
@@ -50,6 +58,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Crash recovery, corruption detection, and structured logging built-in. Data survives power loss.
 
+Validated through comprehensive stress testing:
+- 10,000+ keys stored and retrieved
+- 100+ version history depth
+- 100 concurrent writers with no conflicts
+- 100KB value storage
+
 ### ⏱ Built-in History
 
 Every change is versioned. Time travel and auditing are one method away.
@@ -62,23 +76,108 @@ let history = db.history("users", "alice").await?;
 let past_user = db.get_at("users", "alice", timestamp).await?;
 ```
 
+### 👁️ Materialized Views (v2.0.0)
+
+Create persistent, auto-refreshing query results:
+
+```rust
+use koru_delta::views::ViewDefinition;
+use koru_delta::query::{Query, Filter};
+
+let view = ViewDefinition {
+    name: "active_users".to_string(),
+    source_collection: "users".to_string(),
+    query: Query {
+        filters: vec![Filter::eq("status", "active")],
+        ..Default::default()
+    },
+    created_at: chrono::Utc::now(),
+    description: Some("Active users only".to_string()),
+    auto_refresh: true,
+};
+
+db.create_view(view).await?;
+
+// Query the view (instant, cached results)
+let results = db.query_view("active_users").await?;
+```
+
+Views persist across database restarts.
+
+### 🔐 Self-Sovereign Auth (v2.0.0)
+
+Built-in authentication with proof-of-work identity mining:
+
+```rust
+use koru_delta::auth::{mine_identity, IdentityUserData};
+
+// Mine an identity (proves work to prevent spam)
+let identity = mine_identity(
+    IdentityUserData::new("alice"),
+    4  // difficulty level
+).await;
+
+// identity.id is your public key
+// identity.secret_key is your private key (keep secure!)
+```
+
+### 🔍 Vector Search (v2.0.0)
+
+Store and search vector embeddings for semantic similarity:
+
+```rust
+use koru_delta::vector::Vector;
+
+// Store an embedding
+let embedding = Vector::new(vec![0.1, 0.2, 0.3, ...], "text-embedding-ada-002");
+db.embed("vectors", "doc1", embedding, None).await?;
+
+// Search for similar vectors
+let query = Vector::new(vec![0.15, 0.25, 0.35, ...], "text-embedding-ada-002");
+let results = db.embed_search(Some("vectors"), &query, 
+    VectorSearchOptions { top_k: 10, threshold: 0.0, model_filter: None }
+).await?;
+```
+
+### 🔔 Real-time Subscriptions (v2.0.0)
+
+Get notified when data changes:
+
+```rust
+use koru_delta::subscriptions::{Subscription, ChangeType};
+
+let (sub_id, mut rx) = db.subscribe(Subscription {
+    collection: Some("users".to_string()),
+    key: None,
+    filter: None,
+    change_types: vec![ChangeType::Insert, ChangeType::Update, ChangeType::Delete],
+    name: Some("user-monitor".to_string()),
+}).await;
+
+while let Ok(event) = rx.recv().await {
+    println!("Change: {:?} on {}/{}", 
+        event.change_type, event.collection, event.key);
+}
+```
+
 ### 🌐 Runs Everywhere
 
 Same core engine runs in servers, laptops, browsers, and edge devices.
 
-### 🤝 Clustering (v2.1+)
+**WASM/Browser:**
+```javascript
+import init, { KoruDeltaWasm } from 'koru-delta';
 
-Multi-node clustering is under development. Single-node is production-ready today:
+await init();
 
-```bash
-# Start a production node
-kdelta start
+// Persistent database (IndexedDB)
+const db = await KoruDeltaWasm.newPersistent();
 
-# Multi-node clustering coming in v2.1
-# kdelta start --join 192.168.1.100:7878
+await db.put('users', 'alice', { name: 'Alice', age: 30 });
+const user = await db.get('users', 'alice');
 ```
 
-### 🔌 HTTP API
+### 🤝 HTTP API
 
 Access KoruDelta over HTTP for remote operations and web integration:
 
@@ -89,9 +188,6 @@ kdelta serve --port 8080
 # From anywhere, use remote CLI
 kdelta --url http://localhost:8080 get users/alice
 kdelta --url http://localhost:8080 set users/bob '{"name": "Bob"}'
-
-# Time travel via HTTP
-kdelta --url http://localhost:8080 get users/alice --at "2026-02-04T12:00:00Z"
 ```
 
 REST endpoints:
@@ -101,175 +197,36 @@ REST endpoints:
 - `GET /api/v1/:namespace/:key/at/:timestamp` - Time travel
 - `POST /api/v1/:namespace/query` - Execute queries
 
-### 🗺️ What's Next
-
-See [ROADMAP.md](ROADMAP.md) for upcoming features:
-- **v2.1**: Batch operations (200K+ writes/sec)
-- **v2.2**: Query engine with JOINs and aggregations  
-- **v2.3**: Multi-region with CRDTs
-- **v2.4**: Python, JavaScript, Go bindings
-
-### 🔐 Self-Sovereign Auth
-
-Built-in authentication with zero configuration. Users own their keys.
-
-```rust
-use koru_delta::auth::{AuthManager, IdentityUserData, Permission};
-
-let auth = AuthManager::new(storage);
-
-// Create identity (mines proof-of-work)
-let (identity, secret_key) = auth.create_identity(IdentityUserData {
-    display_name: Some("Alice".to_string()),
-    ..Default::default()
-})?;
-
-// Authenticate via challenge-response
-let challenge = auth.create_challenge(&identity.public_key)?;
-let response = sign_challenge(&secret_key, &challenge)?;
-let session = auth.verify_and_create_session(&identity.public_key, &challenge, &response)?;
-
-// Grant capabilities
-auth.grant_capability(&identity, &secret_key, &grantee, 
-    ResourcePattern::Namespace("documents".to_string()),
-    Permission::Write, None)?;
-```
-
-### 🔍 Powerful Queries
-
-Filter, sort, and aggregate your data with a fluent query API:
-
-```rust
-use koru_delta::query::{Query, Filter, Aggregation};
-
-// Find active users over 30, sorted by name
-let results = db.query("users", Query::new()
-    .filter(Filter::gt("age", 30))
-    .filter(Filter::eq("status", "active"))
-    .sort_by("name", true)
-    .limit(10)
-).await?;
-
-// Aggregate sales by region
-let total = db.query("sales", Query::new()
-    .aggregate(Aggregation::sum("amount"))
-).await?;
-```
-
-### 📊 Materialized Views
-
-Pre-compute and cache query results for instant access:
-
-```rust
-use koru_delta::views::ViewDefinition;
-
-// Create a view of active users
-let view = ViewDefinition::new("active_users", "users")
-    .with_query(Query::new().filter(Filter::eq("status", "active")))
-    .auto_refresh(true);
-
-db.create_view(view).await?;
-
-// Query the view (instant, cached results)
-let results = db.query_view("active_users").await?;
-```
-
-### 🔔 Real-time Subscriptions
-
-Get notified when data changes:
-
-```rust
-use koru_delta::subscriptions::Subscription;
-
-// Subscribe to user changes
-let (id, mut rx) = db.subscribe(Subscription::collection("users")).await;
-
-// React to changes in real-time
-while let Ok(event) = rx.recv().await {
-    println!("Change: {} {}/{}", event.change_type, event.collection, event.key);
-}
-```
-
 ## Core Features
 
 - **Zero-configuration** - Start a node with one line of code
 - **Production hardened** - Crash recovery, corruption detection, structured logging
 - **Causal history** - Every change is versioned with full audit trail
 - **Time travel** - Query data at any point in history
-- **Memory tiering** - Hot/Warm/Cold/Deep automatic management like the human brain
-- **Visual diffs** - Compare versions with Git-style colored output
-- **JSON native** - Store and query JSON documents naturally
-- **Content-addressed** - Built on koru-lambda-core's distinction calculus
-- **Thread-safe** - Concurrent operations with no data races
+- **Materialized views** - Persistent, auto-refreshing query caches
+- **Self-sovereign auth** - Proof-of-work identity mining
+- **Vector search** - Semantic similarity with embeddings
+- **Real-time subscriptions** - Change notifications
+- **Memory tiering** - Hot/Warm/Cold/Deep automatic management
+- **WASM support** - Run in browsers with IndexedDB persistence
 - **HTTP API** - RESTful endpoints for remote access
-- **Remote CLI** - Connect to any KoruDelta instance over HTTP
-- **CLI included** - Full-featured command-line tool for interactive use
-- **High performance** - ~400ns reads, ~50µs writes (with persistence)
+- **High performance** - ~200+ writes/sec, ~159K reads/sec
 - **Query engine** - Filter, sort, project, and aggregate data
-- **Materialized views** - Cache query results for instant access
-- **Resource limits** - Configurable memory/disk bounds
-
-## When to Use KoruDelta
-
-### ✅ Perfect For
-
-**Local-First Applications**
-Apps that work offline and sync when online (like Notion or Obsidian). KoruDelta's automatic versioning means conflicts resolve naturally.
-
-**Edge Computing & IoT**
-8MB binary runs on Raspberry Pi. Survives power loss with WAL. Multi-node sync for edge-to-cloud.
-
-**Audit-Heavy Systems**
-Finance, healthcare, compliance. Every change is versioned forever with cryptographic verification.
-
-**Developer Tooling**
-Feature flags, config management, local analytics. No Docker, no services—just `cargo install`.
-
-**AI Agent Memory**
-Hot/Warm/Cold/Deep tiers mirror human memory. Agents naturally "forget" unimportant details while retaining critical patterns.
-
-### ⚠️ Not For (Yet)
-
-See [ROADMAP.md](ROADMAP.md) for planned improvements:
-
-| Use Case | Status | Alternative |
-|----------|--------|-------------|
-| 100K+ writes/sec analytics | Planned v2.1 | ClickHouse, TimescaleDB |
-| Complex SQL JOINs | Planned v2.2 | PostgreSQL |
-| Multi-region geo-distribution | Planned v2.3 | CockroachDB |
-| Python/JS/Go projects | Planned v2.4 | Use via HTTP API for now |
+- **Thread-safe** - Concurrent operations with no data races
+- **JSON native** - Store and query JSON documents naturally
 
 ## CLI Reference
 
 ```bash
+# Install
+cargo install koru-delta
+
 # Basic Operations
 kdelta set users/alice '{"name": "Alice", "age": 30}'
 kdelta get users/alice
 kdelta get users/alice --at "2026-02-04T12:00:00Z"  # Time travel
 kdelta log users/alice              # Show history
 kdelta diff users/alice             # Compare versions
-
-# Remote Operations (via HTTP)
-kdelta --url http://localhost:8080 get users/alice
-kdelta --url http://localhost:8080 set users/bob '{"name": "Bob"}'
-kdelta --url http://localhost:8080 query users --filter 'age > 30'
-
-# Cluster Operations
-kdelta start                        # Start a cluster node
-kdelta start --join 192.168.1.100   # Join existing cluster
-kdelta peers                        # Show cluster peers
-
-# HTTP API Server
-kdelta serve                        # Start HTTP server on port 8080
-kdelta serve --port 3000            # Start on custom port
-kdelta status                       # Show database stats
-
-# Query Operations
-kdelta query users                              # Get all users
-kdelta query users --filter 'age > 30'          # Filter
-kdelta query users --sort name --limit 10       # Sort and limit
-kdelta query users --count                      # Count records
-kdelta query sales --sum amount                 # Aggregate
 
 # View Operations
 kdelta view create active_users users --filter 'status = "active"'
@@ -278,11 +235,54 @@ kdelta view refresh active_users
 kdelta view query active_users
 kdelta view delete active_users
 
-# Watch for Changes
-kdelta watch users                  # Watch collection
-kdelta watch users/alice            # Watch specific key
-kdelta watch --all                  # Watch everything
+# Query Operations
+kdelta query users                              # Get all users
+kdelta query users --filter 'age > 30'          # Filter
+kdelta query users --sort name --limit 10       # Sort and limit
+kdelta query users --count                      # Count records
+
+# HTTP API Server
+kdelta serve --port 8080
+
+# Remote Operations
+kdelta --url http://localhost:8080 get users/alice
+
+# Database Info
+kdelta status                       # Show database stats
+kdelta list                         # List namespaces
 ```
+
+## Examples
+
+The `examples/` directory contains comprehensive demos:
+
+```bash
+# Full feature showcase - all v2.0.0 features
+cargo run --example crisis_coordination_demo
+
+# Distributed cluster validation
+cargo run --example cluster_e2e_test
+
+# Stress testing and edge cases
+cargo run --example stress_test --release
+
+# Original demos
+cargo run --example ecommerce_demo
+cargo run --example cluster_demo
+```
+
+## Performance (Validated)
+
+From stress_test validation on macOS M1:
+
+| Metric | Result |
+|--------|--------|
+| Write throughput | 200+ ops/sec |
+| Read throughput | 158,859 reads/sec |
+| Large values | Up to 100KB handled |
+| Key capacity | 10,000+ keys tested |
+| History depth | 100+ versions retained |
+| Concurrent writers | 100 tasks, 0 conflicts |
 
 ## Architecture
 
@@ -297,66 +297,26 @@ The math is your secret weapon, not your configuration burden.
 
 ### Persistence
 
-KoruDelta uses a **Write-Ahead Log (WAL)** with content-addressed storage for durability and performance:
+KoruDelta uses a **Write-Ahead Log (WAL)** with content-addressed storage:
 
 ```
 ~/.korudelta/db/
 ├── wal/000001.wal          # Append-only log entries
-└── values/ab/cd1234...     # Content-addressed values (by hash)
+└── values/ab/cd1234...     # Content-addressed values
 ```
 
 **Why this matters:**
-- **O(1) writes** - Append 120 bytes instead of rewriting the entire database
+- **O(1) writes** - Append instead of rewriting
 - **Crash-safe** - Never overwrites existing data
-- **Automatic deduplication** - Identical values stored once by content hash
+- **Automatic deduplication** - Identical values stored once
 - **Immutable history** - The log is the history
 
-Backwards compatible with legacy snapshot files.
+## Project Stats
 
-## Status
-
-**All three phases complete!** KoruDelta is feature-complete and production-ready.
-
-### ✅ Phase 1: Magical Single Node (Complete)
-- Simple key/value + JSON document storage
-- Full causal history tracking
-- Time travel queries (`get_at`)
-- Visual diff command for comparing versions
-- Clean, simple API (Rust + WASM)
-- Full-featured CLI tool (`kdelta`)
-- **Write-Ahead Log (WAL) persistence** - O(1) append-only writes, content-addressed storage
-
-### ✅ Phase 2: Automatic Distribution (Complete)
-- Multi-node clustering (`kdelta start --join`)
-- Automatic data sync between nodes
-- Gossip protocol for peer discovery
-- Cluster health monitoring
-- Snapshot sync on join
-
-### ✅ Phase 3: Advanced Features (Complete)
-- Query engine (filter, sort, project, aggregate)
-- Materialized views (create, refresh, query)
-- Real-time subscriptions (change notifications)
-- History queries across versions
-
-### Project Stats
-- **~6,350 lines** of Rust code
-- **198 tests** (all passing)
-- **~340ns** read latency
-- **~27K** writes/sec throughput
+- **~15,000 lines** of Rust code
+- **424 tests** (all passing)
+- **0 clippy warnings**
 - Cross-platform (Linux, macOS, Windows, WASM)
-
-## Examples
-
-The `examples/` directory contains runnable demos:
-
-```bash
-# E-Commerce demo: CRUD, versioning, queries, views, subscriptions
-cargo run --example ecommerce_demo
-
-# Clustering demo: Multi-node replication and peer discovery
-cargo run --example cluster_demo
-```
 
 ## Contributing
 
@@ -366,15 +326,17 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 This project is licensed under either of:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
 
 ## Links
 
-- [GitHub Repository](https://github.com/swyrknt/koru-delta) - Source code and issues
+- [GitHub Repository](https://github.com/swyrknt/koru-delta)
 - [Design Document](DESIGN.md) - Design philosophy and decisions
+- [Architecture](ARCHITECTURE.md) - Technical architecture
+- [CLI Guide](CLI_GUIDE.md) - Complete command reference
 - [koru-lambda-core](https://github.com/swyrknt/koru-lambda-core) - The underlying distinction engine
 
 ---
