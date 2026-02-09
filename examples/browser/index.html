@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KoruDelta Browser Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0052a3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .output {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .error { color: #dc3545; }
+        .success { color: #28a745; }
+    </style>
+</head>
+<body>
+    <h1>🌊 KoruDelta Browser Example</h1>
+    <p>The invisible database running entirely in your browser!</p>
+
+    <div class="section">
+        <h2>Status</h2>
+        <div id="status">Loading WebAssembly...</div>
+    </div>
+
+    <div class="section">
+        <h2>Basic Operations</h2>
+        <input type="text" id="namespace" placeholder="Namespace (e.g., 'users')" value="users">
+        <input type="text" id="key" placeholder="Key (e.g., 'alice')" value="alice">
+        <textarea id="value" rows="3" placeholder='Value (JSON, e.g., {"name": "Alice"})'>{"name": "Alice", "email": "alice@example.com", "age": 30}</textarea>
+        <div>
+            <button onclick="putValue()" id="btn-put">Put</button>
+            <button onclick="getValue()" id="btn-get">Get</button>
+            <button onclick="deleteValue()" id="btn-delete">Delete</button>
+            <button onclick="showHistory()" id="btn-history">History</button>
+            <button onclick="listNamespaces()" id="btn-namespaces">List Namespaces</button>
+        </div>
+        <div id="output-basic" class="output">Results will appear here...</div>
+    </div>
+
+    <div class="section">
+        <h2>Vector Search (Embeddings)</h2>
+        <p>Store and search vector embeddings for AI applications.</p>
+        <input type="text" id="vec-namespace" placeholder="Namespace" value="documents">
+        <input type="text" id="vec-key" placeholder="Key" value="doc1">
+        <input type="text" id="vec-data" placeholder="Vector data (comma-separated floats)" value="0.1, 0.2, 0.3, 0.4">
+        <button onclick="storeEmbedding()" id="btn-embed">Store Embedding</button>
+        <button onclick="searchEmbeddings()" id="btn-search">Search Similar</button>
+        <div id="output-vector" class="output">Results will appear here...</div>
+    </div>
+
+    <div class="section">
+        <h2>Views (Materialized Queries)</h2>
+        <input type="text" id="view-name" placeholder="View name" value="active-users">
+        <input type="text" id="view-source" placeholder="Source namespace" value="users">
+        <button onclick="createView()" id="btn-create-view">Create View</button>
+        <button onclick="queryView()" id="btn-query-view">Query View</button>
+        <button onclick="listViews()" id="btn-list-views">List Views</button>
+        <div id="output-views" class="output">Results will appear here...</div>
+    </div>
+
+    <div class="section">
+        <h2>Query with Filters</h2>
+        <input type="text" id="query-namespace" placeholder="Namespace" value="users">
+        <input type="text" id="query-filter" placeholder='Filter (JSON, e.g., {"age": 30})' value='{"age": 30}'>
+        <button onclick="runQuery()" id="btn-query">Run Query</button>
+        <div id="output-query" class="output">Results will appear here...</div>
+    </div>
+
+    <script type="module">
+        import init, { KoruDeltaWasm } from '../../bindings/js/pkg-web/koru_delta.js';
+
+        let db;
+        const statusEl = document.getElementById('status');
+
+        async function initialize() {
+            try {
+                await init();
+                db = await KoruDeltaWasm.new();
+                statusEl.innerHTML = '<span class="success">✓ Database initialized</span>';
+                enableButtons(true);
+            } catch (e) {
+                statusEl.innerHTML = `<span class="error">✗ Error: ${e.message}</span>`;
+            }
+        }
+
+        function enableButtons(enabled) {
+            document.querySelectorAll('button').forEach(btn => {
+                btn.disabled = !enabled;
+            });
+        }
+
+        function output(elementId, data) {
+            document.getElementById(elementId).textContent = 
+                typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+        }
+
+        // Expose functions to window for onclick handlers
+        window.putValue = async () => {
+            try {
+                const ns = document.getElementById('namespace').value;
+                const key = document.getElementById('key').value;
+                const value = JSON.parse(document.getElementById('value').value);
+                const result = await db.put(ns, key, value);
+                output('output-basic', { success: true, result });
+            } catch (e) {
+                output('output-basic', { error: e.message });
+            }
+        };
+
+        window.getValue = async () => {
+            try {
+                const ns = document.getElementById('namespace').value;
+                const key = document.getElementById('key').value;
+                const result = await db.get(ns, key);
+                output('output-basic', result);
+            } catch (e) {
+                output('output-basic', { error: e.message });
+            }
+        };
+
+        window.deleteValue = async () => {
+            try {
+                const ns = document.getElementById('namespace').value;
+                const key = document.getElementById('key').value;
+                await db.delete(ns, key);
+                output('output-basic', { success: true, message: `Deleted ${ns}/${key}` });
+            } catch (e) {
+                output('output-basic', { error: e.message });
+            }
+        };
+
+        window.showHistory = async () => {
+            try {
+                const ns = document.getElementById('namespace').value;
+                const key = document.getElementById('key').value;
+                const result = await db.history(ns, key);
+                output('output-basic', result);
+            } catch (e) {
+                output('output-basic', { error: e.message });
+            }
+        };
+
+        window.listNamespaces = async () => {
+            try {
+                const result = await db.listNamespaces();
+                output('output-basic', { namespaces: result });
+            } catch (e) {
+                output('output-basic', { error: e.message });
+            }
+        };
+
+        window.storeEmbedding = async () => {
+            try {
+                const ns = document.getElementById('vec-namespace').value;
+                const key = document.getElementById('vec-key').value;
+                const data = document.getElementById('vec-data').value
+                    .split(',').map(s => parseFloat(s.trim()));
+                await db.embed(ns, key, data, null);
+                output('output-vector', { success: true, message: `Stored embedding for ${ns}/${key}` });
+            } catch (e) {
+                output('output-vector', { error: e.message });
+            }
+        };
+
+        window.searchEmbeddings = async () => {
+            try {
+                const ns = document.getElementById('vec-namespace').value;
+                const data = document.getElementById('vec-data').value
+                    .split(',').map(s => parseFloat(s.trim()));
+                const results = await db.embedSearch(ns, data, 5);
+                output('output-vector', results);
+            } catch (e) {
+                output('output-vector', { error: e.message });
+            }
+        };
+
+        window.createView = async () => {
+            try {
+                const name = document.getElementById('view-name').value;
+                const source = document.getElementById('view-source').value;
+                await db.createView(name, source);
+                output('output-views', { success: true, message: `Created view "${name}"` });
+            } catch (e) {
+                output('output-views', { error: e.message });
+            }
+        };
+
+        window.queryView = async () => {
+            try {
+                const name = document.getElementById('view-name').value;
+                const result = await db.queryView(name);
+                output('output-views', result);
+            } catch (e) {
+                output('output-views', { error: e.message });
+            }
+        };
+
+        window.listViews = async () => {
+            try {
+                const result = await db.listViews();
+                output('output-views', { views: result });
+            } catch (e) {
+                output('output-views', { error: e.message });
+            }
+        };
+
+        window.runQuery = async () => {
+            try {
+                const ns = document.getElementById('query-namespace').value;
+                const filter = JSON.parse(document.getElementById('query-filter').value);
+                const results = await db.query(ns, filter, 10);
+                output('output-query', results);
+            } catch (e) {
+                output('output-query', { error: e.message });
+            }
+        };
+
+        // Initialize on load
+        initialize();
+    </script>
+</body>
+</html>

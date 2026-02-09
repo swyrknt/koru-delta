@@ -1,0 +1,14 @@
+name = "koru-delta-worker"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Cloudflare Workers use the wasm_bindgen generated module
+# Make sure to build with: wasm-pack build --target web
+
+[build]
+command = ""
+
+# Optional: Add KV namespace for persistence (KoruDelta is in-memory by default)
+# [[kv_namespaces]]
+# binding = "KORU_DELTA_CACHE"
+# id = "your-kv-namespace-id"

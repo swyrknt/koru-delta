@@ -1,0 +1,54 @@
+{
+  "name": "koru-delta",
+  "version": "2.0.0",
+  "description": "The invisible database: causal, consistent, and everywhere—without configuration",
+  "author": "Sawyer Kent <sawyerkent.me@gmail.com>",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/swyrknt/koru-delta.git"
+  },
+  "homepage": "https://github.com/swyrknt/koru-delta#readme",
+  "bugs": {
+    "url": "https://github.com/swyrknt/koru-delta/issues"
+  },
+  "keywords": [
+    "database",
+    "causal",
+    "wasm",
+    "vector-search",
+    "embeddings",
+    "time-travel",
+    "versioned"
+  ],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "koru_delta_bg.wasm",
+    "koru_delta_bg.wasm.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ],
+  "scripts": {
+    "build:web": "wasm-pack build --target web --out-dir bindings/js/pkg-web",
+    "build:nodejs": "wasm-pack build --target nodejs --out-dir bindings/js/pkg-nodejs",
+    "build:bundler": "wasm-pack build --target bundler --out-dir bindings/js/pkg-bundler",
+    "build:all": "npm run build:web && npm run build:nodejs && npm run build:bundler",
+    "test": "node tests/node.test.js"
+  },
+  "exports": {
+    ".": {
+      "browser": "./pkg-web/koru_delta.js",
+      "node": "./pkg-nodejs/koru_delta.js",
+      "default": "./pkg-bundler/koru_delta.js"
+    },
+    "./web": "./pkg-web/koru_delta.js",
+    "./nodejs": "./pkg-nodejs/koru_delta.js",
+    "./bundler": "./pkg-bundler/koru_delta.js"
+  }
+}
