@@ -28,9 +28,9 @@
 /// ```
 use crate::error::{DeltaError, DeltaResult};
 use crate::query::Filter;
-use crate::types::VersionedValue;
 #[cfg(test)]
 use crate::types::VectorClock;
+use crate::types::VersionedValue;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -511,8 +511,8 @@ mod tests {
 
     fn create_test_value(value: JsonValue) -> VersionedValue {
         VersionedValue::from_json(
-            value, 
-            Utc::now(), 
+            value,
+            Utc::now(),
             "test-version".to_string(), // write_id
             "test-version".to_string(), // distinction_id
             None,

@@ -145,6 +145,9 @@ impl From<&ViewData> for ViewInfo {
     }
 }
 
+/// Namespace for persisting view definitions.
+pub const VIEW_NAMESPACE: &str = "__views";
+
 /// Manager for materialized views.
 ///
 /// Handles creation, refresh, and querying of views.
@@ -156,17 +159,54 @@ pub struct ViewManager {
 impl ViewManager {
     /// Create a new view manager.
     pub fn new(storage: Arc<CausalStorage>) -> Self {
-        Self {
+        let manager = Self {
             storage,
             views: DashMap::new(),
+        };
+
+        // Load existing views from storage
+        if let Err(e) = manager.load_views_from_storage() {
+            eprintln!("Warning: Failed to load views from storage: {}", e);
         }
+
+        manager
+    }
+
+    /// Load views from persistent storage.
+    fn load_views_from_storage(&self) -> DeltaResult<()> {
+        // Try to get all keys in the views namespace
+        let view_keys: Vec<String> = self.storage.list_keys(VIEW_NAMESPACE).into_iter().collect();
+
+        for key in view_keys {
+            if let Ok(versioned) = self.storage.get(VIEW_NAMESPACE, &key) {
+                if let Ok(definition) =
+                    serde_json::from_value::<ViewDefinition>((*versioned.value()).clone())
+                {
+                    // Execute the query to populate the view
+                    if let Ok(result) = self.execute_view_query(&definition) {
+                        let view_data = ViewData::from_result(definition, result);
+                        self.views.insert(key, view_data);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Persist a view definition to storage.
+    fn persist_view(&self, definition: &ViewDefinition) -> DeltaResult<()> {
+        let value = serde_json::to_value(definition).map_err(DeltaError::SerializationError)?;
+
+        self.storage.put(VIEW_NAMESPACE, &definition.name, value)?;
+        Ok(())
     }
 
     /// Create a new view.
     pub fn create_view(&self, definition: ViewDefinition) -> DeltaResult<ViewInfo> {
         let name = definition.name.clone();
 
-        // Check if view already exists.
+        // Check if view already exists in memory.
         if self.views.contains_key(&name) {
             return Err(DeltaError::StorageError(format!(
                 "View '{}' already exists",
@@ -174,10 +214,24 @@ impl ViewManager {
             )));
         }
 
+        // Check if view exists in storage (might not be loaded yet)
+        // Also check that it's not a deleted view (null tombstone)
+        if let Ok(versioned) = self.storage.get(VIEW_NAMESPACE, &name) {
+            if !versioned.value().is_null() {
+                return Err(DeltaError::StorageError(format!(
+                    "View '{}' already exists",
+                    name
+                )));
+            }
+        }
+
         // Execute the query to populate the view.
         let result = self.execute_view_query(&definition)?;
 
-        // Store the view.
+        // Persist the view definition.
+        self.persist_view(&definition)?;
+
+        // Store the view in memory.
         let view_data = ViewData::from_result(definition, result);
         let info = ViewInfo::from(&view_data);
         self.views.insert(name, view_data);
@@ -301,9 +355,16 @@ impl ViewManager {
 
     /// Delete a view.
     pub fn delete_view(&self, name: &str) -> DeltaResult<()> {
+        // Remove from memory
         self.views
             .remove(name)
             .ok_or_else(|| DeltaError::StorageError(format!("View '{}' not found", name)))?;
+
+        // Mark as deleted in storage by storing null
+        let _ = self
+            .storage
+            .put(VIEW_NAMESPACE, name, serde_json::Value::Null);
+
         Ok(())
     }
 

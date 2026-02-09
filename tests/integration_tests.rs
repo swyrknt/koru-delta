@@ -57,8 +57,14 @@ async fn test_multiple_namespaces() {
     db.put("data", "key1", json!(1)).await.unwrap();
     db.put("other", "key1", json!(2)).await.unwrap();
 
-    assert_eq!(db.get("data", "key1").await.unwrap().value().clone(), json!(1));
-    assert_eq!(db.get("other", "key1").await.unwrap().value().clone(), json!(2));
+    assert_eq!(
+        db.get("data", "key1").await.unwrap().value().clone(),
+        json!(1)
+    );
+    assert_eq!(
+        db.get("other", "key1").await.unwrap().value().clone(),
+        json!(2)
+    );
 }
 
 #[tokio::test]
@@ -320,7 +326,9 @@ async fn test_various_json_types() {
     let db = KoruDelta::start().await.unwrap();
 
     // String
-    db.put("data", "string", json!("Hello, World!")).await.unwrap();
+    db.put("data", "string", json!("Hello, World!"))
+        .await
+        .unwrap();
     assert_eq!(
         db.get("data", "string").await.unwrap().value().clone(),
         json!("Hello, World!")
@@ -328,20 +336,34 @@ async fn test_various_json_types() {
 
     // Number (integer)
     db.put("data", "int", json!(42)).await.unwrap();
-    assert_eq!(db.get("data", "int").await.unwrap().value().clone(), json!(42));
+    assert_eq!(
+        db.get("data", "int").await.unwrap().value().clone(),
+        json!(42)
+    );
 
     // Number (float)
     db.put("data", "float", json!(3.15)).await.unwrap();
-    assert_eq!(db.get("data", "float").await.unwrap().value().clone(), json!(3.15));
+    assert_eq!(
+        db.get("data", "float").await.unwrap().value().clone(),
+        json!(3.15)
+    );
 
     // Boolean
     db.put("data", "bool_true", json!(true)).await.unwrap();
     db.put("data", "bool_false", json!(false)).await.unwrap();
-    assert_eq!(db.get("data", "bool_true").await.unwrap().value().clone(), json!(true));
-    assert_eq!(db.get("data", "bool_false").await.unwrap().value().clone(), json!(false));
+    assert_eq!(
+        db.get("data", "bool_true").await.unwrap().value().clone(),
+        json!(true)
+    );
+    assert_eq!(
+        db.get("data", "bool_false").await.unwrap().value().clone(),
+        json!(false)
+    );
 
     // Array
-    db.put("data", "array", json!([1, 2, 3, 4, 5])).await.unwrap();
+    db.put("data", "array", json!([1, 2, 3, 4, 5]))
+        .await
+        .unwrap();
     assert_eq!(
         db.get("data", "array").await.unwrap().value().clone(),
         json!([1, 2, 3, 4, 5])
@@ -349,7 +371,10 @@ async fn test_various_json_types() {
 
     // Null
     db.put("data", "null", json!(null)).await.unwrap();
-    assert_eq!(db.get("data", "null").await.unwrap().value().clone(), json!(null));
+    assert_eq!(
+        db.get("data", "null").await.unwrap().value().clone(),
+        json!(null)
+    );
 
     // Nested
     db.put(

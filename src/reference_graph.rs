@@ -84,7 +84,10 @@ impl ReferenceGraph {
         debug_assert!(self.nodes.contains_key(&to), "To node must exist");
 
         // Add to from's outgoing list
-        self.outgoing.entry(from.clone()).or_default().push(to.clone());
+        self.outgoing
+            .entry(from.clone())
+            .or_default()
+            .push(to.clone());
 
         // Add to to's incoming list
         self.incoming.entry(to).or_default().push(from);
@@ -92,18 +95,12 @@ impl ReferenceGraph {
 
     /// Get all distinctions that this one references.
     pub fn references(&self, id: &DistinctionId) -> Vec<DistinctionId> {
-        self.outgoing
-            .get(id)
-            .map(|v| v.clone())
-            .unwrap_or_default()
+        self.outgoing.get(id).map(|v| v.clone()).unwrap_or_default()
     }
 
     /// Get all distinctions that reference this one.
     pub fn referrers(&self, id: &DistinctionId) -> Vec<DistinctionId> {
-        self.incoming
-            .get(id)
-            .map(|v| v.clone())
-            .unwrap_or_default()
+        self.incoming.get(id).map(|v| v.clone()).unwrap_or_default()
     }
 
     /// Get the reference count (how many distinctions point to this).
@@ -111,10 +108,7 @@ impl ReferenceGraph {
     /// This is the key metric for garbage collection.
     /// A distinction with reference_count == 0 may be garbage.
     pub fn reference_count(&self, id: &DistinctionId) -> usize {
-        self.incoming
-            .get(id)
-            .map(|v| v.len())
-            .unwrap_or(0)
+        self.incoming.get(id).map(|v| v.len()).unwrap_or(0)
     }
 
     /// Check if a distinction is reachable from any root.
@@ -213,7 +207,7 @@ impl ReferenceGraph {
                 }
             })
             .collect();
-        
+
         // Sort by reference count descending
         candidates.sort_by(|a, b| b.1.cmp(&a.1));
         candidates.into_iter().map(|(id, _)| id).collect()
@@ -323,7 +317,7 @@ mod tests {
         // Setup causal graph:
         // root -> orphan -> current
         // - root: is a root (no parents), NOT in frontier (has child)
-        // - orphan: NOT a root (has parent), NOT in frontier (has child)  
+        // - orphan: NOT a root (has parent), NOT in frontier (has child)
         // - current: NOT a root (has parent), IS in frontier (no children)
         causal_graph.add_node("root".to_string());
         causal_graph.add_node("orphan".to_string());

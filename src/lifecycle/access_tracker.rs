@@ -98,9 +98,10 @@ impl AccessTracker {
         *self.weekday_distribution.entry(weekday).or_insert(0) += 1;
 
         // Update pattern for this distinction
-        let mut pattern = self.patterns.entry(distinction_id.clone()).or_insert_with(|| {
-            AccessPattern::new(distinction_id.clone(), key.clone())
-        });
+        let mut pattern = self
+            .patterns
+            .entry(distinction_id.clone())
+            .or_insert_with(|| AccessPattern::new(distinction_id.clone(), key.clone()));
 
         // Calculate interval from last access
         if let Some(last) = pattern.last_accessed {
@@ -109,8 +110,7 @@ impl AccessTracker {
 
             // Update rolling average
             let n = pattern.access_count as f64;
-            pattern.avg_interval_secs =
-                (pattern.avg_interval_secs * n + interval_secs) / (n + 1.0);
+            pattern.avg_interval_secs = (pattern.avg_interval_secs * n + interval_secs) / (n + 1.0);
         }
 
         // Update basic stats
@@ -233,18 +233,18 @@ impl AccessTracker {
     pub fn global_hourly_distribution(&self) -> [u64; 24] {
         let mut dist = [0u64; 24];
         for (hour, item) in dist.iter_mut().enumerate() {
-            *item = self.hourly_distribution.get(&(hour as u8)).map(|v| *v).unwrap_or(0);
+            *item = self
+                .hourly_distribution
+                .get(&(hour as u8))
+                .map(|v| *v)
+                .unwrap_or(0);
         }
         dist
     }
 
     /// Get statistics
     pub fn stats(&self) -> AccessTrackerStats {
-        let total_accesses: u64 = self
-            .patterns
-            .iter()
-            .map(|p| p.access_count)
-            .sum();
+        let total_accesses: u64 = self.patterns.iter().map(|p| p.access_count).sum();
 
         let unique_distinctions = self.patterns.len() as u64;
 
@@ -375,9 +375,10 @@ impl AccessPattern {
             .sum::<f64>()
             / total_weight as f64;
 
-        Some(NaiveTime::from_hms_opt(weighted_hour as u32, 0, 0).unwrap_or_else(|| {
-            NaiveTime::from_hms_opt(0, 0, 0).expect("valid time")
-        }))
+        Some(
+            NaiveTime::from_hms_opt(weighted_hour as u32, 0, 0)
+                .unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).expect("valid time")),
+        )
     }
 
     /// Get average duration per access (ms)
@@ -490,7 +491,9 @@ mod tests {
             first_accessed: Some(Utc::now()),
             last_accessed: Some(Utc::now()),
             avg_interval_secs: 3600.0,
-            hourly_counts: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            hourly_counts: [
+                10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             weekday_counts: [0; 7],
             predecessors: Vec::new(),
             successors: Vec::new(),

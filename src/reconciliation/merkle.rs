@@ -243,8 +243,16 @@ fn diff_nodes(a: &MerkleNode, b: &MerkleNode, missing: &mut HashSet<String>) {
 
         // Both branches—recurse
         (
-            MerkleNode::Branch { left: l1, right: r1, .. },
-            MerkleNode::Branch { left: l2, right: r2, .. },
+            MerkleNode::Branch {
+                left: l1,
+                right: r1,
+                ..
+            },
+            MerkleNode::Branch {
+                left: l2,
+                right: r2,
+                ..
+            },
         ) => {
             diff_nodes(l1, l2, missing);
             diff_nodes(r1, r2, missing);
@@ -281,9 +289,10 @@ fn collect_distinctions(node: &MerkleNode, result: &mut impl Extend<String>) {
 /// Verify node hash integrity.
 fn verify_node(node: &MerkleNode) -> bool {
     match node {
-        MerkleNode::Leaf { distinction_id, hash } => {
-            *hash == hash_distinction(distinction_id)
-        }
+        MerkleNode::Leaf {
+            distinction_id,
+            hash,
+        } => *hash == hash_distinction(distinction_id),
         MerkleNode::Branch { hash, left, right } => {
             let expected = match (&**left, &**right) {
                 (MerkleNode::Empty, MerkleNode::Empty) => [0; 32],
@@ -380,7 +389,11 @@ mod tests {
         let diff = tree1.diff(&tree2);
         // Diff includes all 4 missing distinctions
         // Due to tree structure differences, might include more, but should include all missing
-        assert!(diff.len() >= 4, "Should have at least 4 differences, got {}", diff.len());
+        assert!(
+            diff.len() >= 4,
+            "Should have at least 4 differences, got {}",
+            diff.len()
+        );
         // Verify all expected missing items are in the diff
         for i in 4..8 {
             assert!(diff.contains(&format!("dist_{:08x}", i)));

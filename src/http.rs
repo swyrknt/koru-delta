@@ -70,15 +70,18 @@ impl HttpServer {
     /// server.bind("0.0.0.0:8080").await?;
     /// ```
     pub async fn bind(self, addr: &str) -> DeltaResult<()> {
-        let addr: SocketAddr = addr.parse()
-            .map_err(|e| crate::error::DeltaError::StorageError(format!("Invalid address: {}", e)))?;
+        let addr: SocketAddr = addr.parse().map_err(|e| {
+            crate::error::DeltaError::StorageError(format!("Invalid address: {}", e))
+        })?;
         let db = Arc::new(self.db);
 
         let app = create_router(db);
 
-        let listener = tokio::net::TcpListener::bind(addr).await
-            .map_err(|e| crate::error::DeltaError::StorageError(format!("Failed to bind: {}", e)))?;
-        axum::serve(listener, app).await
+        let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+            crate::error::DeltaError::StorageError(format!("Failed to bind: {}", e))
+        })?;
+        axum::serve(listener, app)
+            .await
             .map_err(|e| crate::error::DeltaError::StorageError(format!("Server error: {}", e)))?;
 
         Ok(())
@@ -478,9 +481,7 @@ async fn handle_status(
     Ok(axum::Json(response))
 }
 
-async fn handle_list_namespaces(
-    State(db): State<Arc<KoruDelta>>,
-) -> axum::Json<serde_json::Value> {
+async fn handle_list_namespaces(State(db): State<Arc<KoruDelta>>) -> axum::Json<serde_json::Value> {
     let namespaces = db.list_namespaces().await;
     axum::Json(serde_json::json!({ "namespaces": namespaces }))
 }

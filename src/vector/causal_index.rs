@@ -252,11 +252,8 @@ impl CausalVectorIndex {
         }
 
         // Get all versions sorted
-        let mut versions: Vec<VersionId> = self
-            .snapshots
-            .iter()
-            .map(|entry| *entry.key())
-            .collect();
+        let mut versions: Vec<VersionId> =
+            self.snapshots.iter().map(|entry| *entry.key()).collect();
         versions.sort();
 
         // Remove oldest snapshots
@@ -327,7 +324,8 @@ impl CausalVectorIndex {
                 let _temp_index = HnswIndex::new(self.config.hnsw_config);
 
                 // Add snapshot vectors (we'd need to iterate them, but for now search snapshot and merge)
-                let mut results = snapshot.search(query, k + additional.len(), self.config.ef_search * 2);
+                let mut results =
+                    snapshot.search(query, k + additional.len(), self.config.ef_search * 2);
 
                 // Compute distances to additional vectors
                 for (id, vec) in additional {
@@ -343,7 +341,11 @@ impl CausalVectorIndex {
                 }
 
                 // Sort and truncate
-                results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                results.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 results.truncate(k);
 
                 return results;
@@ -448,8 +450,14 @@ mod tests {
         let index = CausalVectorIndex::with_defaults("test");
 
         // Add vectors
-        index.add("v1", create_test_vector(vec![1.0, 0.0]), 1).await.unwrap();
-        index.add("v2", create_test_vector(vec![0.0, 1.0]), 2).await.unwrap();
+        index
+            .add("v1", create_test_vector(vec![1.0, 0.0]), 1)
+            .await
+            .unwrap();
+        index
+            .add("v2", create_test_vector(vec![0.0, 1.0]), 2)
+            .await
+            .unwrap();
 
         // Verify vectors were added
         assert_eq!(index.len().await, 2);
@@ -459,10 +467,13 @@ mod tests {
         let results = index.search(&query, 10).await;
 
         // HNSW is approximate - should find at least 1 result
-        assert!(!results.is_empty(), "Search should return at least 1 result");
+        assert!(
+            !results.is_empty(),
+            "Search should return at least 1 result"
+        );
         // Results should be sorted by score
         for i in 1..results.len() {
-            assert!(results[i-1].score >= results[i].score);
+            assert!(results[i - 1].score >= results[i].score);
         }
     }
 
@@ -482,27 +493,46 @@ mod tests {
 
         index.add("doc1", v1.clone(), 1).await.unwrap();
         index.add("doc2", v2.clone(), 2).await.unwrap();
-        assert_eq!(index.len().await, 2, "Should have 2 vectors before snapshot");
+        assert_eq!(
+            index.len().await,
+            2,
+            "Should have 2 vectors before snapshot"
+        );
 
         // Force snapshot
         index.force_snapshot().await.unwrap();
-        assert_eq!(index.len().await, 2, "Should still have 2 vectors after snapshot");
+        assert_eq!(
+            index.len().await,
+            2,
+            "Should still have 2 vectors after snapshot"
+        );
 
         // Add more
         index.add("doc3", v3.clone(), 3).await.unwrap();
-        assert_eq!(index.len().await, 3, "Should have 3 vectors after adding doc3");
+        assert_eq!(
+            index.len().await,
+            3,
+            "Should have 3 vectors after adding doc3"
+        );
 
         // Search current (should have all 3)
         let query = create_test_vector(vec![0.9, 0.9]);
         let current_results = index.search(&query, 10).await;
-        
+
         // HNSW is approximate, so we might not get all 3, but we should get at least 2
-        assert!(current_results.len() >= 2, "Search should return at least 2 vectors, got {}", current_results.len());
+        assert!(
+            current_results.len() >= 2,
+            "Search should return at least 2 vectors, got {}",
+            current_results.len()
+        );
 
         // Search at version 2 (should only have doc1 and doc2)
         let v2_results = index.search_at(&query, 10, 2).await;
         // Time-travel search is approximate, just check it doesn't panic and returns reasonable results
-        assert!(v2_results.len() <= 3, "Time-travel at v2 should have at most 3 vectors");
+        assert!(
+            v2_results.len() <= 3,
+            "Time-travel at v2 should have at most 3 vectors"
+        );
     }
 
     #[tokio::test]
@@ -517,7 +547,10 @@ mod tests {
         // Add vectors and trigger snapshots
         for i in 0..10 {
             let v = create_test_vector(vec![i as f32, (i * 2) as f32]);
-            index.add(format!("doc{}", i), v, i as u64 + 1).await.unwrap();
+            index
+                .add(format!("doc{}", i), v, i as u64 + 1)
+                .await
+                .unwrap();
         }
 
         // Force snapshot
@@ -543,10 +576,16 @@ mod tests {
 
         assert_eq!(index.current_version().await, 0);
 
-        index.add("v1", create_test_vector(vec![1.0, 0.0]), 5).await.unwrap();
+        index
+            .add("v1", create_test_vector(vec![1.0, 0.0]), 5)
+            .await
+            .unwrap();
         assert_eq!(index.current_version().await, 5);
 
-        index.add("v2", create_test_vector(vec![0.0, 1.0]), 10).await.unwrap();
+        index
+            .add("v2", create_test_vector(vec![0.0, 1.0]), 10)
+            .await
+            .unwrap();
         assert_eq!(index.current_version().await, 10);
     }
 }

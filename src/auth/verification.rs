@@ -59,7 +59,11 @@ impl ChallengeStore {
     }
 
     /// Verify a challenge exists and hasn't expired.
-    pub fn verify_challenge(&self, identity_key: &str, challenge: &str) -> Result<Challenge, AuthError> {
+    pub fn verify_challenge(
+        &self,
+        identity_key: &str,
+        challenge: &str,
+    ) -> Result<Challenge, AuthError> {
         let key = format!("{}:{}", identity_key, challenge);
 
         match self.challenges.get(&key) {
@@ -174,10 +178,7 @@ pub fn verify_challenge_response(
 ///
 /// # Returns
 /// The base58-encoded signature.
-pub fn create_challenge_response(
-    secret_key: &[u8],
-    challenge: &str,
-) -> Result<String, AuthError> {
+pub fn create_challenge_response(secret_key: &[u8], challenge: &str) -> Result<String, AuthError> {
     use crate::auth::identity::sign_message;
 
     let message = format!("challenge:{}", challenge);

@@ -69,7 +69,10 @@ impl DistinctionBackedSNSW {
     }
 
     /// Create with custom SNSW configuration.
-    pub fn with_config(engine: Arc<DistinctionEngine>, config: crate::vector::snsw::AdaptiveConfig) -> Self {
+    pub fn with_config(
+        engine: Arc<DistinctionEngine>,
+        config: crate::vector::snsw::AdaptiveConfig,
+    ) -> Self {
         Self {
             graph: SynthesisGraph::with_config(config),
             engine,
@@ -84,17 +87,17 @@ impl DistinctionBackedSNSW {
     pub fn insert(&self, vector: Vector) -> DeltaResult<ContentHash> {
         // Step 1: Create distinction from vector via koru-lambda-core
         let distinction = self.vector_to_distinction(&vector);
-        
+
         // Step 2: Use distinction hash as content address
         let content_hash = ContentHash::from_vector(&vector);
-        
+
         // Step 3: Track the mapping
         self.distinction_to_vector
             .insert(distinction.id().to_string(), content_hash.clone());
-        
+
         // Step 4: Insert into SNSW graph (which handles synthesis edges)
         let id = self.graph.insert(vector)?;
-        
+
         Ok(id)
     }
 
@@ -105,11 +108,10 @@ impl DistinctionBackedSNSW {
     fn vector_to_distinction(&self, vector: &Vector) -> Distinction {
         // Use the distinction engine to synthesize a distinction
         // from the vector's content (model + data fingerprint)
-        let model_distinction = self.engine.synthesize(
-            self.engine.d0(),
-            &self.vector_fingerprint(vector),
-        );
-        
+        let model_distinction = self
+            .engine
+            .synthesize(self.engine.d0(), &self.vector_fingerprint(vector));
+
         model_distinction
     }
 
@@ -121,7 +123,7 @@ impl DistinctionBackedSNSW {
         // Create a distinction that encodes the vector's model and dimensionality
         // The actual values are handled by the content hash
         let fingerprint = format!("{}:{}", vector.model(), vector.dimensions());
-        
+
         // Use DocumentMapper to convert the fingerprint string to a distinction
         DocumentMapper::bytes_to_distinction(fingerprint.as_bytes(), &self.engine)
     }
@@ -130,7 +132,11 @@ impl DistinctionBackedSNSW {
     ///
     /// The query vector is first converted to a distinction, then we navigate
     /// the synthesis graph using both geometric and semantic proximity.
-    pub fn search(&self, query: &Vector, k: usize) -> DeltaResult<Vec<crate::vector::snsw::SearchResult>> {
+    pub fn search(
+        &self,
+        query: &Vector,
+        k: usize,
+    ) -> DeltaResult<Vec<crate::vector::snsw::SearchResult>> {
         // Standard SNSW search (already synthesis-aware)
         self.graph.search(query, k)
     }
@@ -152,13 +158,13 @@ impl DistinctionBackedSNSW {
     /// relationships in the distinction calculus, not just geometric proximity.
     pub fn find_by_distinction_pattern(&self, pattern: &str) -> Vec<ContentHash> {
         let mut results = Vec::new();
-        
+
         for entry in self.distinction_to_vector.iter() {
             if entry.key().contains(pattern) {
                 results.push(entry.value().clone());
             }
         }
-        
+
         results
     }
 
@@ -174,26 +180,27 @@ impl DistinctionBackedSNSW {
         // Get the corresponding distinctions
         let from_distinction = self.get_distinction_for_vector(from)?;
         let to_distinction = self.get_distinction_for_vector(to)?;
-        
+
         // Use the engine to determine relationship type
         let relationship = self.infer_relationship_type(&from_distinction, &to_distinction);
-        
+
         // Calculate synthesis strength via distinction calculus
         let strength = self.calculate_distinction_proximity(&from_distinction, &to_distinction);
-        
-        Some(SynthesisEdge::new(to.clone(), relationship, strength, strength))
+
+        Some(SynthesisEdge::new(
+            to.clone(),
+            relationship,
+            strength,
+            strength,
+        ))
     }
 
     /// Infer the type of relationship between two distinctions.
-    fn infer_relationship_type(
-        &self,
-        from: &Distinction,
-        to: &Distinction,
-    ) -> SynthesisType {
+    fn infer_relationship_type(&self, from: &Distinction, to: &Distinction) -> SynthesisType {
         // Analyze the distinction relationship via ID patterns
         let from_id = from.id();
         let to_id = to.id();
-        
+
         // If one is a prefix of the other, it's abstraction/instantiation
         if from_id.starts_with(to_id) || to_id.starts_with(from_id) {
             if from_id.len() > to_id.len() {
@@ -214,16 +221,16 @@ impl DistinctionBackedSNSW {
         // native proximity measures
         let a_bytes = a.id().as_bytes();
         let b_bytes = b.id().as_bytes();
-        
+
         let xor_sum: usize = a_bytes
             .iter()
             .zip(b_bytes.iter())
             .map(|(x, y)| (x ^ y).count_ones() as usize)
             .sum();
-        
+
         let max_bits = (a_bytes.len().max(b_bytes.len())) * 8;
         let similarity = 1.0 - (xor_sum as f32 / max_bits as f32);
-        
+
         similarity.clamp(0.0, 1.0)
     }
 
@@ -303,7 +310,7 @@ mod tests {
         let hash = snsw.insert(vector.clone()).unwrap();
 
         assert_eq!(snsw.len(), 1);
-        
+
         // Should be able to find by content hash
         let found = snsw.graph().search(&vector, 1).unwrap();
         assert_eq!(found.len(), 1);
@@ -338,7 +345,7 @@ mod tests {
         let dist2 = snsw.vector_to_distinction(&vector2);
 
         let proximity = snsw.calculate_distinction_proximity(&dist1, &dist2);
-        
+
         // Proximity should be between 0 and 1
         assert!((0.0..=1.0).contains(&proximity));
     }
@@ -355,9 +362,13 @@ mod tests {
         // Since we can't predict the exact ID, we verify the mapping exists
         // by checking the graph has the node
         assert_eq!(snsw.len(), 1);
-        
+
         // Verify we can find the content hash we just inserted
         // by checking it exists in the graph
-        assert!(!snsw.graph().search(&Vector::new(vec![0.1; 256], "embedding-model"), 1).unwrap().is_empty());
+        assert!(!snsw
+            .graph()
+            .search(&Vector::new(vec![0.1; 256], "embedding-model"), 1)
+            .unwrap()
+            .is_empty());
     }
 }

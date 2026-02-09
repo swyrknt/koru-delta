@@ -117,11 +117,7 @@ impl CausalGraph {
         self.add_node(id.clone());
 
         for parent in parents {
-            debug_assert!(
-                self.nodes.contains(&parent),
-                "Parent {} must exist",
-                parent
-            );
+            debug_assert!(self.nodes.contains(&parent), "Parent {} must exist", parent);
             self.add_edge(parent, id.clone());
         }
     }
@@ -230,12 +226,13 @@ impl CausalGraph {
         // Find the "deepest" common ancestor (furthest from root)
         // This is the one with the most descendants in common set
         let common_for_closure = common.clone();
-        common
-            .into_iter()
-            .max_by_key(|candidate| {
-                let descendants = self.descendants(candidate);
-                descendants.iter().filter(|d| common_for_closure.contains(*d)).count()
-            })
+        common.into_iter().max_by_key(|candidate| {
+            let descendants = self.descendants(candidate);
+            descendants
+                .iter()
+                .filter(|d| common_for_closure.contains(*d))
+                .count()
+        })
     }
 
     /// Get the causal frontier (all leaf nodes).
@@ -305,8 +302,7 @@ impl CausalGraph {
 
     /// Increment the epoch (for garbage collection).
     pub fn increment_epoch(&self) -> u64 {
-        self.epoch
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        self.epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Get the current epoch.

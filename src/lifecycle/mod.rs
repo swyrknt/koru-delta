@@ -142,7 +142,9 @@ impl LifecycleManager {
         Self {
             config: config.clone(),
             access_tracker: Arc::new(RwLock::new(AccessTracker::new())),
-            importance_scorer: Arc::new(RwLock::new(ImportanceScorer::new(config.ml_scoring_enabled))),
+            importance_scorer: Arc::new(RwLock::new(ImportanceScorer::new(
+                config.ml_scoring_enabled,
+            ))),
             transition_planner: Arc::new(RwLock::new(TransitionPlanner::new())),
             stats: Arc::new(RwLock::new(LifecycleStats::default())),
             shutdown: Arc::new(AtomicBool::new(false)),
@@ -224,11 +226,11 @@ impl LifecycleManager {
                     let tracker = tracker.read().await;
                     let mut scorer = scorer.write().await;
                     let scores = scorer.score_all(&tracker);
-                    
+
                     // Update stats
                     let mut stats_guard = stats.write().await;
                     stats_guard.distinctions_scored = scores.len() as u64;
-                    
+
                     scores
                 };
 
@@ -310,7 +312,7 @@ impl LifecycleManager {
         let secs = duration.num_seconds().max(1) as u64;
         interval(tokio::time::Duration::from_secs(secs))
     }
-    
+
     /// Execute a single transition
     async fn execute_transition(
         _transition: &Transition,
@@ -318,13 +320,13 @@ impl LifecycleManager {
         // Placeholder - actual implementation would move data between tiers
         Ok(())
     }
-    
+
     /// Run consolidation across all tiers
     async fn run_consolidation() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         debug!("Running consolidation");
         Ok(())
     }
-    
+
     /// Run genome extraction
     async fn run_genome_extraction() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         debug!("Running genome extraction");
@@ -343,12 +345,19 @@ impl ImportanceScorer {
     pub fn new(ml_enabled: bool) -> Self {
         Self {
             ml_enabled,
-            model: if ml_enabled { Some(ImportanceModel::new()) } else { None },
+            model: if ml_enabled {
+                Some(ImportanceModel::new())
+            } else {
+                None
+            },
         }
     }
 
     /// Score all distinctions based on access patterns
-    pub fn score_all(&mut self, tracker: &AccessTracker) -> HashMap<DistinctionId, ImportanceScore> {
+    pub fn score_all(
+        &mut self,
+        tracker: &AccessTracker,
+    ) -> HashMap<DistinctionId, ImportanceScore> {
         if self.ml_enabled && self.model.is_some() {
             // Use ML model for scoring
             self.model.as_ref().unwrap().predict_all(tracker)
@@ -359,16 +368,19 @@ impl ImportanceScorer {
     }
 
     /// Heuristic scoring (fallback when ML is disabled)
-    fn heuristic_score_all(&self, tracker: &AccessTracker) -> HashMap<DistinctionId, ImportanceScore> {
+    fn heuristic_score_all(
+        &self,
+        tracker: &AccessTracker,
+    ) -> HashMap<DistinctionId, ImportanceScore> {
         use chrono::Utc;
-        
+
         let mut scores = HashMap::new();
         let now = Utc::now();
 
         for entry in tracker.patterns() {
             let id = entry.key().clone();
             let pattern = entry.value();
-            
+
             // Simple heuristic: recency + frequency
             let recency_score = if let Some(last) = pattern.last_accessed {
                 let age = now.signed_duration_since(last);
@@ -451,12 +463,12 @@ mod tests {
         let tracker = AccessTracker::new();
         let key = FullKey::new("test", "key1");
         let id = "dist1".to_string();
-        
+
         tracker.record_access(key, id.clone());
-        
+
         let mut scorer = ImportanceScorer::new(false); // ML disabled
         let scores = scorer.score_all(&tracker);
-        
+
         assert!(scores.contains_key(&id));
         let score = scores.get(&id).unwrap();
         assert!(score.score > 0.0);

@@ -106,10 +106,10 @@ mod types;
 pub mod causal_graph;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lifecycle;
-pub mod reference_graph;
 pub mod memory;
 pub mod processes;
 pub mod reconciliation;
+pub mod reference_graph;
 
 // Self-sovereign authentication via distinctions
 pub mod auth;
@@ -271,8 +271,7 @@ pub fn init_logging() {
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::EnvFilter;
 
-    let filter = EnvFilter::try_from_env("KORU_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_env("KORU_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(filter)

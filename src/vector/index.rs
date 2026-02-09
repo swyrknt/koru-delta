@@ -63,7 +63,9 @@ impl FlatIndex {
 
     /// Get all vectors in a namespace.
     pub fn get_namespace(&self, namespace: &str) -> Option<Arc<DashMap<String, Vector>>> {
-        self.vectors.get(namespace).map(|entry| Arc::new(entry.clone()))
+        self.vectors
+            .get(namespace)
+            .map(|entry| Arc::new(entry.clone()))
     }
 }
 
@@ -129,7 +131,11 @@ impl AnnIndex for FlatIndex {
         }
 
         // Sort by similarity (highest first)
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Take top_k
         results.truncate(opts.top_k);
@@ -138,10 +144,7 @@ impl AnnIndex for FlatIndex {
     }
 
     fn len(&self) -> usize {
-        self.vectors
-            .iter()
-            .map(|entry| entry.value().len())
-            .sum()
+        self.vectors.iter().map(|entry| entry.value().len()).sum()
     }
 
     fn is_empty(&self) -> bool {
@@ -278,9 +281,7 @@ mod tests {
 
         // Search with model filter
         let query = Vector::new(vec![1.0, 0.0], "model-a");
-        let opts = VectorSearchOptions::new()
-            .top_k(10)
-            .model_filter("model-a");
+        let opts = VectorSearchOptions::new().top_k(10).model_filter("model-a");
         let results = index.search(&query, &opts);
 
         assert_eq!(results.len(), 1);

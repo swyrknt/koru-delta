@@ -53,11 +53,8 @@ impl VectorClock {
     /// - `Some(Ordering::Equal)` if they're the same
     /// - `None` if they're concurrent (conflict)
     pub fn compare(&self, other: &VectorClock) -> Option<std::cmp::Ordering> {
-        let all_nodes: std::collections::HashSet<_> = self
-            .clocks
-            .keys()
-            .chain(other.clocks.keys())
-            .collect();
+        let all_nodes: std::collections::HashSet<_> =
+            self.clocks.keys().chain(other.clocks.keys()).collect();
 
         let mut has_less = false;
         let mut has_greater = false;
@@ -74,7 +71,7 @@ impl VectorClock {
         }
 
         match (has_less, has_greater) {
-            (true, true) => None,     // Concurrent (conflict)
+            (true, true) => None, // Concurrent (conflict)
             (true, false) => Some(std::cmp::Ordering::Less),
             (false, true) => Some(std::cmp::Ordering::Greater),
             (false, false) => Some(std::cmp::Ordering::Equal),
@@ -410,8 +407,8 @@ mod tests {
         let now = Utc::now();
         let value = serde_json::json!({"count": 42});
         let versioned = VersionedValue::from_json(
-            value.clone(), 
-            now, 
+            value.clone(),
+            now,
             "write_v1".to_string(), // write_id
             "dist_xyz".to_string(), // distinction_id
             None,

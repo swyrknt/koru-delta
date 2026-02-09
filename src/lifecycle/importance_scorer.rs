@@ -270,12 +270,13 @@ impl ImportanceModel {
         let base_confidence = (pattern.access_count as f32 / 10.0).min(1.0);
 
         // Also consider time span (longer = more confidence)
-        let time_span_factor = if let (Some(first), Some(last)) = (pattern.first_accessed, pattern.last_accessed) {
-            let span_days = last.signed_duration_since(first).num_days() as f32;
-            (span_days / 7.0).min(1.0) // Week of data = full confidence
-        } else {
-            0.0
-        };
+        let time_span_factor =
+            if let (Some(first), Some(last)) = (pattern.first_accessed, pattern.last_accessed) {
+                let span_days = last.signed_duration_since(first).num_days() as f32;
+                (span_days / 7.0).min(1.0) // Week of data = full confidence
+            } else {
+                0.0
+            };
 
         (base_confidence * 0.7 + time_span_factor * 0.3).min(1.0)
     }
@@ -368,7 +369,9 @@ mod tests {
             first_accessed: Some(Utc::now() - chrono::Duration::days(7)),
             last_accessed,
             avg_interval_secs: 3600.0,
-            hourly_counts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Peak at noon
+            hourly_counts: [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ], // Peak at noon
             weekday_counts: [0; 7],
             predecessors: Vec::new(),
             successors: Vec::new(),
@@ -393,7 +396,10 @@ mod tests {
         // Recent access
         let recent_pattern = create_test_pattern(1, 5); // 5 minutes ago
         let recent_score = model.calculate_recency_feature(&recent_pattern, now);
-        assert!(recent_score > 0.9, "Recent access should have high recency score");
+        assert!(
+            recent_score > 0.9,
+            "Recent access should have high recency score"
+        );
 
         // Old access
         let old_pattern = create_test_pattern(1, 60 * 24 * 2); // 2 days ago
@@ -411,7 +417,10 @@ mod tests {
         let high_freq = create_test_pattern(100, 0);
         let high_score = model.calculate_frequency_feature(&high_freq);
 
-        assert!(high_score > low_score, "Higher frequency should have higher score");
+        assert!(
+            high_score > low_score,
+            "Higher frequency should have higher score"
+        );
         assert!(high_score <= 1.0, "Score should be bounded");
     }
 

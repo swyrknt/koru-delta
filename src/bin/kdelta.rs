@@ -14,7 +14,9 @@
 
 // This binary is not supported on WASM targets
 #[cfg(target_arch = "wasm32")]
-compile_error!("The kdelta CLI binary is not supported on WASM targets. Use the library API instead.");
+compile_error!(
+    "The kdelta CLI binary is not supported on WASM targets. Use the library API instead."
+);
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -55,17 +57,25 @@ impl HttpClient {
     async fn get(&self, namespace: &str, key: &str) -> Result<serde_json::Value> {
         let url = format!("{}/api/v1/{}/{}", self.base_url, namespace, key);
         let response = self.client.get(&url).send().await?;
-        
+
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             anyhow::bail!("Key not found: {}/{}", namespace, key);
         }
-        
+
         let data: serde_json::Value = response.error_for_status()?.json().await?;
-        Ok(data.get("value").cloned().unwrap_or(serde_json::Value::Null))
+        Ok(data
+            .get("value")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null))
     }
 
     /// Store a value on the remote server.
-    async fn put(&self, namespace: &str, key: &str, value: serde_json::Value) -> Result<serde_json::Value> {
+    async fn put(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: serde_json::Value,
+    ) -> Result<serde_json::Value> {
         let url = format!("{}/api/v1/{}/{}", self.base_url, namespace, key);
         let body = serde_json::json!({ "value": value });
         let response = self.client.put(&url).json(&body).send().await?;
@@ -77,27 +87,36 @@ impl HttpClient {
     async fn history(&self, namespace: &str, key: &str) -> Result<Vec<serde_json::Value>> {
         let url = format!("{}/api/v1/{}/{}/history", self.base_url, namespace, key);
         let response = self.client.get(&url).send().await?;
-        
+
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             anyhow::bail!("Key not found: {}/{}", namespace, key);
         }
-        
+
         let data: serde_json::Value = response.error_for_status()?.json().await?;
-        Ok(data.get("versions")
+        Ok(data
+            .get("versions")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default())
     }
 
     /// Get value at a specific timestamp.
-    async fn get_at(&self, namespace: &str, key: &str, timestamp: &str) -> Result<serde_json::Value> {
-        let url = format!("{}/api/v1/{}/{}/at/{}", self.base_url, namespace, key, timestamp);
+    async fn get_at(
+        &self,
+        namespace: &str,
+        key: &str,
+        timestamp: &str,
+    ) -> Result<serde_json::Value> {
+        let url = format!(
+            "{}/api/v1/{}/{}/at/{}",
+            self.base_url, namespace, key, timestamp
+        );
         let response = self.client.get(&url).send().await?;
-        
+
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             anyhow::bail!("Key not found at timestamp: {}/{}", namespace, key);
         }
-        
+
         let data: serde_json::Value = response.error_for_status()?.json().await?;
         Ok(data)
     }
@@ -115,9 +134,14 @@ impl HttpClient {
         let url = format!("{}/api/v1/namespaces", self.base_url);
         let response = self.client.get(&url).send().await?;
         let data: serde_json::Value = response.error_for_status()?.json().await?;
-        Ok(data.get("namespaces")
+        Ok(data
+            .get("namespaces")
             .and_then(|n| n.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
@@ -126,9 +150,14 @@ impl HttpClient {
         let url = format!("{}/api/v1/{}/keys", self.base_url, namespace);
         let response = self.client.get(&url).send().await?;
         let data: serde_json::Value = response.error_for_status()?.json().await?;
-        Ok(data.get("keys")
+        Ok(data
+            .get("keys")
             .and_then(|k| k.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
@@ -145,7 +174,8 @@ impl HttpClient {
         let url = format!("{}/api/v1/views", self.base_url);
         let response = self.client.get(&url).send().await?;
         let data: serde_json::Value = response.error_for_status()?.json().await?;
-        Ok(data.get("views")
+        Ok(data
+            .get("views")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default())
@@ -163,11 +193,11 @@ impl HttpClient {
     async fn query_view(&self, name: &str) -> Result<serde_json::Value> {
         let url = format!("{}/api/v1/views/{}", self.base_url, name);
         let response = self.client.get(&url).send().await?;
-        
+
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             anyhow::bail!("View not found: {}", name);
         }
-        
+
         let data: serde_json::Value = response.error_for_status()?.json().await?;
         Ok(data)
     }
@@ -176,11 +206,11 @@ impl HttpClient {
     async fn refresh_view(&self, name: &str) -> Result<()> {
         let url = format!("{}/api/v1/views/{}/refresh", self.base_url, name);
         let response = self.client.post(&url).send().await?;
-        
+
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             anyhow::bail!("View not found: {}", name);
         }
-        
+
         response.error_for_status()?;
         Ok(())
     }
@@ -189,11 +219,11 @@ impl HttpClient {
     async fn delete_view(&self, name: &str) -> Result<()> {
         let url = format!("{}/api/v1/views/{}", self.base_url, name);
         let response = self.client.delete(&url).send().await?;
-        
+
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             anyhow::bail!("View not found: {}", name);
         }
-        
+
         response.error_for_status()?;
         Ok(())
     }
@@ -698,19 +728,30 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
                 .with_context(|| format!("Invalid JSON value: {}", value))?;
 
             let result = client.put(&namespace, &key_name, json_value).await?;
-            
+
             println!("{}", "OK".green().bold());
             println!("  Stored: {}/{}", namespace.cyan(), key_name.cyan());
-            println!("  Version: {}", result.get("versionId").and_then(|v| v.as_str()).unwrap_or("unknown").bright_black());
+            println!(
+                "  Version: {}",
+                result
+                    .get("versionId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .bright_black()
+            );
             if let Some(ts) = result.get("timestamp").and_then(|v| v.as_str()) {
                 println!("  Timestamp: {}", ts);
             }
             Ok(())
         }
 
-        Commands::Get { key, verbose: _, at } => {
+        Commands::Get {
+            key,
+            verbose: _,
+            at,
+        } => {
             let (namespace, key_name) = parse_key(key)?;
-            
+
             if let Some(timestamp_str) = at {
                 // Time travel query via HTTP
                 let value = client.get_at(&namespace, &key_name, timestamp_str).await?;
@@ -727,7 +768,7 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
         Commands::Log { key, limit } => {
             let (namespace, key_name) = parse_key(key)?;
             let history = client.history(&namespace, &key_name).await?;
-            
+
             let entries: Vec<_> = if let Some(lim) = limit {
                 history.iter().rev().take(*lim).cloned().collect()
             } else {
@@ -755,7 +796,15 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
                 println!();
             }
 
-            println!("  {} {} total", history.len(), if history.len() == 1 { "version" } else { "versions" });
+            println!(
+                "  {} {} total",
+                history.len(),
+                if history.len() == 1 {
+                    "version"
+                } else {
+                    "versions"
+                }
+            );
             Ok(())
         }
 
@@ -763,9 +812,27 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
             let status = client.status().await?;
             println!("{}", "Database Status".bold().cyan());
             println!();
-            println!("  {} {}", "Keys:".bright_white(), status.get("keyCount").and_then(|v| v.as_u64()).unwrap_or(0));
-            println!("  {} {}", "Versions:".bright_white(), status.get("totalVersions").and_then(|v| v.as_u64()).unwrap_or(0));
-            println!("  {} {}", "Namespaces:".bright_white(), status.get("namespaceCount").and_then(|v| v.as_u64()).unwrap_or(0));
+            println!(
+                "  {} {}",
+                "Keys:".bright_white(),
+                status.get("keyCount").and_then(|v| v.as_u64()).unwrap_or(0)
+            );
+            println!(
+                "  {} {}",
+                "Versions:".bright_white(),
+                status
+                    .get("totalVersions")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+            );
+            println!(
+                "  {} {}",
+                "Namespaces:".bright_white(),
+                status
+                    .get("namespaceCount")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+            );
             println!();
 
             if let Some(namespaces) = status.get("namespaces").and_then(|v| v.as_array()) {
@@ -811,9 +878,18 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
             Ok(())
         }
 
-        Commands::Query { namespace, filter, sort, desc, limit, count: _count, sum: _sum, avg: _avg } => {
+        Commands::Query {
+            namespace,
+            filter,
+            sort,
+            desc,
+            limit,
+            count: _count,
+            sum: _sum,
+            avg: _avg,
+        } => {
             let mut query = serde_json::json!({});
-            
+
             if let Some(f) = filter {
                 // Parse simple filter expressions like "age > 30"
                 query["filter"] = serde_json::json!({
@@ -822,24 +898,24 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
                     "value": f
                 });
             }
-            
+
             if let Some(s) = sort {
                 query["sort"] = serde_json::json!({
                     "field": s,
                     "descending": *desc
                 });
             }
-            
+
             if let Some(l) = limit {
                 query["limit"] = serde_json::json!(l);
             }
 
             let result = client.query(namespace, query).await?;
-            
+
             if let Some(records) = result.get("results").and_then(|v| v.as_array()) {
                 println!("{} ({} records)", "Query results:".bold(), records.len());
                 println!();
-                
+
                 for record in records {
                     if let Some(key) = record.get("key").and_then(|v| v.as_str()) {
                         println!("  {} {}", "*".cyan(), key.bright_white());
@@ -849,22 +925,28 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
                     }
                 }
             }
-            
+
             Ok(())
         }
 
         Commands::View(view_cmd) => match view_cmd {
-            ViewCommands::Create { name, source, filter, description, auto_refresh } => {
+            ViewCommands::Create {
+                name,
+                source,
+                filter,
+                description,
+                auto_refresh,
+            } => {
                 let mut view_def = serde_json::json!({
                     "name": name,
                     "source": source,
                     "auto_refresh": *auto_refresh
                 });
-                
+
                 if let Some(desc) = description {
                     view_def["description"] = serde_json::json!(desc);
                 }
-                
+
                 if let Some(f) = filter {
                     view_def["filter"] = serde_json::json!({
                         "field": f.split_whitespace().next().unwrap_or(""),
@@ -902,17 +984,21 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
 
             ViewCommands::Query { name, limit } => {
                 let result = client.query_view(name).await?;
-                
+
                 if let Some(records) = result.get("results").and_then(|v| v.as_array()) {
                     let records: Vec<_> = if let Some(l) = limit {
                         records.iter().take(*l).cloned().collect()
                     } else {
                         records.clone()
                     };
-                    
-                    println!("{} ({} records)", format!("View '{}' results:", name).bold(), records.len());
+
+                    println!(
+                        "{} ({} records)",
+                        format!("View '{}' results:", name).bold(),
+                        records.len()
+                    );
                     println!();
-                    
+
                     for record in records {
                         if let Some(key) = record.get("key").and_then(|v| v.as_str()) {
                             println!("  {} {}", "*".cyan(), key.bright_white());
@@ -932,7 +1018,12 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
             }
         },
 
-        Commands::Diff { key, at: _at, from, to } => {
+        Commands::Diff {
+            key,
+            at: _at,
+            from,
+            to,
+        } => {
             let (namespace, key_name) = parse_key(key)?;
             let history = client.history(&namespace, &key_name).await?;
 
@@ -949,10 +1040,21 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
                 anyhow::bail!("Invalid version indices");
             }
 
-            let old_val = history[old_idx].get("value").cloned().unwrap_or(serde_json::Value::Null);
-            let new_val = history[new_idx].get("value").cloned().unwrap_or(serde_json::Value::Null);
+            let old_val = history[old_idx]
+                .get("value")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            let new_val = history[new_idx]
+                .get("value")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
 
-            show_diff(&old_val, &new_val, &format!("Version {}", old_idx), &format!("Version {}", new_idx));
+            show_diff(
+                &old_val,
+                &new_val,
+                &format!("Version {}", old_idx),
+                &format!("Version {}", new_idx),
+            );
             Ok(())
         }
 
@@ -969,17 +1071,26 @@ async fn handle_remote_command(command: &Commands, url: &str) -> Result<()> {
         }
 
         Commands::Peers => {
-            println!("{}", "Peers command not available via HTTP API yet".yellow());
+            println!(
+                "{}",
+                "Peers command not available via HTTP API yet".yellow()
+            );
             Ok(())
         }
 
         Commands::Watch { .. } => {
-            println!("{}", "Watch command not available via HTTP API (use websockets for streaming)".yellow());
+            println!(
+                "{}",
+                "Watch command not available via HTTP API (use websockets for streaming)".yellow()
+            );
             Ok(())
         }
 
         Commands::Auth(_) => {
-            println!("{}", "Auth commands require local database access.".yellow());
+            println!(
+                "{}",
+                "Auth commands require local database access.".yellow()
+            );
             println!("{}", "Remove --url to use auth commands locally.".yellow());
             Ok(())
         }
@@ -1016,79 +1127,128 @@ async fn main() -> Result<()> {
     // Execute command - wrap in async block to ensure shutdown is called
     let result = async {
         match cli.command {
-        Commands::Set { key, value } => {
-            let (namespace, key_name) = parse_key(&key)?;
+            Commands::Set { key, value } => {
+                let (namespace, key_name) = parse_key(&key)?;
 
-            // Parse value as JSON
-            let json_value: JsonValue = serde_json::from_str(&value)
-                .with_context(|| format!("Invalid JSON value: {}", value))?;
+                // Parse value as JSON
+                let json_value: JsonValue = serde_json::from_str(&value)
+                    .with_context(|| format!("Invalid JSON value: {}", value))?;
 
-            // Store the value
-            let versioned = db
-                .put(&namespace, &key_name, json_value)
-                .await
-                .context("Failed to store value")?;
+                // Store the value
+                let versioned = db
+                    .put(&namespace, &key_name, json_value)
+                    .await
+                    .context("Failed to store value")?;
 
-            // Save database to disk
-            save_database(&db, &db_path)
-                .await
-                .context("Failed to persist changes")?;
+                // Save database to disk
+                save_database(&db, &db_path)
+                    .await
+                    .context("Failed to persist changes")?;
 
-            // Output success message
-            println!("{}", "OK".green().bold());
-            println!("  Stored: {}/{}", namespace.cyan(), key_name.cyan());
-            println!("  Version: {}", versioned.version_id().bright_black());
-            println!("  Timestamp: {}", format_timestamp(&versioned.timestamp()));
+                // Output success message
+                println!("{}", "OK".green().bold());
+                println!("  Stored: {}/{}", namespace.cyan(), key_name.cyan());
+                println!("  Version: {}", versioned.version_id().bright_black());
+                println!("  Timestamp: {}", format_timestamp(&versioned.timestamp()));
 
-            Ok(())
-        }
+                Ok(())
+            }
 
-        Commands::Get { key, verbose, at } => {
-            let (namespace, key_name) = parse_key(&key)?;
+            Commands::Get { key, verbose, at } => {
+                let (namespace, key_name) = parse_key(&key)?;
 
-            // Handle time travel query
-            if let Some(timestamp_str) = at {
-                let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
-                    .with_context(|| format!("Invalid timestamp format: {}", timestamp_str))?
-                    .with_timezone(&Utc);
+                // Handle time travel query
+                if let Some(timestamp_str) = at {
+                    let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
+                        .with_context(|| format!("Invalid timestamp format: {}", timestamp_str))?
+                        .with_timezone(&Utc);
 
-                match db.get_at(&namespace, &key_name, timestamp).await {
-                    Ok(versioned) => {
-                        println!("{}", format_json(versioned.value()));
-                        println!();
-                        println!("{}", format!("(value at {})", timestamp_str).bright_black());
-                        Ok(())
-                    }
-                    Err(DeltaError::KeyNotFound { .. }) => {
-                        eprintln!("{}", "Error".red().bold());
-                        eprintln!("  Key not found: {}/{}", namespace, key_name);
-                        std::process::exit(1);
-                    }
-                    Err(DeltaError::NoValueAtTimestamp { .. }) => {
-                        eprintln!("{}", "Error".red().bold());
-                        eprintln!("  No value at timestamp: {}", timestamp_str);
-                        std::process::exit(1);
-                    }
-                    Err(e) => Err(e.into()),
-                }
-            } else {
-                match db.get(&namespace, &key_name).await {
-                    Ok(versioned) => {
-                        // Pretty print the value
-                        println!("{}", format_json(versioned.value()));
-
-                        if verbose {
+                    match db.get_at(&namespace, &key_name, timestamp).await {
+                        Ok(versioned) => {
+                            println!("{}", format_json(versioned.value()));
                             println!();
-                            println!("{}", "Metadata:".bright_black());
-                            println!("  Version: {}", versioned.version_id().bright_black());
-                            println!(
-                                "  Timestamp: {}",
-                                format_timestamp(&versioned.timestamp()).bright_black()
-                            );
-                            if let Some(prev) = versioned.previous_version() {
-                                println!("  Previous: {}", prev.bright_black());
-                            }
+                            println!("{}", format!("(value at {})", timestamp_str).bright_black());
+                            Ok(())
                         }
+                        Err(DeltaError::KeyNotFound { .. }) => {
+                            eprintln!("{}", "Error".red().bold());
+                            eprintln!("  Key not found: {}/{}", namespace, key_name);
+                            std::process::exit(1);
+                        }
+                        Err(DeltaError::NoValueAtTimestamp { .. }) => {
+                            eprintln!("{}", "Error".red().bold());
+                            eprintln!("  No value at timestamp: {}", timestamp_str);
+                            std::process::exit(1);
+                        }
+                        Err(e) => Err(e.into()),
+                    }
+                } else {
+                    match db.get(&namespace, &key_name).await {
+                        Ok(versioned) => {
+                            // Pretty print the value
+                            println!("{}", format_json(versioned.value()));
+
+                            if verbose {
+                                println!();
+                                println!("{}", "Metadata:".bright_black());
+                                println!("  Version: {}", versioned.version_id().bright_black());
+                                println!(
+                                    "  Timestamp: {}",
+                                    format_timestamp(&versioned.timestamp()).bright_black()
+                                );
+                                if let Some(prev) = versioned.previous_version() {
+                                    println!("  Previous: {}", prev.bright_black());
+                                }
+                            }
+
+                            Ok(())
+                        }
+                        Err(DeltaError::KeyNotFound { .. }) => {
+                            eprintln!("{}", "Error".red().bold());
+                            eprintln!("  Key not found: {}/{}", namespace, key_name);
+                            std::process::exit(1);
+                        }
+                        Err(e) => Err(e.into()),
+                    }
+                }
+            }
+
+            Commands::Log { key, limit } => {
+                let (namespace, key_name) = parse_key(&key)?;
+
+                match db.history(&namespace, &key_name).await {
+                    Ok(history) => {
+                        let entries = if let Some(limit) = limit {
+                            history.iter().rev().take(limit).collect::<Vec<_>>()
+                        } else {
+                            history.iter().rev().collect::<Vec<_>>()
+                        };
+
+                        if entries.is_empty() {
+                            println!("{}", "No history found".yellow());
+                            return Ok(());
+                        }
+
+                        println!("{}", "History:".bold());
+                        println!();
+
+                        for entry in entries {
+                            let ts = format_timestamp(&entry.timestamp);
+                            println!("  {} {}", "*".cyan(), ts.bright_black());
+                            println!("    {}", format_json(&entry.value).bright_white());
+                            println!("    Version: {}", entry.version_id.bright_black());
+                            println!();
+                        }
+
+                        println!(
+                            "  {} {} total",
+                            history.len(),
+                            if history.len() == 1 {
+                                "version"
+                            } else {
+                                "versions"
+                            }
+                        );
 
                         Ok(())
                     }
@@ -1100,121 +1260,26 @@ async fn main() -> Result<()> {
                     Err(e) => Err(e.into()),
                 }
             }
-        }
 
-        Commands::Log { key, limit } => {
-            let (namespace, key_name) = parse_key(&key)?;
+            Commands::Status => {
+                let stats = db.stats().await;
+                let namespaces = db.list_namespaces().await;
 
-            match db.history(&namespace, &key_name).await {
-                Ok(history) => {
-                    let entries = if let Some(limit) = limit {
-                        history.iter().rev().take(limit).collect::<Vec<_>>()
-                    } else {
-                        history.iter().rev().collect::<Vec<_>>()
-                    };
-
-                    if entries.is_empty() {
-                        println!("{}", "No history found".yellow());
-                        return Ok(());
-                    }
-
-                    println!("{}", "History:".bold());
-                    println!();
-
-                    for entry in entries {
-                        let ts = format_timestamp(&entry.timestamp);
-                        println!("  {} {}", "*".cyan(), ts.bright_black());
-                        println!("    {}", format_json(&entry.value).bright_white());
-                        println!("    Version: {}", entry.version_id.bright_black());
-                        println!();
-                    }
-
-                    println!(
-                        "  {} {} total",
-                        history.len(),
-                        if history.len() == 1 {
-                            "version"
-                        } else {
-                            "versions"
-                        }
-                    );
-
-                    Ok(())
-                }
-                Err(DeltaError::KeyNotFound { .. }) => {
-                    eprintln!("{}", "Error".red().bold());
-                    eprintln!("  Key not found: {}/{}", namespace, key_name);
-                    std::process::exit(1);
-                }
-                Err(e) => Err(e.into()),
-            }
-        }
-
-        Commands::Status => {
-            let stats = db.stats().await;
-            let namespaces = db.list_namespaces().await;
-
-            println!("{}", "Database Status".bold().cyan());
-            println!();
-            println!("  {} {}", "Keys:".bright_white(), stats.key_count);
-            println!("  {} {}", "Versions:".bright_white(), stats.total_versions);
-            println!(
-                "  {} {}",
-                "Namespaces:".bright_white(),
-                stats.namespace_count
-            );
-            println!();
-
-            if !namespaces.is_empty() {
-                println!("{}", "Namespaces:".bright_white());
-                for ns in &namespaces {
-                    let keys = db.list_keys(ns).await;
-                    println!(
-                        "  {} {} ({} {})",
-                        "*".cyan(),
-                        ns,
-                        keys.len(),
-                        if keys.len() == 1 { "key" } else { "keys" }
-                    );
-                }
+                println!("{}", "Database Status".bold().cyan());
                 println!();
-            }
+                println!("  {} {}", "Keys:".bright_white(), stats.key_count);
+                println!("  {} {}", "Versions:".bright_white(), stats.total_versions);
+                println!(
+                    "  {} {}",
+                    "Namespaces:".bright_white(),
+                    stats.namespace_count
+                );
+                println!();
 
-            println!("  {} {}", "Database:".bright_black(), db_path.display());
-
-            Ok(())
-        }
-
-        Commands::List { namespace } => {
-            match namespace {
-                Some(ns) => {
-                    // List keys in namespace
-                    let keys = db.list_keys(&ns).await;
-
-                    if keys.is_empty() {
-                        println!("{}", format!("No keys in namespace '{}'", ns).yellow());
-                        return Ok(());
-                    }
-
-                    println!("{}", format!("Keys in '{}':", ns).bold());
-                    println!();
-                    for key in keys {
-                        println!("  {} {}/{}", "*".cyan(), ns.bright_black(), key);
-                    }
-                }
-                None => {
-                    // List all namespaces
-                    let namespaces = db.list_namespaces().await;
-
-                    if namespaces.is_empty() {
-                        println!("{}", "No namespaces found".yellow());
-                        return Ok(());
-                    }
-
-                    println!("{}", "Namespaces:".bold());
-                    println!();
-                    for ns in namespaces {
-                        let keys = db.list_keys(&ns).await;
+                if !namespaces.is_empty() {
+                    println!("{}", "Namespaces:".bright_white());
+                    for ns in &namespaces {
+                        let keys = db.list_keys(ns).await;
                         println!(
                             "  {} {} ({} {})",
                             "*".cyan(),
@@ -1223,472 +1288,540 @@ async fn main() -> Result<()> {
                             if keys.len() == 1 { "key" } else { "keys" }
                         );
                     }
-                }
-            }
-
-            Ok(())
-        }
-
-        Commands::Diff { key, at, from, to } => {
-            let (namespace, key_name) = parse_key(&key)?;
-
-            // Get history for this key
-            let history = match db.history(&namespace, &key_name).await {
-                Ok(h) => h,
-                Err(DeltaError::KeyNotFound { .. }) => {
-                    eprintln!("{}", "Error".red().bold());
-                    eprintln!("  Key not found: {}/{}", namespace, key_name);
-                    std::process::exit(1);
-                }
-                Err(e) => return Err(e.into()),
-            };
-
-            if history.is_empty() {
-                println!("{}", "No history found".yellow());
-                return Ok(());
-            }
-
-            // Determine which versions to compare
-            let (old_idx, new_idx) = if let (Some(f), Some(t)) = (from, to) {
-                // Explicit indices provided
-                if f >= history.len() || t >= history.len() {
-                    anyhow::bail!(
-                        "Invalid version indices. History has {} versions (0-{})",
-                        history.len(),
-                        history.len() - 1
-                    );
-                }
-                (f, t)
-            } else if let Some(timestamp_str) = at {
-                // Find version at timestamp and compare with previous
-                let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
-                    .with_context(|| format!("Invalid timestamp format: {}", timestamp_str))?
-                    .with_timezone(&Utc);
-
-                // Find version at or before this timestamp
-                let idx = history
-                    .iter()
-                    .position(|e| e.timestamp >= timestamp)
-                    .unwrap_or(history.len() - 1);
-
-                if idx == 0 {
-                    anyhow::bail!("No previous version to compare with");
-                }
-                (idx - 1, idx)
-            } else {
-                // Default: compare latest with previous
-                if history.len() < 2 {
-                    println!("{}", "Only one version exists, nothing to compare".yellow());
-                    return Ok(());
-                }
-                (history.len() - 2, history.len() - 1)
-            };
-
-            let old_entry = &history[old_idx];
-            let new_entry = &history[new_idx];
-
-            // Show metadata
-            println!("{}", "Comparing versions:".bold());
-            println!();
-            println!(
-                "  {} Version {} ({})",
-                "-".red().bold(),
-                old_idx,
-                format_timestamp(&old_entry.timestamp).bright_black()
-            );
-            println!(
-                "  {} Version {} ({})",
-                "+".green().bold(),
-                new_idx,
-                format_timestamp(&new_entry.timestamp).bright_black()
-            );
-            println!();
-
-            // Show diff
-            show_diff(
-                &old_entry.value,
-                &new_entry.value,
-                &format!("Version {}", old_idx),
-                &format!("Version {}", new_idx),
-            );
-
-            Ok(())
-        }
-
-        Commands::Peers => {
-            println!("{}", "Cluster peers not available in client mode.".yellow());
-            println!("  Use 'kdelta start' to run in server mode and see peers.");
-            Ok(())
-        }
-
-        Commands::Query {
-            namespace,
-            filter,
-            sort,
-            desc,
-            limit,
-            count,
-            sum,
-            avg,
-        } => {
-            // Build the query
-            let mut query = Query::new();
-
-            // Add filter if provided
-            if let Some(filter_expr) = filter {
-                let filter = parse_filter(&filter_expr)?;
-                query = query.filter(filter);
-            }
-
-            // Add sort if provided
-            if let Some(sort_field) = sort {
-                query = query.sort_by(sort_field, !desc);
-            }
-
-            // Add limit if provided
-            if let Some(lim) = limit {
-                query = query.limit(lim);
-            }
-
-            // Add aggregation
-            if count {
-                query = query.aggregate(Aggregation::count());
-            } else if let Some(field) = sum {
-                query = query.aggregate(Aggregation::sum(field));
-            } else if let Some(field) = avg {
-                query = query.aggregate(Aggregation::avg(field));
-            }
-
-            // Execute query
-            let results = db
-                .query(&namespace, query)
-                .await
-                .context("Failed to execute query")?;
-
-            // Show results
-            if count {
-                println!("{}", "Query result:".bold());
-                println!("  Count: {}", results.total_count.to_string().cyan());
-            } else {
-                println!(
-                    "{} ({} {})",
-                    "Query results:".bold(),
-                    results.records.len(),
-                    if results.records.len() == 1 {
-                        "record"
-                    } else {
-                        "records"
-                    }
-                );
-                println!();
-
-                for record in &results.records {
-                    println!("  {} {}", "*".cyan(), record.key.bright_white());
-                    println!("    {}", format_json(&record.value).bright_black());
-                }
-            }
-
-            Ok(())
-        }
-
-        Commands::View(view_cmd) => match view_cmd {
-            ViewCommands::Create {
-                name,
-                source,
-                filter,
-                description,
-                auto_refresh,
-            } => {
-                let mut definition = ViewDefinition::new(&name, &source);
-
-                if let Some(filter_expr) = filter {
-                    let filter = parse_filter(&filter_expr)?;
-                    definition = definition.with_query(Query::new().filter(filter));
-                }
-
-                if let Some(desc) = description {
-                    definition = definition.with_description(desc);
-                }
-
-                if auto_refresh {
-                    definition = definition.auto_refresh(true);
-                }
-
-                let info = db
-                    .create_view(definition)
-                    .await
-                    .context("Failed to create view")?;
-
-                println!("{}", "View created:".bold().green());
-                println!("  Name: {}", info.name.cyan());
-                println!("  Source: {}", info.source_collection);
-                println!("  Records: {}", info.record_count);
-                if let Some(desc) = &info.description {
-                    println!("  Description: {}", desc.bright_black());
-                }
-
-                Ok(())
-            }
-
-            ViewCommands::List => {
-                let views = db.list_views().await;
-
-                if views.is_empty() {
-                    println!("{}", "No views found".yellow());
-                    return Ok(());
-                }
-
-                println!("{}", "Materialized views:".bold());
-                println!();
-
-                for view in views {
-                    println!("  {} {}", "*".cyan(), view.name.bright_white());
-                    println!("    Source: {}", view.source_collection);
-                    println!("    Records: {}", view.record_count);
-                    println!(
-                        "    Last refreshed: {}",
-                        format_timestamp(&view.last_refreshed).bright_black()
-                    );
-                    if view.auto_refresh {
-                        println!("    Auto-refresh: {}", "enabled".green());
-                    }
-                    if let Some(desc) = &view.description {
-                        println!("    Description: {}", desc.bright_black());
-                    }
                     println!();
                 }
 
-                Ok(())
-            }
-
-            ViewCommands::Refresh { name } => {
-                let info = db
-                    .refresh_view(&name)
-                    .await
-                    .context("Failed to refresh view")?;
-
-                println!("{}", "View refreshed:".bold().green());
-                println!("  Name: {}", info.name.cyan());
-                println!("  Records: {}", info.record_count);
-                println!(
-                    "  Last refreshed: {}",
-                    format_timestamp(&info.last_refreshed)
-                );
+                println!("  {} {}", "Database:".bright_black(), db_path.display());
 
                 Ok(())
             }
 
-            ViewCommands::Query { name, limit } => {
-                let result = db.query_view(&name).await.context("Failed to query view")?;
+            Commands::List { namespace } => {
+                match namespace {
+                    Some(ns) => {
+                        // List keys in namespace
+                        let keys = db.list_keys(&ns).await;
 
-                let records = if let Some(lim) = limit {
-                    result.records.into_iter().take(lim).collect::<Vec<_>>()
-                } else {
-                    result.records
-                };
+                        if keys.is_empty() {
+                            println!("{}", format!("No keys in namespace '{}'", ns).yellow());
+                            return Ok(());
+                        }
 
-                println!(
-                    "{} ({} {})",
-                    format!("View '{}' results:", name).bold(),
-                    records.len(),
-                    if records.len() == 1 {
-                        "record"
-                    } else {
-                        "records"
-                    }
-                );
-                println!();
-
-                for record in records {
-                    println!("  {} {}", "*".cyan(), record.key.bright_white());
-                    println!("    {}", format_json(&record.value).bright_black());
-                }
-
-                Ok(())
-            }
-
-            ViewCommands::Delete { name } => {
-                db.delete_view(&name)
-                    .await
-                    .context("Failed to delete view")?;
-
-                println!("{}", format!("View '{}' deleted.", name).green());
-
-                Ok(())
-            }
-        },
-
-        Commands::Auth(auth_cmd) => match auth_cmd {
-            AuthCommands::CreateIdentity { name } => {
-                use koru_delta::auth::IdentityUserData;
-                
-                let (identity, _secret_key) = db.auth()
-                    .create_identity(IdentityUserData {
-                        display_name: name.clone(),
-                        ..Default::default()
-                    })
-                    .context("Failed to create identity")?;
-
-                println!("{}", "Identity created:".bold().green());
-                println!("  ID: {}", identity.public_key.cyan());
-                if let Some(n) = identity.user_data.display_name {
-                    println!("  Name: {}", n);
-                }
-                println!("\n{}", "IMPORTANT: Save your secret key!".yellow().bold());
-                println!("{}", "It cannot be recovered if lost.".yellow());
-
-                Ok(())
-            }
-
-            AuthCommands::ListIdentities => {
-                println!("{}", "Identities:".bold());
-                println!();
-                println!("{}", "Note: Identity listing requires direct storage access.".yellow());
-                println!("{}", "Use the Rust API for programmatic identity management.".yellow());
-                Ok(())
-            }
-
-            AuthCommands::Grant { to, resource, permission, expires } => {
-                use koru_delta::auth::{Permission, ResourcePattern};
-                
-                let perm = match permission.to_lowercase().as_str() {
-                    "read" => Permission::Read,
-                    "write" => Permission::Write,
-                    "admin" => Permission::Admin,
-                    _ => {
-                        anyhow::bail!("Invalid permission. Use: read, write, or admin");
-                    }
-                };
-
-                let _pattern = if resource.contains(':') {
-                    ResourcePattern::Exact(resource.clone())
-                } else if resource.ends_with("/*") {
-                    ResourcePattern::Namespace(resource.trim_end_matches("/*").to_string())
-                } else {
-                    ResourcePattern::Namespace(resource.clone())
-                };
-
-                let expiration = expires.as_ref().and_then(|e| parse_duration(e));
-
-                // Note: This requires the granter's secret key which we don't have in CLI context
-                // For now, show what would be needed
-                println!("{}", "Capability grant request:".bold());
-                println!("  To: {}", to.cyan());
-                println!("  Resource: {}", resource);
-                println!("  Permission: {:?}", perm);
-                if let Some(exp) = expiration {
-                    println!("  Expires: {}", exp);
-                }
-                println!();
-                println!("{}", "Note: Granting requires your secret key.".yellow());
-                println!("{}", "Use the Rust API for programmatic grants.".yellow());
-
-                Ok(())
-            }
-
-            AuthCommands::ListCapabilities => {
-                println!("{}", "Capabilities for current identity:".bold());
-                println!();
-                println!("{}", "Note: Use the Rust API to query capabilities.".yellow());
-                Ok(())
-            }
-
-            AuthCommands::Revoke { capability } => {
-                println!("{}", format!("Revoking capability: {}", capability).bold());
-                println!();
-                println!("{}", "Note: Revocation requires the granter's secret key.".yellow());
-                println!("{}", "Use the Rust API for programmatic revocation.".yellow());
-                Ok(())
-            }
-        },
-
-        Commands::Watch {
-            target,
-            all,
-            inserts_only,
-            updates_only,
-        } => {
-            // Build subscription
-            let subscription = if all {
-                Subscription::all()
-            } else if let Some(t) = target {
-                // Check if it's a key (contains /) or just a namespace
-                if t.contains('/') {
-                    let (ns, key) = parse_key(&t)?;
-                    Subscription::key(ns, key)
-                } else {
-                    Subscription::collection(t)
-                }
-            } else {
-                Subscription::all()
-            };
-
-            // Apply change type filters
-            let subscription = if inserts_only {
-                subscription.inserts_only()
-            } else if updates_only {
-                subscription.updates_only()
-            } else {
-                subscription
-            };
-
-            let (_id, mut rx) = db.subscribe(subscription).await;
-
-            println!("{}", "Watching for changes...".bold().cyan());
-            println!("  Press Ctrl+C to stop.");
-            println!();
-
-            // Watch loop
-            loop {
-                tokio::select! {
-                    event = rx.recv() => {
-                        match event {
-                            Ok(change) => {
-                                let change_type = match change.change_type {
-                                    ChangeType::Insert => "INSERT".green(),
-                                    ChangeType::Update => "UPDATE".yellow(),
-                                    ChangeType::Delete => "DELETE".red(),
-                                };
-
-                                println!(
-                                    "{} {}/{} {}",
-                                    change_type,
-                                    change.collection.cyan(),
-                                    change.key.bright_white(),
-                                    format_timestamp(&change.timestamp).bright_black()
-                                );
-
-                                if let Some(value) = &change.value {
-                                    println!("  {}", format_json(value).bright_black());
-                                }
-                                println!();
-                            }
-                            Err(_) => {
-                                // Channel lagged, continue
-                                continue;
-                            }
+                        println!("{}", format!("Keys in '{}':", ns).bold());
+                        println!();
+                        for key in keys {
+                            println!("  {} {}/{}", "*".cyan(), ns.bright_black(), key);
                         }
                     }
-                    _ = signal::ctrl_c() => {
+                    None => {
+                        // List all namespaces
+                        let namespaces = db.list_namespaces().await;
+
+                        if namespaces.is_empty() {
+                            println!("{}", "No namespaces found".yellow());
+                            return Ok(());
+                        }
+
+                        println!("{}", "Namespaces:".bold());
                         println!();
-                        println!("{}", "Stopped watching.".yellow());
-                        break;
+                        for ns in namespaces {
+                            let keys = db.list_keys(&ns).await;
+                            println!(
+                                "  {} {} ({} {})",
+                                "*".cyan(),
+                                ns,
+                                keys.len(),
+                                if keys.len() == 1 { "key" } else { "keys" }
+                            );
+                        }
                     }
                 }
+
+                Ok(())
             }
 
-            Ok(())
-        }
+            Commands::Diff { key, at, from, to } => {
+                let (namespace, key_name) = parse_key(&key)?;
 
-        // Start and Serve are handled above
-        Commands::Start { .. } => unreachable!(),
-        Commands::Serve { .. } => unreachable!(),
+                // Get history for this key
+                let history = match db.history(&namespace, &key_name).await {
+                    Ok(h) => h,
+                    Err(DeltaError::KeyNotFound { .. }) => {
+                        eprintln!("{}", "Error".red().bold());
+                        eprintln!("  Key not found: {}/{}", namespace, key_name);
+                        std::process::exit(1);
+                    }
+                    Err(e) => return Err(e.into()),
+                };
+
+                if history.is_empty() {
+                    println!("{}", "No history found".yellow());
+                    return Ok(());
+                }
+
+                // Determine which versions to compare
+                let (old_idx, new_idx) = if let (Some(f), Some(t)) = (from, to) {
+                    // Explicit indices provided
+                    if f >= history.len() || t >= history.len() {
+                        anyhow::bail!(
+                            "Invalid version indices. History has {} versions (0-{})",
+                            history.len(),
+                            history.len() - 1
+                        );
+                    }
+                    (f, t)
+                } else if let Some(timestamp_str) = at {
+                    // Find version at timestamp and compare with previous
+                    let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
+                        .with_context(|| format!("Invalid timestamp format: {}", timestamp_str))?
+                        .with_timezone(&Utc);
+
+                    // Find version at or before this timestamp
+                    let idx = history
+                        .iter()
+                        .position(|e| e.timestamp >= timestamp)
+                        .unwrap_or(history.len() - 1);
+
+                    if idx == 0 {
+                        anyhow::bail!("No previous version to compare with");
+                    }
+                    (idx - 1, idx)
+                } else {
+                    // Default: compare latest with previous
+                    if history.len() < 2 {
+                        println!("{}", "Only one version exists, nothing to compare".yellow());
+                        return Ok(());
+                    }
+                    (history.len() - 2, history.len() - 1)
+                };
+
+                let old_entry = &history[old_idx];
+                let new_entry = &history[new_idx];
+
+                // Show metadata
+                println!("{}", "Comparing versions:".bold());
+                println!();
+                println!(
+                    "  {} Version {} ({})",
+                    "-".red().bold(),
+                    old_idx,
+                    format_timestamp(&old_entry.timestamp).bright_black()
+                );
+                println!(
+                    "  {} Version {} ({})",
+                    "+".green().bold(),
+                    new_idx,
+                    format_timestamp(&new_entry.timestamp).bright_black()
+                );
+                println!();
+
+                // Show diff
+                show_diff(
+                    &old_entry.value,
+                    &new_entry.value,
+                    &format!("Version {}", old_idx),
+                    &format!("Version {}", new_idx),
+                );
+
+                Ok(())
+            }
+
+            Commands::Peers => {
+                println!("{}", "Cluster peers not available in client mode.".yellow());
+                println!("  Use 'kdelta start' to run in server mode and see peers.");
+                Ok(())
+            }
+
+            Commands::Query {
+                namespace,
+                filter,
+                sort,
+                desc,
+                limit,
+                count,
+                sum,
+                avg,
+            } => {
+                // Build the query
+                let mut query = Query::new();
+
+                // Add filter if provided
+                if let Some(filter_expr) = filter {
+                    let filter = parse_filter(&filter_expr)?;
+                    query = query.filter(filter);
+                }
+
+                // Add sort if provided
+                if let Some(sort_field) = sort {
+                    query = query.sort_by(sort_field, !desc);
+                }
+
+                // Add limit if provided
+                if let Some(lim) = limit {
+                    query = query.limit(lim);
+                }
+
+                // Add aggregation
+                if count {
+                    query = query.aggregate(Aggregation::count());
+                } else if let Some(field) = sum {
+                    query = query.aggregate(Aggregation::sum(field));
+                } else if let Some(field) = avg {
+                    query = query.aggregate(Aggregation::avg(field));
+                }
+
+                // Execute query
+                let results = db
+                    .query(&namespace, query)
+                    .await
+                    .context("Failed to execute query")?;
+
+                // Show results
+                if count {
+                    println!("{}", "Query result:".bold());
+                    println!("  Count: {}", results.total_count.to_string().cyan());
+                } else {
+                    println!(
+                        "{} ({} {})",
+                        "Query results:".bold(),
+                        results.records.len(),
+                        if results.records.len() == 1 {
+                            "record"
+                        } else {
+                            "records"
+                        }
+                    );
+                    println!();
+
+                    for record in &results.records {
+                        println!("  {} {}", "*".cyan(), record.key.bright_white());
+                        println!("    {}", format_json(&record.value).bright_black());
+                    }
+                }
+
+                Ok(())
+            }
+
+            Commands::View(view_cmd) => match view_cmd {
+                ViewCommands::Create {
+                    name,
+                    source,
+                    filter,
+                    description,
+                    auto_refresh,
+                } => {
+                    let mut definition = ViewDefinition::new(&name, &source);
+
+                    if let Some(filter_expr) = filter {
+                        let filter = parse_filter(&filter_expr)?;
+                        definition = definition.with_query(Query::new().filter(filter));
+                    }
+
+                    if let Some(desc) = description {
+                        definition = definition.with_description(desc);
+                    }
+
+                    if auto_refresh {
+                        definition = definition.auto_refresh(true);
+                    }
+
+                    let info = db
+                        .create_view(definition)
+                        .await
+                        .context("Failed to create view")?;
+
+                    println!("{}", "View created:".bold().green());
+                    println!("  Name: {}", info.name.cyan());
+                    println!("  Source: {}", info.source_collection);
+                    println!("  Records: {}", info.record_count);
+                    if let Some(desc) = &info.description {
+                        println!("  Description: {}", desc.bright_black());
+                    }
+
+                    Ok(())
+                }
+
+                ViewCommands::List => {
+                    let views = db.list_views().await;
+
+                    if views.is_empty() {
+                        println!("{}", "No views found".yellow());
+                        return Ok(());
+                    }
+
+                    println!("{}", "Materialized views:".bold());
+                    println!();
+
+                    for view in views {
+                        println!("  {} {}", "*".cyan(), view.name.bright_white());
+                        println!("    Source: {}", view.source_collection);
+                        println!("    Records: {}", view.record_count);
+                        println!(
+                            "    Last refreshed: {}",
+                            format_timestamp(&view.last_refreshed).bright_black()
+                        );
+                        if view.auto_refresh {
+                            println!("    Auto-refresh: {}", "enabled".green());
+                        }
+                        if let Some(desc) = &view.description {
+                            println!("    Description: {}", desc.bright_black());
+                        }
+                        println!();
+                    }
+
+                    Ok(())
+                }
+
+                ViewCommands::Refresh { name } => {
+                    let info = db
+                        .refresh_view(&name)
+                        .await
+                        .context("Failed to refresh view")?;
+
+                    println!("{}", "View refreshed:".bold().green());
+                    println!("  Name: {}", info.name.cyan());
+                    println!("  Records: {}", info.record_count);
+                    println!(
+                        "  Last refreshed: {}",
+                        format_timestamp(&info.last_refreshed)
+                    );
+
+                    Ok(())
+                }
+
+                ViewCommands::Query { name, limit } => {
+                    let result = db.query_view(&name).await.context("Failed to query view")?;
+
+                    let records = if let Some(lim) = limit {
+                        result.records.into_iter().take(lim).collect::<Vec<_>>()
+                    } else {
+                        result.records
+                    };
+
+                    println!(
+                        "{} ({} {})",
+                        format!("View '{}' results:", name).bold(),
+                        records.len(),
+                        if records.len() == 1 {
+                            "record"
+                        } else {
+                            "records"
+                        }
+                    );
+                    println!();
+
+                    for record in records {
+                        println!("  {} {}", "*".cyan(), record.key.bright_white());
+                        println!("    {}", format_json(&record.value).bright_black());
+                    }
+
+                    Ok(())
+                }
+
+                ViewCommands::Delete { name } => {
+                    db.delete_view(&name)
+                        .await
+                        .context("Failed to delete view")?;
+
+                    println!("{}", format!("View '{}' deleted.", name).green());
+
+                    Ok(())
+                }
+            },
+
+            Commands::Auth(auth_cmd) => match auth_cmd {
+                AuthCommands::CreateIdentity { name } => {
+                    use koru_delta::auth::IdentityUserData;
+
+                    let (identity, _secret_key) = db
+                        .auth()
+                        .create_identity(IdentityUserData {
+                            display_name: name.clone(),
+                            ..Default::default()
+                        })
+                        .context("Failed to create identity")?;
+
+                    println!("{}", "Identity created:".bold().green());
+                    println!("  ID: {}", identity.public_key.cyan());
+                    if let Some(n) = identity.user_data.display_name {
+                        println!("  Name: {}", n);
+                    }
+                    println!("\n{}", "IMPORTANT: Save your secret key!".yellow().bold());
+                    println!("{}", "It cannot be recovered if lost.".yellow());
+
+                    Ok(())
+                }
+
+                AuthCommands::ListIdentities => {
+                    println!("{}", "Identities:".bold());
+                    println!();
+                    println!(
+                        "{}",
+                        "Note: Identity listing requires direct storage access.".yellow()
+                    );
+                    println!(
+                        "{}",
+                        "Use the Rust API for programmatic identity management.".yellow()
+                    );
+                    Ok(())
+                }
+
+                AuthCommands::Grant {
+                    to,
+                    resource,
+                    permission,
+                    expires,
+                } => {
+                    use koru_delta::auth::{Permission, ResourcePattern};
+
+                    let perm = match permission.to_lowercase().as_str() {
+                        "read" => Permission::Read,
+                        "write" => Permission::Write,
+                        "admin" => Permission::Admin,
+                        _ => {
+                            anyhow::bail!("Invalid permission. Use: read, write, or admin");
+                        }
+                    };
+
+                    let _pattern = if resource.contains(':') {
+                        ResourcePattern::Exact(resource.clone())
+                    } else if resource.ends_with("/*") {
+                        ResourcePattern::Namespace(resource.trim_end_matches("/*").to_string())
+                    } else {
+                        ResourcePattern::Namespace(resource.clone())
+                    };
+
+                    let expiration = expires.as_ref().and_then(|e| parse_duration(e));
+
+                    // Note: This requires the granter's secret key which we don't have in CLI context
+                    // For now, show what would be needed
+                    println!("{}", "Capability grant request:".bold());
+                    println!("  To: {}", to.cyan());
+                    println!("  Resource: {}", resource);
+                    println!("  Permission: {:?}", perm);
+                    if let Some(exp) = expiration {
+                        println!("  Expires: {}", exp);
+                    }
+                    println!();
+                    println!("{}", "Note: Granting requires your secret key.".yellow());
+                    println!("{}", "Use the Rust API for programmatic grants.".yellow());
+
+                    Ok(())
+                }
+
+                AuthCommands::ListCapabilities => {
+                    println!("{}", "Capabilities for current identity:".bold());
+                    println!();
+                    println!(
+                        "{}",
+                        "Note: Use the Rust API to query capabilities.".yellow()
+                    );
+                    Ok(())
+                }
+
+                AuthCommands::Revoke { capability } => {
+                    println!("{}", format!("Revoking capability: {}", capability).bold());
+                    println!();
+                    println!(
+                        "{}",
+                        "Note: Revocation requires the granter's secret key.".yellow()
+                    );
+                    println!(
+                        "{}",
+                        "Use the Rust API for programmatic revocation.".yellow()
+                    );
+                    Ok(())
+                }
+            },
+
+            Commands::Watch {
+                target,
+                all,
+                inserts_only,
+                updates_only,
+            } => {
+                // Build subscription
+                let subscription = if all {
+                    Subscription::all()
+                } else if let Some(t) = target {
+                    // Check if it's a key (contains /) or just a namespace
+                    if t.contains('/') {
+                        let (ns, key) = parse_key(&t)?;
+                        Subscription::key(ns, key)
+                    } else {
+                        Subscription::collection(t)
+                    }
+                } else {
+                    Subscription::all()
+                };
+
+                // Apply change type filters
+                let subscription = if inserts_only {
+                    subscription.inserts_only()
+                } else if updates_only {
+                    subscription.updates_only()
+                } else {
+                    subscription
+                };
+
+                let (_id, mut rx) = db.subscribe(subscription).await;
+
+                println!("{}", "Watching for changes...".bold().cyan());
+                println!("  Press Ctrl+C to stop.");
+                println!();
+
+                // Watch loop
+                loop {
+                    tokio::select! {
+                        event = rx.recv() => {
+                            match event {
+                                Ok(change) => {
+                                    let change_type = match change.change_type {
+                                        ChangeType::Insert => "INSERT".green(),
+                                        ChangeType::Update => "UPDATE".yellow(),
+                                        ChangeType::Delete => "DELETE".red(),
+                                    };
+
+                                    println!(
+                                        "{} {}/{} {}",
+                                        change_type,
+                                        change.collection.cyan(),
+                                        change.key.bright_white(),
+                                        format_timestamp(&change.timestamp).bright_black()
+                                    );
+
+                                    if let Some(value) = &change.value {
+                                        println!("  {}", format_json(value).bright_black());
+                                    }
+                                    println!();
+                                }
+                                Err(_) => {
+                                    // Channel lagged, continue
+                                    continue;
+                                }
+                            }
+                        }
+                        _ = signal::ctrl_c() => {
+                            println!();
+                            println!("{}", "Stopped watching.".yellow());
+                            break;
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
+            // Start and Serve are handled above
+            Commands::Start { .. } => unreachable!(),
+            Commands::Serve { .. } => unreachable!(),
+        }
     }
-    }.await;
-    
+    .await;
+
     // Shutdown database to release lock
     db.shutdown().await.ok();
-    
+
     result
 }
 
@@ -1732,7 +1865,11 @@ async fn run_server(
     }
 
     // Create cluster node and attach to database for write broadcasting
-    let node = std::sync::Arc::new(ClusterNode::new(db.storage().clone(), db.engine().clone(), config));
+    let node = std::sync::Arc::new(ClusterNode::new(
+        db.storage().clone(),
+        db.engine().clone(),
+        config,
+    ));
     let db = db.with_cluster(node.clone());
 
     println!("{}", "Starting KoruDelta node...".bold().cyan());
@@ -1800,11 +1937,7 @@ async fn run_server(
 }
 
 /// Run the HTTP API server
-async fn run_http_server(
-    db_path: &std::path::Path,
-    bind: &str,
-    port: u16,
-) -> Result<()> {
+async fn run_http_server(db_path: &std::path::Path, bind: &str, port: u16) -> Result<()> {
     use koru_delta::http::HttpServer;
 
     // Parse bind address
@@ -1834,7 +1967,7 @@ async fn run_http_server(
 
     // Create and start HTTP server
     let server = HttpServer::new(db);
-    
+
     // Handle Ctrl+C for graceful shutdown
     let shutdown = async {
         signal::ctrl_c().await.ok();
@@ -1855,14 +1988,19 @@ async fn run_http_server(
     Ok(())
 }
 
-
 /// Parse a duration string like "1h", "1d", "7d" into seconds
 fn parse_duration(s: &str) -> Option<u64> {
     let s = s.trim().to_lowercase();
     if s.ends_with('h') {
-        s.trim_end_matches('h').parse::<u64>().ok().map(|n| n * 3600)
+        s.trim_end_matches('h')
+            .parse::<u64>()
+            .ok()
+            .map(|n| n * 3600)
     } else if s.ends_with('d') {
-        s.trim_end_matches('d').parse::<u64>().ok().map(|n| n * 86400)
+        s.trim_end_matches('d')
+            .parse::<u64>()
+            .ok()
+            .map(|n| n * 86400)
     } else if s.ends_with('m') {
         s.trim_end_matches('m').parse::<u64>().ok().map(|n| n * 60)
     } else {

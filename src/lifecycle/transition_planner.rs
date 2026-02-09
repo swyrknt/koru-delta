@@ -50,11 +50,7 @@ impl TransitionPlanner {
     }
 
     /// Create with custom capacities
-    pub fn with_capacities(
-        hot: usize,
-        warm: usize,
-        cold_per_epoch: usize,
-    ) -> Self {
+    pub fn with_capacities(hot: usize, warm: usize, cold_per_epoch: usize) -> Self {
         Self {
             hot_capacity: hot,
             warm_capacity: warm,
@@ -84,14 +80,16 @@ impl TransitionPlanner {
         let mut cold_count = 0;
 
         for score in ranked {
-            let target_tier = if hot_count < self.hot_capacity && score.score >= self.hot_min_importance
+            let target_tier = if hot_count < self.hot_capacity
+                && score.score >= self.hot_min_importance
             {
                 hot_count += 1;
                 MemoryTier::Hot
             } else if warm_count < self.warm_capacity && score.score >= self.warm_min_importance {
                 warm_count += 1;
                 MemoryTier::Warm
-            } else if cold_count < self.cold_capacity_per_epoch && score.score >= self.cold_min_importance
+            } else if cold_count < self.cold_capacity_per_epoch
+                && score.score >= self.cold_min_importance
             {
                 cold_count += 1;
                 MemoryTier::Cold
@@ -191,12 +189,7 @@ impl TransitionPlanner {
     }
 
     /// Set importance thresholds
-    pub fn set_thresholds(
-        &mut self,
-        hot: f32,
-        warm: f32,
-        cold: f32,
-    ) {
+    pub fn set_thresholds(&mut self, hot: f32, warm: f32, cold: f32) {
         self.hot_min_importance = hot.clamp(0.0, 1.0);
         self.warm_min_importance = warm.clamp(0.0, 1.0);
         self.cold_min_importance = cold.clamp(0.0, 1.0);
@@ -260,12 +253,18 @@ impl Transition {
 
     /// Check if this is a promotion (to faster tier)
     pub fn is_promotion(&self) -> bool {
-        matches!(self.transition_type(), TransitionType::Promote | TransitionType::Restore)
+        matches!(
+            self.transition_type(),
+            TransitionType::Promote | TransitionType::Restore
+        )
     }
 
     /// Check if this is a demotion (to slower tier)
     pub fn is_demotion(&self) -> bool {
-        matches!(self.transition_type(), TransitionType::Demote | TransitionType::Archive)
+        matches!(
+            self.transition_type(),
+            TransitionType::Demote | TransitionType::Archive
+        )
     }
 }
 
@@ -444,9 +443,24 @@ mod tests {
         let mut batch = TransitionBatch::new();
         assert!(batch.is_empty());
 
-        batch.add(Transition::new("t1".to_string(), MemoryTier::Warm, MemoryTier::Hot, 0.8));
-        batch.add(Transition::new("t2".to_string(), MemoryTier::Hot, MemoryTier::Warm, 0.3));
-        batch.add(Transition::new("t3".to_string(), MemoryTier::Warm, MemoryTier::Hot, 0.9));
+        batch.add(Transition::new(
+            "t1".to_string(),
+            MemoryTier::Warm,
+            MemoryTier::Hot,
+            0.8,
+        ));
+        batch.add(Transition::new(
+            "t2".to_string(),
+            MemoryTier::Hot,
+            MemoryTier::Warm,
+            0.3,
+        ));
+        batch.add(Transition::new(
+            "t3".to_string(),
+            MemoryTier::Warm,
+            MemoryTier::Hot,
+            0.9,
+        ));
 
         assert_eq!(batch.len(), 3);
         assert_eq!(batch.to_hot.len(), 2);

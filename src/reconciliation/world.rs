@@ -166,24 +166,17 @@ impl WorldReconciliation {
     /// Find distinctions missing from remote.
     pub fn find_missing(&self, remote_frontier: &[String]) -> Vec<String> {
         let divergence = self.find_divergence(remote_frontier);
-        
+
         // Get all distinctions from divergence point
         let local_all: HashSet<_> = match &divergence {
-            Some(point) => self
-                .local_graph
-                .descendants(point)
-                .into_iter()
-                .collect(),
+            Some(point) => self.local_graph.descendants(point).into_iter().collect(),
             None => self.local_graph.all_nodes().into_iter().collect(),
         };
 
         let remote_set: HashSet<_> = remote_frontier.iter().cloned().collect();
 
         // Find what we have that they don't
-        local_all
-            .difference(&remote_set)
-            .cloned()
-            .collect()
+        local_all.difference(&remote_set).cloned().collect()
     }
 
     /// Prepare sync data to send to remote.
@@ -258,10 +251,7 @@ impl WorldReconciliation {
         let common: HashSet<_> = local_nodes.intersection(&remote_nodes).cloned().collect();
 
         // Find unique to remote
-        let remote_unique: Vec<_> = remote_nodes
-            .difference(&local_nodes)
-            .cloned()
-            .collect();
+        let remote_unique: Vec<_> = remote_nodes.difference(&local_nodes).cloned().collect();
 
         // Add remote unique nodes
         for id in &remote_unique {
@@ -299,17 +289,17 @@ impl WorldReconciliation {
             }
 
             // Check if this is a divergent branch
-            let remote_ancestors: HashSet<_> = if let Some(divergence) = 
-                self.find_divergence(std::slice::from_ref(remote_id)) {
-                // Find path from divergence to remote
-                self.local_graph
-                    .ancestors(remote_id)
-                    .into_iter()
-                    .filter(|a| *a != divergence)
-                    .collect()
-            } else {
-                continue;
-            };
+            let remote_ancestors: HashSet<_> =
+                if let Some(divergence) = self.find_divergence(std::slice::from_ref(remote_id)) {
+                    // Find path from divergence to remote
+                    self.local_graph
+                        .ancestors(remote_id)
+                        .into_iter()
+                        .filter(|a| *a != divergence)
+                        .collect()
+                } else {
+                    continue;
+                };
 
             // If we have divergent paths, it's a conflict
             if !remote_ancestors.is_empty() {

@@ -114,9 +114,9 @@ pub use capability::{
     authorize, check_permission, create_capability, create_revocation, CapabilityManager,
 };
 pub use identity::{
-    estimate_hash_rate, estimate_mining_time_ms, mine_identity, mine_identity_sync,
-    sign_message, sign_message_base58, verify_identity_pow, verify_signature,
-    DEFAULT_DIFFICULTY, MAX_DIFFICULTY, MIN_DIFFICULTY,
+    estimate_hash_rate, estimate_mining_time_ms, mine_identity, mine_identity_sync, sign_message,
+    sign_message_base58, verify_identity_pow, verify_signature, DEFAULT_DIFFICULTY, MAX_DIFFICULTY,
+    MIN_DIFFICULTY,
 };
 pub use manager::{AuthConfig, AuthManager, AuthStats};
 pub use session::{
@@ -136,10 +136,10 @@ pub use verification::{
 // HTTP exports (requires http feature)
 #[cfg(all(not(target_arch = "wasm32"), feature = "http"))]
 pub use http::{
-    auth_layer, auth_routes, protected_routes, AuthContext, AuthorizeRequest, AuthorizeResponse,
-    CapabilityInfo, CapabilityResponse, ChallengeRequest, ChallengeResponse, extract_auth_context,
-    GrantCapabilityRequest, RegisterRequest, RegisterResponse, require_auth_context, SessionInfo,
-    SessionResponse, ValidateSessionRequest, ValidateSessionResponse, VerifyRequest,
+    auth_layer, auth_routes, extract_auth_context, protected_routes, require_auth_context,
+    AuthContext, AuthorizeRequest, AuthorizeResponse, CapabilityInfo, CapabilityResponse,
+    ChallengeRequest, ChallengeResponse, GrantCapabilityRequest, RegisterRequest, RegisterResponse,
+    SessionInfo, SessionResponse, ValidateSessionRequest, ValidateSessionResponse, VerifyRequest,
 };
 
 use crate::storage::CausalStorage;
@@ -194,9 +194,9 @@ mod integration_tests {
     use super::*;
 
     fn create_test_auth() -> AuthManager {
-        let storage = Arc::new(CausalStorage::new(
-            std::sync::Arc::new(koru_lambda_core::DistinctionEngine::new()),
-        ));
+        let storage = Arc::new(CausalStorage::new(std::sync::Arc::new(
+            koru_lambda_core::DistinctionEngine::new(),
+        )));
         AuthManager::new(storage)
     }
 
@@ -267,9 +267,9 @@ mod integration_tests {
 
     #[test]
     fn test_init_functions() {
-        let storage = Arc::new(CausalStorage::new(
-            std::sync::Arc::new(koru_lambda_core::DistinctionEngine::new()),
-        ));
+        let storage = Arc::new(CausalStorage::new(std::sync::Arc::new(
+            koru_lambda_core::DistinctionEngine::new(),
+        )));
 
         let auth1 = init(storage.clone());
         let auth2 = init_with_config(

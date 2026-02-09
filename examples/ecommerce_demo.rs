@@ -348,8 +348,16 @@ async fn main() -> DeltaResult<()> {
 
     println!("\n  Current laptop state:");
     let current = db.get("products", "laptop").await?;
-    let price = current.value.get("price").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let stock = current.value.get("stock").and_then(|v| v.as_i64()).unwrap_or(0);
+    let price = current
+        .value
+        .get("price")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let stock = current
+        .value
+        .get("stock")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     println!("  ✓ Price is: ${:.2}", price);
     println!("  ✓ Stock is: {}", stock);
 
@@ -448,7 +456,12 @@ async fn main() -> DeltaResult<()> {
     let max_order = all_orders
         .records
         .iter()
-        .filter_map(|r| r.value.get("total").and_then(|t| t.as_f64()).map(|t| (r.key.clone(), t)))
+        .filter_map(|r| {
+            r.value
+                .get("total")
+                .and_then(|t| t.as_f64())
+                .map(|t| (r.key.clone(), t))
+        })
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
     if let Some((key, total)) = max_order {
         println!("  Largest order: {} - ${:.2}", key, total);

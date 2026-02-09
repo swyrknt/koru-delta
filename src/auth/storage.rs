@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-
 use crate::auth::types::{AuthError, Capability, Identity, Revocation};
 use crate::storage::CausalStorage;
 
@@ -188,10 +187,7 @@ impl AuthStorageAdapter {
     }
 
     /// Get a revocation by capability ID.
-    pub fn get_revocation(
-        &self,
-        capability_id: &str,
-    ) -> Result<Option<Revocation>, AuthError> {
+    pub fn get_revocation(&self, capability_id: &str) -> Result<Option<Revocation>, AuthError> {
         let key = revocation_key(capability_id);
 
         match self.storage.get(AUTH_NAMESPACE, &key) {
@@ -215,10 +211,7 @@ impl AuthStorageAdapter {
     }
 
     /// List revocations for a specific granter.
-    pub fn list_revocations_by_granter(
-        &self,
-        granter: &str,
-    ) -> Result<Vec<Revocation>, AuthError> {
+    pub fn list_revocations_by_granter(&self, granter: &str) -> Result<Vec<Revocation>, AuthError> {
         let all = self.list_all_revocations()?;
 
         let filtered: Vec<Revocation> = all
@@ -267,9 +260,7 @@ impl AuthStorageAdapter {
         prefix: &str,
     ) -> Result<Vec<T>, AuthError> {
         // Scan all items in auth namespace and filter by prefix
-        let items = self
-            .storage
-            .scan_collection(AUTH_NAMESPACE);
+        let items = self.storage.scan_collection(AUTH_NAMESPACE);
 
         let mut results = Vec::new();
         for (key, versioned) in items {
@@ -284,10 +275,7 @@ impl AuthStorageAdapter {
         Ok(results)
     }
 
-    fn list_revocations_by_prefix(
-        &self,
-        prefix: &str,
-    ) -> Result<Vec<Revocation>, AuthError> {
+    fn list_revocations_by_prefix(&self, prefix: &str) -> Result<Vec<Revocation>, AuthError> {
         self.list_by_prefix(prefix)
     }
 }
@@ -315,9 +303,9 @@ mod tests {
     use crate::auth::types::{IdentityUserData, Permission, ResourcePattern};
 
     fn create_test_storage() -> Arc<CausalStorage> {
-        Arc::new(CausalStorage::new(
-            std::sync::Arc::new(koru_lambda_core::DistinctionEngine::new()),
-        ))
+        Arc::new(CausalStorage::new(std::sync::Arc::new(
+            koru_lambda_core::DistinctionEngine::new(),
+        )))
     }
 
     #[test]
@@ -355,7 +343,9 @@ mod tests {
         adapter.update_identity(&mined.identity).unwrap();
 
         // Get history
-        let history = adapter.get_identity_history(&mined.identity.public_key).unwrap();
+        let history = adapter
+            .get_identity_history(&mined.identity.public_key)
+            .unwrap();
         assert_eq!(history.len(), 2);
     }
 
@@ -463,7 +453,9 @@ mod tests {
         assert_eq!(grantee2_caps.len(), 1);
 
         // List by granter
-        let granter_caps = adapter.list_capabilities_by_granter(&granter.public_key).unwrap();
+        let granter_caps = adapter
+            .list_capabilities_by_granter(&granter.public_key)
+            .unwrap();
         assert_eq!(granter_caps.len(), 3);
     }
 

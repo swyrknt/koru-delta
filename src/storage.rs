@@ -14,7 +14,9 @@ use crate::causal_graph::CausalGraph;
 use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
 use crate::reference_graph::ReferenceGraph;
-use crate::types::{CausalWriteResult, FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue};
+use crate::types::{
+    CausalWriteResult, FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue,
+};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use koru_lambda_core::DistinctionEngine;
@@ -128,12 +130,17 @@ impl CausalStorage {
 
         // Generate unique write ID for this specific write event
         // Uses nanosecond precision to avoid collisions in rapid writes
-        let write_id = format!("{}_{}", distinction_id, timestamp.timestamp_nanos_opt().unwrap_or(0));
+        let write_id = format!(
+            "{}_{}",
+            distinction_id,
+            timestamp.timestamp_nanos_opt().unwrap_or(0)
+        );
 
         // Capture in causal graph (NEW: emergent tracking)
         self.causal_graph.add_node(write_id.clone());
         if let Some(ref parent_id) = previous_version {
-            self.causal_graph.add_edge(parent_id.clone(), write_id.clone());
+            self.causal_graph
+                .add_edge(parent_id.clone(), write_id.clone());
         }
 
         // Capture in reference graph (NEW: emergent tracking)
@@ -150,8 +157,8 @@ impl CausalStorage {
 
         // Create new versioned value with unique write_id
         let versioned = VersionedValue::new(
-            shared_value, 
-            timestamp, 
+            shared_value,
+            timestamp,
             write_id.clone(), // unique per write
             distinction_id,   // content hash for deduplication
             previous_version,
@@ -183,11 +190,12 @@ impl CausalStorage {
         let full_key = FullKey::new(namespace, key);
         let write_id = versioned.write_id.clone();
         let distinction_id = versioned.distinction_id.clone();
-        
+
         // Add to causal graph (preserving original write_id)
         self.causal_graph.add_node(write_id.clone());
         if let Some(ref parent_id) = versioned.previous_version {
-            self.causal_graph.add_edge(parent_id.clone(), write_id.clone());
+            self.causal_graph
+                .add_edge(parent_id.clone(), write_id.clone());
         }
 
         // Add to reference graph
@@ -203,8 +211,7 @@ impl CausalStorage {
             .insert(write_id.clone(), versioned.clone());
 
         // Update current state (this overwrites any existing entry for the key)
-        self.current_state
-            .insert(full_key.clone(), versioned);
+        self.current_state.insert(full_key.clone(), versioned);
 
         Ok(())
     }
@@ -231,7 +238,7 @@ impl CausalStorage {
         // Check if there's an existing value
         if let Some(existing) = self.current_state.get(&full_key) {
             let existing_clock = &existing.vector_clock;
-            
+
             // Compare vector clocks
             match incoming_clock.compare(existing_clock) {
                 Some(std::cmp::Ordering::Less) => {
@@ -280,12 +287,17 @@ impl CausalStorage {
         // Compute distinction
         let distinction = DocumentMapper::json_to_distinction(&incoming_value, &self.engine)?;
         let distinction_id = DocumentMapper::store_distinction_id(&distinction);
-        let write_id = format!("{}_{}", distinction_id, timestamp.timestamp_nanos_opt().unwrap_or(0));
+        let write_id = format!(
+            "{}_{}",
+            distinction_id,
+            timestamp.timestamp_nanos_opt().unwrap_or(0)
+        );
 
         // Capture in causal graph
         self.causal_graph.add_node(write_id.clone());
         if let Some(ref parent_id) = previous_version {
-            self.causal_graph.add_edge(parent_id.clone(), write_id.clone());
+            self.causal_graph
+                .add_edge(parent_id.clone(), write_id.clone());
         }
 
         // Capture in reference graph
@@ -355,11 +367,16 @@ impl CausalStorage {
         let previous_version = Some(existing.write_id.clone());
         let distinction = DocumentMapper::json_to_distinction(&final_value, &self.engine)?;
         let distinction_id = DocumentMapper::store_distinction_id(&distinction);
-        let write_id = format!("merge_{}_{}", distinction_id, timestamp.timestamp_nanos_opt().unwrap_or(0));
+        let write_id = format!(
+            "merge_{}_{}",
+            distinction_id,
+            timestamp.timestamp_nanos_opt().unwrap_or(0)
+        );
 
         // Capture in causal graph
         self.causal_graph.add_node(write_id.clone());
-        self.causal_graph.add_edge(existing.write_id.clone(), write_id.clone());
+        self.causal_graph
+            .add_edge(existing.write_id.clone(), write_id.clone());
 
         // Capture in reference graph
         self.reference_graph.add_node(write_id.clone());
@@ -431,14 +448,11 @@ impl CausalStorage {
         let timestamp = Utc::now();
 
         // Get existing value to establish causality
-        let previous_version = self
-            .current_state
-            .get(&full_key)
-            .map(|v| {
-                // Merge with existing vector clock to maintain causality
-                deletion_clock.merge(&v.vector_clock);
-                v.write_id.clone()
-            });
+        let previous_version = self.current_state.get(&full_key).map(|v| {
+            // Merge with existing vector clock to maintain causality
+            deletion_clock.merge(&v.vector_clock);
+            v.write_id.clone()
+        });
 
         // Remove from current state (tombstone)
         self.current_state.remove(&full_key);
@@ -447,7 +461,11 @@ impl CausalStorage {
         deletion_clock.increment("local");
 
         // Generate write ID for tombstone
-        let write_id = format!("tombstone_{:?}_{}", full_key, timestamp.timestamp_nanos_opt().unwrap_or(0));
+        let write_id = format!(
+            "tombstone_{:?}_{}",
+            full_key,
+            timestamp.timestamp_nanos_opt().unwrap_or(0)
+        );
 
         // Create versioned tombstone value
         let tombstone_value = Arc::new(serde_json::Value::Null);
@@ -490,11 +508,7 @@ impl CausalStorage {
     }
 
     /// Check if a key has a tombstone (was deleted).
-    pub fn has_tombstone(
-        &self,
-        namespace: impl Into<String>,
-        key: impl Into<String>,
-    ) -> bool {
+    pub fn has_tombstone(&self, namespace: impl Into<String>, key: impl Into<String>) -> bool {
         let full_key = FullKey::new(namespace, key);
         self.tombstones.contains_key(&full_key)
     }
@@ -741,26 +755,26 @@ impl CausalStorage {
 
         // Build history log from causal graph - traverse and collect all versions
         let mut history_log: HashMap<FullKey, Vec<VersionedValue>> = HashMap::new();
-        
+
         for entry in self.current_state.iter() {
             let key = entry.key().clone();
             let current = entry.value().clone();
-            
+
             // Traverse causal graph to collect all versions
             let mut history = Vec::new();
             let mut visited = std::collections::HashSet::new();
             let mut to_visit = vec![current.write_id.clone()];
-            
+
             while let Some(write_id) = to_visit.pop() {
                 if !visited.insert(write_id.clone()) {
                     continue;
                 }
-                
+
                 // Get the version from version store
                 if let Some(versioned) = self.version_store.get(&write_id) {
                     history.push(versioned.clone());
                 }
-                
+
                 // Add parents to visit
                 let parents = self.causal_graph.ancestors(&write_id);
                 for parent in parents {
@@ -769,7 +783,7 @@ impl CausalStorage {
                     }
                 }
             }
-            
+
             // Sort by timestamp (oldest first) for consistent ordering
             history.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
             history_log.insert(key, history);
@@ -790,15 +804,17 @@ impl CausalStorage {
         // Restore current state and version store
         for (key, versioned) in current_state {
             // Add to value store for deduplication (uses distinction_id)
-            storage.value_store
+            storage
+                .value_store
                 .entry(versioned.distinction_id().to_string())
                 .or_insert_with(|| versioned.value.clone());
-            
+
             // Add to version store (uses write_id)
-            storage.version_store
+            storage
+                .version_store
                 .entry(versioned.write_id().to_string())
                 .or_insert_with(|| versioned.clone());
-            
+
             storage.current_state.insert(key, versioned);
         }
 
@@ -807,24 +823,26 @@ impl CausalStorage {
             let mut prev_id: Option<String> = None;
             for versioned in history {
                 let id = versioned.write_id().to_string();
-                
+
                 // Add to value store
-                storage.value_store
+                storage
+                    .value_store
                     .entry(id.clone())
                     .or_insert_with(|| versioned.value.clone());
-                
+
                 // Add to version store
-                storage.version_store
+                storage
+                    .version_store
                     .entry(id.clone())
                     .or_insert_with(|| versioned.clone());
-                
+
                 // Add to causal graph
                 storage.causal_graph.add_node(id.clone());
-                
+
                 if let Some(ref parent) = prev_id {
                     storage.causal_graph.add_edge(parent.clone(), id.clone());
                 }
-                
+
                 prev_id = Some(id);
             }
         }
@@ -883,7 +901,7 @@ mod tests {
         // Current value should be v2
         let current = storage.get("users", "alice").unwrap();
         assert_eq!(current.version_id(), v2.version_id());
-        
+
         // Values with different content have different version_ids (distinction_ids)
         assert_ne!(v1.version_id(), v2.version_id());
 

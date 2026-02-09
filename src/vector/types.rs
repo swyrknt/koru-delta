@@ -264,7 +264,12 @@ pub struct VectorSearchResult {
 
 impl VectorSearchResult {
     /// Create a new search result.
-    pub fn new(namespace: impl Into<String>, key: impl Into<String>, score: f32, vector: Vector) -> Self {
+    pub fn new(
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        score: f32,
+        vector: Vector,
+    ) -> Self {
         Self {
             namespace: namespace.into(),
             key: key.into(),
@@ -342,7 +347,10 @@ mod tests {
         let v1 = Vector::new(vec![1.0, 0.0, 0.0], "test");
         let v2 = Vector::new(vec![1.0, 0.0, 0.0], "test");
         let sim = v1.cosine_similarity(&v2).unwrap();
-        assert!((sim - 1.0).abs() < 1e-6, "Identical vectors should have similarity 1.0");
+        assert!(
+            (sim - 1.0).abs() < 1e-6,
+            "Identical vectors should have similarity 1.0"
+        );
     }
 
     #[test]
@@ -350,7 +358,10 @@ mod tests {
         let v1 = Vector::new(vec![1.0, 0.0], "test");
         let v2 = Vector::new(vec![0.0, 1.0], "test");
         let sim = v1.cosine_similarity(&v2).unwrap();
-        assert!((sim - 0.0).abs() < 1e-6, "Orthogonal vectors should have similarity 0.0");
+        assert!(
+            (sim - 0.0).abs() < 1e-6,
+            "Orthogonal vectors should have similarity 0.0"
+        );
     }
 
     #[test]
@@ -358,14 +369,20 @@ mod tests {
         let v1 = Vector::new(vec![1.0, 0.0], "test");
         let v2 = Vector::new(vec![-1.0, 0.0], "test");
         let sim = v1.cosine_similarity(&v2).unwrap();
-        assert!((sim - (-1.0)).abs() < 1e-6, "Opposite vectors should have similarity -1.0");
+        assert!(
+            (sim - (-1.0)).abs() < 1e-6,
+            "Opposite vectors should have similarity -1.0"
+        );
     }
 
     #[test]
     fn test_cosine_similarity_mismatched_dims() {
         let v1 = Vector::new(vec![1.0, 0.0], "test");
         let v2 = Vector::new(vec![1.0, 0.0, 0.0], "test");
-        assert!(v1.cosine_similarity(&v2).is_none(), "Mismatched dimensions should return None");
+        assert!(
+            v1.cosine_similarity(&v2).is_none(),
+            "Mismatched dimensions should return None"
+        );
     }
 
     #[test]
@@ -380,7 +397,10 @@ mod tests {
     fn test_euclidean_distance_mismatched_dims() {
         let v1 = Vector::new(vec![1.0, 0.0], "test");
         let v2 = Vector::new(vec![1.0, 0.0, 0.0], "test");
-        assert!(v1.euclidean_distance(&v2).is_none(), "Mismatched dimensions should return None");
+        assert!(
+            v1.euclidean_distance(&v2).is_none(),
+            "Mismatched dimensions should return None"
+        );
     }
 
     #[test]
@@ -424,10 +444,13 @@ mod tests {
             .top_k(5)
             .threshold(0.8)
             .model_filter("text-embedding-3-small");
-        
+
         assert_eq!(opts.top_k, 5);
         assert!((opts.threshold - 0.8).abs() < 1e-6);
-        assert_eq!(opts.model_filter, Some("text-embedding-3-small".to_string()));
+        assert_eq!(
+            opts.model_filter,
+            Some("text-embedding-3-small".to_string())
+        );
     }
 
     #[test]

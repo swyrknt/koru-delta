@@ -35,7 +35,6 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-
 /// Configuration for HNSW index.
 #[derive(Debug, Clone, Copy)]
 pub struct HnswConfig {
@@ -96,10 +95,7 @@ struct Node {
 
 impl Node {
     fn new(vector: Vector, max_layer: usize, _m: usize) -> Self {
-        Self {
-            vector,
-            max_layer,
-        }
+        Self { vector, max_layer }
     }
 }
 
@@ -156,7 +152,10 @@ impl std::fmt::Debug for HnswIndex {
             .field("config", &self.config)
             .field("num_nodes", &self.nodes.len())
             .field("num_layers", &self.layers.len())
-            .field("max_layer", &self.max_layer.load(std::sync::atomic::Ordering::Relaxed))
+            .field(
+                "max_layer",
+                &self.max_layer.load(std::sync::atomic::Ordering::Relaxed),
+            )
             .field("entry_point", &self.entry_point.read().unwrap())
             .finish()
     }
@@ -179,7 +178,9 @@ impl PartialOrd for Candidate {
 
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.distance.partial_cmp(&self.distance) // Reverse for min-heap
+        other
+            .distance
+            .partial_cmp(&self.distance) // Reverse for min-heap
             .unwrap_or(std::cmp::Ordering::Equal)
     }
 }
@@ -305,7 +306,8 @@ impl HnswIndex {
         let min_layer = layer.min(curr_max_layer);
         for lc in (0..=min_layer).rev() {
             // Search for neighbors
-            let neighbors = self.search_layer(&curr_ep, &vector_ref, self.config.ef_construction, lc);
+            let neighbors =
+                self.search_layer(&curr_ep, &vector_ref, self.config.ef_construction, lc);
 
             // Select M neighbors using heuristic
             let selected = self.select_neighbors(&neighbors, self.config.m);
@@ -352,7 +354,10 @@ impl HnswIndex {
         });
 
         while let Some(curr) = candidates.pop() {
-            let worst_best = best.peek().map(|c: &Candidate| -c.distance).unwrap_or(f32::MAX);
+            let worst_best = best
+                .peek()
+                .map(|c: &Candidate| -c.distance)
+                .unwrap_or(f32::MAX);
             if curr.distance > worst_best {
                 break;
             }
@@ -421,7 +426,10 @@ impl HnswIndex {
         });
 
         while let Some(curr) = candidates.pop() {
-            let worst_best = best.peek().map(|c: &Candidate| -c.distance).unwrap_or(f32::MAX);
+            let worst_best = best
+                .peek()
+                .map(|c: &Candidate| -c.distance)
+                .unwrap_or(f32::MAX);
             if curr.distance > worst_best {
                 break;
             }
@@ -456,14 +464,16 @@ impl HnswIndex {
         }
 
         // Convert to vec
-        best.into_iter()
-            .map(|c| (c.id, -c.distance))
-            .collect()
+        best.into_iter().map(|c| (c.id, -c.distance)).collect()
     }
 
     /// Select M neighbors from candidates using simple heuristic.
     fn select_neighbors(&self, candidates: &[(String, f32)], m: usize) -> Vec<String> {
-        candidates.iter().take(m).map(|(id, _)| id.clone()).collect()
+        candidates
+            .iter()
+            .take(m)
+            .map(|(id, _)| id.clone())
+            .collect()
     }
 
     /// Add an edge in a layer.
@@ -487,13 +497,13 @@ impl HnswIndex {
         }
 
         // Need to prune - keep closest M*2
-        let node = self
-            .nodes
-            .get(node_id)
-            .ok_or_else(|| crate::error::DeltaError::KeyNotFound {
-                namespace: "hnsw".to_string(),
-                key: node_id.to_string(),
-            })?;
+        let node =
+            self.nodes
+                .get(node_id)
+                .ok_or_else(|| crate::error::DeltaError::KeyNotFound {
+                    namespace: "hnsw".to_string(),
+                    key: node_id.to_string(),
+                })?;
 
         let mut neighbor_dists: Vec<(String, f32)> = neighbors
             .iter()
@@ -631,7 +641,11 @@ impl HnswIndex {
             .collect();
 
         // Sort by score (highest first)
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         results
     }
@@ -645,7 +659,8 @@ impl HnswIndex {
             }
         }
         *self.entry_point.write().unwrap() = None;
-        self.max_layer.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.max_layer
+            .store(0, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -660,10 +675,15 @@ impl super::index::AnnIndex for HnswIndex {
         self.remove(&id);
     }
 
-    fn search(&self, query: &Vector, opts: &super::types::VectorSearchOptions) -> Vec<VectorSearchResult> {
+    fn search(
+        &self,
+        query: &Vector,
+        opts: &super::types::VectorSearchOptions,
+    ) -> Vec<VectorSearchResult> {
         let results = self.search(query, opts.top_k, self.config.ef_search);
         // Filter by threshold
-        results.into_iter()
+        results
+            .into_iter()
             .filter(|r| r.score >= opts.threshold)
             .collect()
     }
@@ -699,9 +719,7 @@ mod tests {
 
     #[test]
     fn test_hnsw_config_custom() {
-        let config = HnswConfig::with_m(32)
-            .ef_construction(400)
-            .ef_search(100);
+        let config = HnswConfig::with_m(32).ef_construction(400).ef_search(100);
         assert_eq!(config.m, 32);
         assert_eq!(config.ef_construction, 400);
         assert_eq!(config.ef_search, 100);
@@ -729,11 +747,11 @@ mod tests {
 
         // Basic sanity checks
         assert!(results.len() <= 3, "Should return at most 3 results");
-        
+
         // Results should be sorted by score descending
         for i in 1..results.len() {
             assert!(
-                results[i-1].score >= results[i].score,
+                results[i - 1].score >= results[i].score,
                 "Results should be sorted by score descending"
             );
         }
@@ -767,8 +785,12 @@ mod tests {
     fn test_hnsw_clear() {
         let index = HnswIndex::new(HnswConfig::default());
 
-        index.add("doc1".to_string(), create_test_vector(vec![1.0, 0.0])).unwrap();
-        index.add("doc2".to_string(), create_test_vector(vec![0.0, 1.0])).unwrap();
+        index
+            .add("doc1".to_string(), create_test_vector(vec![1.0, 0.0]))
+            .unwrap();
+        index
+            .add("doc2".to_string(), create_test_vector(vec![0.0, 1.0]))
+            .unwrap();
         assert_eq!(index.len(), 2);
 
         index.clear();
@@ -820,10 +842,7 @@ mod tests {
         // Create random-ish vectors
         let mut vectors = Vec::new();
         for i in 0..1000 {
-            let v = create_test_vector(vec![
-                (i % 10) as f32 / 10.0,
-                ((i / 10) % 10) as f32 / 10.0,
-            ]);
+            let v = create_test_vector(vec![(i % 10) as f32 / 10.0, ((i / 10) % 10) as f32 / 10.0]);
             vectors.push((format!("doc{}", i), v.clone()));
             index.add(format!("doc{}", i), v).unwrap();
         }

@@ -17,9 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{
-    IdbDatabase, IdbOpenDbRequest, IdbTransactionMode,
-};
+use web_sys::{IdbDatabase, IdbOpenDbRequest, IdbTransactionMode};
 
 /// Convert an IdbRequest to a JsFuture by creating a Promise wrapper
 fn idb_request_to_future(request: &web_sys::IdbRequest) -> Result<JsFuture, JsValue> {
@@ -28,19 +26,19 @@ fn idb_request_to_future(request: &web_sys::IdbRequest) -> Result<JsFuture, JsVa
         let on_success = Closure::wrap(Box::new(move || {
             let _ = resolve.call0(&JsValue::NULL);
         }) as Box<dyn FnMut()>);
-        
+
         let on_error = Closure::wrap(Box::new(move || {
             let _ = reject.call0(&JsValue::NULL);
         }) as Box<dyn FnMut()>);
-        
+
         request.set_onsuccess(Some(on_success.as_ref().unchecked_ref()));
         request.set_onerror(Some(on_error.as_ref().unchecked_ref()));
-        
+
         // Forget the closures so they stay alive
         on_success.forget();
         on_error.forget();
     });
-    
+
     Ok(JsFuture::from(promise))
 }
 
@@ -90,7 +88,9 @@ impl IndexedDbStorage {
                 })
             }
             Err(e) => {
-                web_sys::console::warn_1(&format!("IndexedDB unavailable, using memory-only: {:?}", e).into());
+                web_sys::console::warn_1(
+                    &format!("IndexedDB unavailable, using memory-only: {:?}", e).into(),
+                );
                 Ok(Self {
                     db: None,
                     memory_fallback: true,
@@ -147,7 +147,7 @@ impl IndexedDbStorage {
             .map_err(|e| JsValue::from_str(&format!("Object store error: {:?}", e)))?;
 
         let full_key = format!("{}:{}", namespace, key);
-        
+
         // Use put (upsert) to handle updates
         let request = store
             .put_with_key(&JsValue::from_str(&json), &JsValue::from_str(&full_key))
@@ -165,7 +165,17 @@ impl IndexedDbStorage {
     /// Load all records from IndexedDB
     pub async fn load_all_records(
         &self,
-    ) -> Result<Vec<(String, String, serde_json::Value, chrono::DateTime<chrono::Utc>, String, Option<String>)>, JsValue> {
+    ) -> Result<
+        Vec<(
+            String,
+            String,
+            serde_json::Value,
+            chrono::DateTime<chrono::Utc>,
+            String,
+            Option<String>,
+        )>,
+        JsValue,
+    > {
         if self.memory_fallback {
             return Ok(Vec::new());
         }
@@ -185,7 +195,9 @@ impl IndexedDbStorage {
             .map_err(|e| JsValue::from_str(&format!("Get all error: {:?}", e)))?;
 
         let result = idb_request_to_future(&request)?.await?;
-        let array: Array = result.dyn_into().map_err(|_| JsValue::from_str("Expected array"))?;
+        let array: Array = result
+            .dyn_into()
+            .map_err(|_| JsValue::from_str("Expected array"))?;
 
         let mut records = Vec::new();
 
@@ -319,11 +331,12 @@ impl IndexedDbStorage {
 
             // Create object stores if they don't exist
             let store_names = db.object_store_names();
-            let has_data_store = (0..store_names.length()).any(|i| {
-                store_names.get(i).is_some_and(|name| name == STORE_DATA)
-            });
+            let has_data_store = (0..store_names.length())
+                .any(|i| store_names.get(i).is_some_and(|name| name == STORE_DATA));
             let has_meta_store = (0..store_names.length()).any(|i| {
-                store_names.get(i).is_some_and(|name| name == STORE_METADATA)
+                store_names
+                    .get(i)
+                    .is_some_and(|name| name == STORE_METADATA)
             });
 
             if !has_data_store {
@@ -345,7 +358,7 @@ impl IndexedDbStorage {
         // Wait for the open request to complete using a simple poll approach
         // This is necessary because IndexedDB events don't work well with async/await
         let open_request_rc = Rc::new(std::cell::RefCell::new(Some(open_request)));
-        
+
         loop {
             // Small delay between checks
             let _ = wasm_bindgen_futures::JsFuture::from(Promise::new(&mut |resolve, _reject| {
@@ -355,14 +368,17 @@ impl IndexedDbStorage {
                     10, // 10ms poll interval
                     &Array::new(),
                 );
-            })).await;
+            }))
+            .await;
 
             let req = open_request_rc.borrow();
             if let Some(req) = req.as_ref() {
                 // Check if the request is ready
                 if let Ok(result) = req.result() {
                     if !result.is_null() && !result.is_undefined() {
-                        let db: IdbDatabase = result.dyn_into().map_err(|_| JsValue::from_str("Expected database"))?;
+                        let db: IdbDatabase = result
+                            .dyn_into()
+                            .map_err(|_| JsValue::from_str("Expected database"))?;
                         web_sys::console::log_1(&"IndexedDB: Database opened successfully".into());
                         return Ok(db);
                     }

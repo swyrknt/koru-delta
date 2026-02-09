@@ -30,7 +30,7 @@ pub mod world;
 
 pub use bloom::{BloomExchange, BloomFilter};
 pub use merkle::{MerkleNode, MerkleTree};
-pub use world::{WorldReconciliation, SyncResult};
+pub use world::{SyncResult, WorldReconciliation};
 
 use crate::causal_graph::CausalGraph;
 use std::collections::HashSet;
@@ -132,7 +132,10 @@ impl ReconciliationManager {
     /// This is a compact representation (32 bytes) of the entire set.
     pub fn merkle_root(&mut self) -> [u8; 32] {
         self.ensure_cache();
-        self.cached_tree.as_ref().map(|t| t.root_hash()).unwrap_or([0; 32])
+        self.cached_tree
+            .as_ref()
+            .map(|t| t.root_hash())
+            .unwrap_or([0; 32])
     }
 
     /// Get the full Merkle tree.
@@ -155,7 +158,7 @@ impl ReconciliationManager {
     /// Returns distinctions we have that might be missing from remote.
     pub fn compare_merkle_root(&mut self, remote_root: &[u8; 32]) -> Option<Vec<String>> {
         self.ensure_cache();
-        
+
         let local_root = self.cached_tree.as_ref()?.root_hash();
         if local_root == *remote_root {
             // Roots match—sets are identical
@@ -170,7 +173,7 @@ impl ReconciliationManager {
     /// Find missing distinctions given a remote tree.
     pub fn find_missing_with_tree(&mut self, remote_tree: &MerkleTree) -> Vec<String> {
         self.ensure_cache();
-        
+
         if let Some(ref local_tree) = self.cached_tree {
             let missing: Vec<_> = local_tree.diff(remote_tree).into_iter().collect();
             missing
@@ -195,10 +198,7 @@ impl ReconciliationManager {
     /// Returns distinctions in our graph that are missing from the remote graph.
     pub fn reconcile_with_graph(&self, remote_graph: &CausalGraph) -> Vec<String> {
         // Get all distinctions from remote graph
-        let remote_distinctions: HashSet<_> = remote_graph
-            .all_nodes()
-            .into_iter()
-            .collect();
+        let remote_distinctions: HashSet<_> = remote_graph.all_nodes().into_iter().collect();
 
         // Find what we have that they don't
         self.local_distinctions
@@ -273,7 +273,7 @@ mod tests {
     #[test]
     fn test_merkle_root() {
         let mut manager = ReconciliationManager::new();
-        
+
         let root1 = manager.merkle_root();
         assert_eq!(root1, [0; 32]); // Empty
 
@@ -303,7 +303,7 @@ mod tests {
         }
 
         let filter = manager.bloom_filter(100, 0.01);
-        
+
         // All inserted items should be found
         for i in 0..100 {
             assert!(filter.might_contain(&format!("dist_{}", i)));
@@ -312,15 +312,8 @@ mod tests {
 
     #[test]
     fn test_find_missing() {
-        let local = vec![
-            "a".to_string(),
-            "b".to_string(),
-            "c".to_string(),
-        ];
-        let remote = vec![
-            "a".to_string(),
-            "b".to_string(),
-        ];
+        let local = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let remote = vec!["a".to_string(), "b".to_string()];
 
         let missing = find_missing(&local, &remote);
         assert_eq!(missing, vec!["c"]);

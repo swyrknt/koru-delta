@@ -56,28 +56,27 @@ use tracing::{debug, error, info, trace, warn};
 use tracing::{debug, info, trace};
 
 use crate::auth::{AuthConfig, AuthManager};
-use crate::runtime::sync::RwLock;
 use crate::error::DeltaResult;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::lifecycle::{LifecycleConfig, LifecycleManager};
 use crate::memory::{ColdMemory, DeepMemory, HotConfig, HotMemory, WarmMemory};
-use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
 use crate::processes::ProcessRunner;
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
 use crate::reconciliation::ReconciliationManager;
+use crate::runtime::sync::RwLock;
+use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
 use crate::storage::CausalStorage;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionId, SubscriptionManager};
 use crate::types::{FullKey, HistoryEntry, VersionedValue};
-use crate::views::{ViewDefinition, ViewInfo, ViewManager};
 use crate::vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
+use crate::views::{ViewDefinition, ViewInfo, ViewManager};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::cluster::ClusterNode;
 
 /// Configuration for KoruDelta.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct CoreConfig {
     /// Memory tier configuration
     pub memory: MemoryConfig,
@@ -107,8 +106,8 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_mb: 512,      // 512MB default
-            max_disk_mb: 10 * 1024,  // 10GB default
+            max_memory_mb: 512,     // 512MB default
+            max_disk_mb: 10 * 1024, // 10GB default
             max_open_files: 256,
             max_connections: 100,
         }
@@ -147,7 +146,6 @@ pub struct ReconciliationConfig {
     /// Sync interval
     pub sync_interval: Duration,
 }
-
 
 impl Default for MemoryConfig {
     fn default() -> Self {
@@ -283,14 +281,14 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn start_with_path(path: impl Into<PathBuf>) -> DeltaResult<Self> {
         use crate::persistence;
-        
+
         let path = path.into();
         let path_display = path.display().to_string();
         info!(db_path = %path_display, "Starting KoruDelta with persistence");
-        
+
         let config = CoreConfig::default();
         let runtime = R::new();
-        
+
         // Acquire lock and check for unclean shutdown
         let lock_state = persistence::acquire_lock(&path).await?;
         if lock_state == persistence::LockState::Unclean {
@@ -298,7 +296,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         } else {
             debug!("Lock acquired successfully");
         }
-        
+
         // Load from WAL if exists
         let storage = if persistence::exists(&path).await {
             info!("Loading existing database from WAL");
@@ -311,7 +309,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             info!("Creating new database");
             CausalStorage::new(Arc::new(DistinctionEngine::new()))
         };
-        
+
         let storage = Arc::new(storage);
         let engine = storage.engine();
 
@@ -329,7 +327,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
 
         // Initialize auth
-        let auth = Arc::new(AuthManager::with_config(Arc::clone(&storage), config.auth.clone()));
+        let auth = Arc::new(AuthManager::with_config(
+            Arc::clone(&storage),
+            config.auth.clone(),
+        ));
 
         // Initialize views
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
@@ -404,7 +405,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
 
         // Initialize auth
-        let auth = Arc::new(AuthManager::with_config(Arc::clone(&storage), config.auth.clone()));
+        let auth = Arc::new(AuthManager::with_config(
+            Arc::clone(&storage),
+            config.auth.clone(),
+        ));
 
         // Initialize views
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
@@ -455,7 +459,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     }
 
     /// Attach a cluster node for distributed operation.
-    /// 
+    ///
     /// This enables automatic broadcast of writes to cluster peers.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn with_cluster(mut self, cluster: Arc<ClusterNode>) -> Self {
@@ -473,7 +477,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let storage = Arc::clone(&self.storage);
         let mut shutdown = self.shutdown_rx.clone();
         let runtime = self.runtime.clone();
-        
+
         let consolidation_interval = self.config.processes.consolidation_interval;
         let distillation_interval = self.config.processes.distillation_interval;
         let genome_interval = self.config.processes.genome_interval;
@@ -504,7 +508,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let storage = Arc::clone(&self.storage);
         let mut shutdown = self.shutdown_rx.clone();
         let runtime_clone = runtime.clone();
-        
+
         runtime.spawn(async move {
             let mut interval = runtime_clone.interval(distillation_interval);
             loop {
@@ -526,7 +530,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let deep = Arc::clone(&self.deep);
         let mut shutdown = self.shutdown_rx.clone();
         let runtime_clone = runtime.clone();
-        
+
         runtime.spawn(async move {
             let mut interval = runtime_clone.interval(genome_interval);
             loop {
@@ -649,18 +653,15 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// Creates a minimal "DNA" representation of the causal graph
     /// that can regenerate the full system state.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    async fn run_genome_update(
-        deep: &Arc<RwLock<DeepMemory>>,
-    ) {
+    async fn run_genome_update(deep: &Arc<RwLock<DeepMemory>>) {
         // Extract genome using the genome update process
         // This captures the causal topology (structure, not content)
-        let genome = crate::processes::GenomeUpdateProcess::new()
-            .extract_genome();
-        
+        let genome = crate::processes::GenomeUpdateProcess::new().extract_genome();
+
         // Store in deep memory
         let deep = deep.write().await;
         deep.store_genome("latest", genome.clone());
-        
+
         // Also store timestamped version for history
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
         deep.store_genome(&format!("genome_{}", timestamp), genome);
@@ -699,7 +700,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
 
         // Initialize auth
-        let auth = Arc::new(AuthManager::with_config(Arc::clone(&storage), config.auth.clone()));
+        let auth = Arc::new(AuthManager::with_config(
+            Arc::clone(&storage),
+            config.auth.clone(),
+        ));
 
         // Initialize views
         let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
@@ -834,7 +838,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             let warm = self.warm.read().await;
             warm.get_by_key(&full_key)
         };
-        
+
         if let Some(id) = warm_id {
             let warm = self.warm.read().await;
             if let Some((_, value)) = warm.get(&id) {
@@ -851,7 +855,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             let cold = self.cold.read().await;
             cold.get_by_key(&full_key)
         };
-        
+
         if let Some(id) = cold_id {
             let cold = self.cold.read().await;
             if let Some((_, _epoch)) = cold.get(&id) {
@@ -889,9 +893,13 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let hot = self.hot.write().await;
         // This may evict something to warm
         let evicted = hot.put(key.clone(), value.clone());
-        
+
         // Handle eviction if needed
-        if let Some(crate::memory::Evicted { distinction_id: _, versioned }) = evicted {
+        if let Some(crate::memory::Evicted {
+            distinction_id: _,
+            versioned,
+        }) = evicted
+        {
             drop(hot);
             let warm = self.warm.write().await;
             warm.put(key, versioned);
@@ -905,7 +913,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             let warm = self.warm.write().await;
             warm.put(key.clone(), value.clone());
         }
-        
+
         // Then add to hot (may trigger warm eviction)
         self.promote_to_hot(key, value).await;
     }
@@ -941,11 +949,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     }
 
     /// Get complete history for a key.
-    pub async fn history(
-        &self,
-        namespace: &str,
-        key: &str,
-    ) -> DeltaResult<Vec<HistoryEntry>> {
+    pub async fn history(&self, namespace: &str, key: &str) -> DeltaResult<Vec<HistoryEntry>> {
         self.storage.history(namespace, key)
     }
 
@@ -969,7 +973,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Apply value filters using QueryExecutor
         if !history_query.query.filters.is_empty() {
             entries.retain(|e| {
-                history_query.query.filters.iter()
+                history_query
+                    .query
+                    .filters
+                    .iter()
                     .all(|f| f.matches_value(&e.value))
             });
         }
@@ -1111,23 +1118,24 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         options: VectorSearchOptions,
     ) -> DeltaResult<Vec<VectorSearchResult>> {
         use crate::vector::{HnswConfig, HnswIndex};
-        
+
         // Parse timestamp
-        let target_time = timestamp.parse::<DateTime<Utc>>()
-            .map_err(|e| crate::error::DeltaError::InvalidData {
+        let target_time = timestamp.parse::<DateTime<Utc>>().map_err(|e| {
+            crate::error::DeltaError::InvalidData {
                 reason: format!("Invalid timestamp '{}': {}", timestamp, e),
-            })?;
-        
+            }
+        })?;
+
         // Get all keys in the namespace(s)
         let namespaces_to_search: Vec<String> = match namespace {
             Some(ns) => vec![ns.to_string()],
             None => self.storage.list_namespaces(),
         };
-        
+
         // Build temporary index with vectors that existed at that time
         let temp_index = HnswIndex::new(HnswConfig::default());
         let mut vector_count = 0;
-        
+
         for ns in &namespaces_to_search {
             let keys = self.storage.list_keys(ns);
             for key in keys {
@@ -1142,7 +1150,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
                                     continue;
                                 }
                             }
-                            
+
                             let full_key = FullKey::new(ns.clone(), key);
                             let _ = temp_index.add(full_key.to_canonical_string(), vector);
                             vector_count += 1;
@@ -1155,20 +1163,20 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
                 }
             }
         }
-        
+
         debug!(
             vectors = vector_count,
             timestamp = %timestamp,
             "Time-travel vector search"
         );
-        
+
         if vector_count == 0 {
             return Ok(Vec::new());
         }
-        
+
         // Search the temporary index
         let results = temp_index.search(query, options.top_k, 50);
-        
+
         // Filter by namespace and threshold
         let mut filtered: Vec<VectorSearchResult> = results
             .into_iter()
@@ -1177,10 +1185,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
                 r.score >= options.threshold
             })
             .collect();
-        
+
         // Apply top_k
         filtered.truncate(options.top_k);
-        
+
         Ok(filtered)
     }
 
@@ -1353,7 +1361,20 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
     /// Create a materialized view.
     pub async fn create_view(&self, definition: ViewDefinition) -> DeltaResult<ViewInfo> {
-        self.views.create_view(definition)
+        // First let the view manager validate and execute the query
+        let info = self.views.create_view(definition.clone())?;
+
+        // Persist the view definition to WAL via normal put (ensures durability)
+        // ViewManager already stored it in storage, but we need WAL persistence
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.db_path.is_some() {
+            use crate::views::VIEW_NAMESPACE;
+            let def_value = serde_json::to_value(&definition)?;
+            self.put(VIEW_NAMESPACE, &definition.name, def_value)
+                .await?;
+        }
+
+        Ok(info)
     }
 
     /// List all views.
@@ -1373,7 +1394,17 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
     /// Delete a materialized view.
     pub async fn delete_view(&self, name: &str) -> DeltaResult<()> {
-        self.views.delete_view(name)
+        self.views.delete_view(name)?;
+
+        // Persist the deletion to WAL
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.db_path.is_some() {
+            use crate::views::VIEW_NAMESPACE;
+            self.put(VIEW_NAMESPACE, name, serde_json::Value::Null)
+                .await?;
+        }
+
+        Ok(())
     }
 
     /// Get view manager.
@@ -1390,7 +1421,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     pub async fn subscribe(
         &self,
         subscription: Subscription,
-    ) -> (SubscriptionId, tokio::sync::broadcast::Receiver<ChangeEvent>) {
+    ) -> (
+        SubscriptionId,
+        tokio::sync::broadcast::Receiver<ChangeEvent>,
+    ) {
         self.subscriptions.subscribe(subscription)
     }
 
@@ -1465,10 +1499,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// Shutdown the database.
     pub async fn shutdown(self) -> DeltaResult<()> {
         info!("Shutting down KoruDelta");
-        
+
         let _ = self.shutdown_tx.send(true);
         trace!("Shutdown signal sent to background processes");
-        
+
         // Release database lock
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(ref db_path) = self.db_path {
@@ -1479,7 +1513,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
                 trace!("Database lock released");
             }
         }
-        
+
         // TODO: Wait for background processes to complete
         info!("KoruDelta shutdown complete");
         Ok(())

@@ -69,13 +69,19 @@ impl<T> RwLock<T> {
     /// Try to acquire a read lock.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn try_read(&self) -> Option<RwLockReadGuard<'_, T>> {
-        self.inner.try_read().ok().map(|guard| RwLockReadGuard { guard })
+        self.inner
+            .try_read()
+            .ok()
+            .map(|guard| RwLockReadGuard { guard })
     }
 
     /// Try to acquire a read lock - WASM fallback.
     #[cfg(target_arch = "wasm32")]
     pub fn try_read(&self) -> Option<RwLockReadGuard<'_, T>> {
-        self.inner.try_read().ok().map(|guard| RwLockReadGuard { guard })
+        self.inner
+            .try_read()
+            .ok()
+            .map(|guard| RwLockReadGuard { guard })
     }
 }
 

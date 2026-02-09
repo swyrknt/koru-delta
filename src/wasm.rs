@@ -16,13 +16,13 @@
 //! import init, { KoruDeltaWasm } from 'koru-delta';
 //!
 //! await init();
-//! 
+//!
 //! // Memory-only database (data lost on refresh)
 //! const db = await KoruDeltaWasm.new();
-//! 
+//!
 //! // Persistent database (data survives refresh)
 //! const db = await KoruDeltaWasm.newPersistent();
-//! 
+//!
 //! await db.put('users', 'alice', { name: 'Alice', age: 30 });
 //! const user = await db.get('users', 'alice');
 //! ```
@@ -32,8 +32,8 @@ mod storage;
 use crate::vector::{Vector, VectorSearchOptions};
 use crate::{DeltaError, HistoryEntry, KoruDelta, VersionedValue, ViewDefinition};
 use serde_json::Value as JsonValue;
+use storage::{is_indexeddb_supported, IndexedDbStorage};
 use wasm_bindgen::prelude::*;
-use storage::{IndexedDbStorage, is_indexeddb_supported};
 
 /// WASM-friendly wrapper around KoruDelta
 #[wasm_bindgen]
@@ -69,7 +69,7 @@ impl KoruDeltaWasm {
     /// # Example (JavaScript)
     /// ```javascript
     /// const db = await KoruDeltaWasm.newPersistent();
-    /// 
+    ///
     /// // Check if persistence is working
     /// if (db.isPersistent()) {
     ///   console.log("Data will survive page refreshes!");
@@ -84,7 +84,10 @@ impl KoruDeltaWasm {
         // Initialize IndexedDB storage
         let storage = IndexedDbStorage::new().await?;
 
-        let mut wasm_db = KoruDeltaWasm { db, storage: Some(storage) };
+        let mut wasm_db = KoruDeltaWasm {
+            db,
+            storage: Some(storage),
+        };
 
         // Load existing data from IndexedDB
         wasm_db.load_from_storage().await?;
@@ -95,7 +98,10 @@ impl KoruDeltaWasm {
     /// Check if the database is using IndexedDB persistence
     #[wasm_bindgen(js_name = isPersistent)]
     pub fn is_persistent(&self) -> bool {
-        self.storage.as_ref().map(|s| s.is_persistent()).unwrap_or(false)
+        self.storage
+            .as_ref()
+            .map(|s| s.is_persistent())
+            .unwrap_or(false)
     }
 
     /// Check if IndexedDB is supported in the current environment
@@ -133,7 +139,9 @@ impl KoruDeltaWasm {
         }
 
         if storage.is_persistent() {
-            web_sys::console::log_1(&format!("Loaded {} records from IndexedDB", record_count).into());
+            web_sys::console::log_1(
+                &format!("Loaded {} records from IndexedDB", record_count).into(),
+            );
         }
 
         Ok(())
@@ -153,14 +161,16 @@ impl KoruDeltaWasm {
 
         // Get the latest version info from the database
         if let Ok(versioned) = self.db.get(namespace, key).await {
-            storage.save_record(
-                namespace,
-                key,
-                value,
-                &versioned.timestamp(),
-                versioned.version_id(),
-                versioned.previous_version(),
-            ).await?;
+            storage
+                .save_record(
+                    namespace,
+                    key,
+                    value,
+                    &versioned.timestamp(),
+                    versioned.version_id(),
+                    versioned.previous_version(),
+                )
+                .await?;
         }
 
         Ok(())
@@ -210,16 +220,12 @@ impl KoruDeltaWasm {
     /// A JavaScript object with the value and metadata
     #[wasm_bindgen(js_name = get)]
     pub async fn get_js(&self, namespace: &str, key: &str) -> Result<JsValue, JsValue> {
-        let versioned = self
-            .db
-            .get(namespace, key)
-            .await
-            .map_err(|e| match e {
-                DeltaError::KeyNotFound { .. } => {
-                    JsValue::from_str(&format!("Key not found: {}/{}", namespace, key))
-                }
-                _ => JsValue::from_str(&format!("Failed to retrieve value: {}", e)),
-            })?;
+        let versioned = self.db.get(namespace, key).await.map_err(|e| match e {
+            DeltaError::KeyNotFound { .. } => {
+                JsValue::from_str(&format!("Key not found: {}/{}", namespace, key))
+            }
+            _ => JsValue::from_str(&format!("Failed to retrieve value: {}", e)),
+        })?;
 
         versioned_to_js(&versioned)
     }
@@ -326,7 +332,9 @@ impl KoruDeltaWasm {
         // Also delete from IndexedDB if persistence is enabled
         if let Some(storage) = &self.storage {
             if let Err(e) = storage.delete_record(namespace, key).await {
-                web_sys::console::warn_1(&format!("Failed to delete from IndexedDB: {:?}", e).into());
+                web_sys::console::warn_1(
+                    &format!("Failed to delete from IndexedDB: {:?}", e).into(),
+                );
             }
         }
 
@@ -398,7 +406,7 @@ impl KoruDeltaWasm {
         limit: Option<usize>,
     ) -> Result<JsValue, JsValue> {
         let query_vec = Vector::new(query, "query");
-        
+
         let options = VectorSearchOptions {
             top_k: limit.unwrap_or(10),
             ..Default::default()
@@ -413,7 +421,11 @@ impl KoruDeltaWasm {
         let js_array = js_sys::Array::new();
         for result in results {
             let obj = js_sys::Object::new();
-            js_sys::Reflect::set(&obj, &"namespace".into(), &JsValue::from_str(&result.namespace))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"namespace".into(),
+                &JsValue::from_str(&result.namespace),
+            )?;
             js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&result.key))?;
             js_sys::Reflect::set(
                 &obj,
@@ -443,11 +455,7 @@ impl KoruDeltaWasm {
     /// * `name` - View name
     /// * `source_namespace` - Source collection/namespace
     #[wasm_bindgen(js_name = createView)]
-    pub async fn create_view_js(
-        &self,
-        name: &str,
-        source_namespace: &str,
-    ) -> Result<(), JsValue> {
+    pub async fn create_view_js(&self, name: &str, source_namespace: &str) -> Result<(), JsValue> {
         let view_def = ViewDefinition::new(name, source_namespace);
 
         self.db
@@ -467,7 +475,11 @@ impl KoruDeltaWasm {
         for view in views {
             let obj = js_sys::Object::new();
             js_sys::Reflect::set(&obj, &"name".into(), &JsValue::from_str(&view.name))?;
-            js_sys::Reflect::set(&obj, &"source".into(), &JsValue::from_str(&view.source_collection))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"source".into(),
+                &JsValue::from_str(&view.source_collection),
+            )?;
             js_array.push(&obj);
         }
 
@@ -484,27 +496,27 @@ impl KoruDeltaWasm {
             .map_err(|e| JsValue::from_str(&format!("Failed to query view: {}", e)))?;
 
         let obj = js_sys::Object::new();
-        
+
         // Convert records
         let records_array = js_sys::Array::new();
         for record in result.records {
             let record_obj = js_sys::Object::new();
             js_sys::Reflect::set(&record_obj, &"key".into(), &JsValue::from_str(&record.key))?;
-            
+
             let value_js = serde_wasm_bindgen::to_value(&record.value)
                 .map_err(|e| JsValue::from_str(&format!("Failed to convert value: {}", e)))?;
             js_sys::Reflect::set(&record_obj, &"value".into(), &value_js)?;
-            
+
             js_sys::Reflect::set(
                 &record_obj,
                 &"timestamp".into(),
                 &JsValue::from_str(&record.timestamp.to_rfc3339()),
             )?;
-            
+
             records_array.push(&record_obj);
         }
         js_sys::Reflect::set(&obj, &"records".into(), &records_array)?;
-        
+
         js_sys::Reflect::set(
             &obj,
             &"totalCount".into(),
@@ -561,12 +573,12 @@ impl KoruDeltaWasm {
         if !filter.is_null() && !filter.is_undefined() {
             let filter_json: JsonValue = serde_wasm_bindgen::from_value(filter)
                 .map_err(|e| JsValue::from_str(&format!("Invalid filter: {}", e)))?;
-            
+
             if let Some(obj) = filter_json.as_object() {
                 for (key, value) in obj {
-                    query.filters.push(Filter::Eq { 
-                        field: key.clone(), 
-                        value: value.clone() 
+                    query.filters.push(Filter::Eq {
+                        field: key.clone(),
+                        value: value.clone(),
                     });
                 }
             }
@@ -587,17 +599,17 @@ impl KoruDeltaWasm {
         for record in result.records {
             let obj = js_sys::Object::new();
             js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&record.key))?;
-            
+
             let value_js = serde_wasm_bindgen::to_value(&record.value)
                 .map_err(|e| JsValue::from_str(&format!("Failed to convert value: {}", e)))?;
             js_sys::Reflect::set(&obj, &"value".into(), &value_js)?;
-            
+
             js_sys::Reflect::set(
                 &obj,
                 &"timestamp".into(),
                 &JsValue::from_str(&record.timestamp.to_rfc3339()),
             )?;
-            
+
             js_array.push(&obj);
         }
 

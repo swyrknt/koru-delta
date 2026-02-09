@@ -145,7 +145,11 @@ async fn test_query_aggregation_sum() {
         .unwrap();
 
     // Calculate sum from results
-    let sum: f64 = results.records.iter().map(|r| r.value["amount"].as_f64().unwrap_or(0.0)).sum();
+    let sum: f64 = results
+        .records
+        .iter()
+        .map(|r| r.value["amount"].as_f64().unwrap_or(0.0))
+        .sum();
     assert_eq!(sum, 600.0);
 }
 

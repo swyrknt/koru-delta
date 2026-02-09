@@ -56,8 +56,8 @@ impl Default for ClusterConfig {
             heartbeat_interval: Duration::from_secs(5),
             gossip_interval: Duration::from_secs(10),
             connection_timeout: Duration::from_secs(5),
-            quorum_size: 1,                    // Default: single node is sufficient
-            require_quorum_for_writes: false,  // Default: allow writes without quorum
+            quorum_size: 1,                   // Default: single node is sufficient
+            require_quorum_for_writes: false, // Default: allow writes without quorum
         }
     }
 }
@@ -107,23 +107,24 @@ impl ClusterState {
             partition_state: RwLock::new(PartitionState::Healthy),
         }
     }
-    
+
     /// Check if we have quorum based on peer count.
     fn has_quorum(&self, quorum_size: usize) -> bool {
         // Count healthy peers + ourselves
-        let healthy_peers = self.peers
+        let healthy_peers = self
+            .peers
             .iter()
             .filter(|p| matches!(p.status, PeerStatus::Healthy))
             .count();
         let total_nodes = healthy_peers + 1; // +1 for ourselves
         total_nodes >= quorum_size
     }
-    
+
     /// Get current partition state.
     async fn partition_state(&self) -> PartitionState {
         *self.partition_state.read().await
     }
-    
+
     /// Update partition state.
     async fn set_partition_state(&self, state: PartitionState) {
         let mut guard = self.partition_state.write().await;
@@ -263,7 +264,7 @@ impl ClusterNode {
     pub async fn partition_state(&self) -> PartitionState {
         self.state.partition_state().await
     }
-    
+
     /// Get the current partition state as a string.
     pub async fn partition_state_str(&self) -> &'static str {
         match self.state.partition_state().await {
@@ -525,14 +526,14 @@ impl ClusterNode {
             let message = message.clone();
             let version_id = version_id.clone();
             let key = key.clone();
-            
+
             tokio::spawn(async move {
                 let mut attempts = 0;
                 let max_attempts = 3;
-                
+
                 while attempts < max_attempts {
                     attempts += 1;
-                    
+
                     match Connection::connect(peer.address).await {
                         Ok(mut conn) => {
                             // Send the write event
@@ -540,17 +541,28 @@ impl ClusterNode {
                                 tracing::debug!("Failed to send write to {}: {}", peer.node_id, e);
                                 continue;
                             }
-                            
+
                             // Wait for ACK with timeout
                             match tokio::time::timeout(
                                 std::time::Duration::from_secs(5),
-                                conn.receive()
-                            ).await {
-                                Ok(Ok(Message::WriteAck { node_id: ack_node_id, key: ack_key, version_id: ack_version })) => {
-                                    if ack_node_id == peer.node_id 
-                                        && ack_key == key 
-                                        && ack_version == version_id {
-                                        tracing::trace!("Received ACK from {} for {}", peer.node_id, version_id);
+                                conn.receive(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(Message::WriteAck {
+                                    node_id: ack_node_id,
+                                    key: ack_key,
+                                    version_id: ack_version,
+                                })) => {
+                                    if ack_node_id == peer.node_id
+                                        && ack_key == key
+                                        && ack_version == version_id
+                                    {
+                                        tracing::trace!(
+                                            "Received ACK from {} for {}",
+                                            peer.node_id,
+                                            version_id
+                                        );
                                         return; // Success!
                                     }
                                 }
@@ -558,10 +570,17 @@ impl ClusterNode {
                                     tracing::debug!("Unexpected response from {}", peer.node_id);
                                 }
                                 Ok(Err(e)) => {
-                                    tracing::debug!("Failed to receive ACK from {}: {}", peer.node_id, e);
+                                    tracing::debug!(
+                                        "Failed to receive ACK from {}: {}",
+                                        peer.node_id,
+                                        e
+                                    );
                                 }
                                 Err(_) => {
-                                    tracing::debug!("Timeout waiting for ACK from {}", peer.node_id);
+                                    tracing::debug!(
+                                        "Timeout waiting for ACK from {}",
+                                        peer.node_id
+                                    );
                                 }
                             }
                         }
@@ -569,14 +588,19 @@ impl ClusterNode {
                             tracing::debug!("Failed to connect to {}: {}", peer.node_id, e);
                         }
                     }
-                    
+
                     // Exponential backoff before retry
                     if attempts < max_attempts {
-                        tokio::time::sleep(std::time::Duration::from_millis(100 * attempts as u64)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(100 * attempts as u64))
+                            .await;
                     }
                 }
-                
-                tracing::warn!("Failed to broadcast write to {} after {} attempts", peer.node_id, max_attempts);
+
+                tracing::warn!(
+                    "Failed to broadcast write to {} after {} attempts",
+                    peer.node_id,
+                    max_attempts
+                );
             });
         }
     }
@@ -681,8 +705,14 @@ fn handle_message(
             value,
         } => {
             // Apply the write with causal ordering check.
-            match storage.put_causal(&key.namespace, &key.key, (*value.value).clone(), value.vector_clock.clone())? {
-                crate::types::CausalWriteResult::Applied(_) | crate::types::CausalWriteResult::Duplicate(_) => {
+            match storage.put_causal(
+                &key.namespace,
+                &key.key,
+                (*value.value).clone(),
+                value.vector_clock.clone(),
+            )? {
+                crate::types::CausalWriteResult::Applied(_)
+                | crate::types::CausalWriteResult::Duplicate(_) => {
                     // Successfully applied or already had it
                     Ok(Some(Message::WriteAck {
                         node_id: node_id.clone(),
@@ -698,7 +728,10 @@ fn handle_message(
                         version_id: value.write_id.clone(),
                     }))
                 }
-                crate::types::CausalWriteResult::Conflict { existing, incoming_clock } => {
+                crate::types::CausalWriteResult::Conflict {
+                    existing,
+                    incoming_clock,
+                } => {
                     // Concurrent write conflict - merge using last-write-wins
                     tracing::warn!(
                         "Concurrent write conflict for {:?}: existing={}, incoming={}. Merging...",
@@ -706,7 +739,7 @@ fn handle_message(
                         existing.write_id,
                         value.write_id
                     );
-                    
+
                     // Attempt to merge the concurrent writes
                     match storage.merge_concurrent_writes(
                         &key.namespace,
@@ -715,13 +748,11 @@ fn handle_message(
                         (*value.value).clone(),
                         incoming_clock,
                     ) {
-                        Ok(merged) => {
-                            Ok(Some(Message::WriteAck {
-                                node_id: node_id.clone(),
-                                key,
-                                version_id: merged.write_id.clone(),
-                            }))
-                        }
+                        Ok(merged) => Ok(Some(Message::WriteAck {
+                            node_id: node_id.clone(),
+                            key,
+                            version_id: merged.write_id.clone(),
+                        })),
                         Err(e) => {
                             tracing::error!("Failed to merge concurrent writes: {}", e);
                             // Still acknowledge to prevent infinite retries
@@ -736,7 +767,11 @@ fn handle_message(
             }
         }
 
-        Message::SyncRequest { node_id: _, keys, tombstones: known_tombstones } => {
+        Message::SyncRequest {
+            node_id: _,
+            keys,
+            tombstones: known_tombstones,
+        } => {
             let mut updates = Vec::new();
             let mut tombstones_to_send = Vec::new();
 
@@ -752,7 +787,7 @@ fn handle_message(
                                 != Some(std::cmp::Ordering::Less)
                         })
                         .unwrap_or(true); // If peer doesn't have this tombstone, send it
-                    
+
                     if peer_knows {
                         tombstones_to_send.push(tombstone);
                     }
@@ -772,7 +807,7 @@ fn handle_message(
                                     entry.value,
                                     entry.timestamp,
                                     entry.version_id.clone(), // write_id
-                                    entry.version_id,        // distinction_id
+                                    entry.version_id,         // distinction_id
                                     None,
                                     VectorClock::new(),
                                 )
@@ -785,7 +820,7 @@ fn handle_message(
                                     entry.value,
                                     entry.timestamp,
                                     entry.version_id.clone(), // write_id
-                                    entry.version_id,        // distinction_id
+                                    entry.version_id,         // distinction_id
                                     None,
                                     VectorClock::new(),
                                 )
@@ -845,15 +880,18 @@ async fn send_heartbeats(state: &Arc<ClusterState>, node_id: &NodeId, quorum_siz
 
     // Prune stale peers.
     state.prune_stale_peers(Duration::from_secs(60));
-    
+
     // Check partition state after updating peer statuses
     let current_state = state.partition_state().await;
     let has_quorum = state.has_quorum(quorum_size);
-    
+
     match (current_state, has_quorum) {
         (PartitionState::Healthy, false) => {
             // Lost quorum - entering partitioned state
-            tracing::warn!("Lost quorum! Entering partitioned state (healthy peers < {})", quorum_size);
+            tracing::warn!(
+                "Lost quorum! Entering partitioned state (healthy peers < {})",
+                quorum_size
+            );
             state.set_partition_state(PartitionState::Partitioned).await;
         }
         (PartitionState::Partitioned, true) => {
@@ -893,27 +931,27 @@ async fn run_anti_entropy(
     node_id: &NodeId,
 ) {
     let peers = state.get_peers();
-    
+
     // Only run anti-entropy if we have healthy peers
     let healthy_peers: Vec<_> = peers
         .into_iter()
         .filter(|p| matches!(p.status, PeerStatus::Healthy))
         .collect();
-    
+
     if healthy_peers.is_empty() {
         return;
     }
-    
+
     tracing::trace!("Running anti-entropy with {} peers", healthy_peers.len());
-    
+
     for peer in healthy_peers {
         let storage = Arc::clone(storage);
         let node_id = node_id.clone();
-        
+
         tokio::spawn(async move {
             // Get our current key set with version info
             let mut keys_to_check = HashMap::new();
-            
+
             // Get all namespaces and keys
             // TODO: Optimize this to only check recently changed keys
             let namespaces = storage.list_namespaces();
@@ -929,14 +967,14 @@ async fn run_anti_entropy(
                     keys_to_check.insert(full_key, version);
                 }
             }
-            
+
             // Get our known tombstones for tombstone propagation
             let our_tombstones: HashMap<FullKey, VectorClock> = storage
                 .get_all_tombstones()
                 .into_iter()
                 .map(|t| (t.key.clone(), t.vector_clock))
                 .collect();
-            
+
             // Send sync request to peer
             match Connection::connect(peer.address).await {
                 Ok(mut conn) => {
@@ -945,9 +983,13 @@ async fn run_anti_entropy(
                         keys: keys_to_check,
                         tombstones: our_tombstones,
                     };
-                    
+
                     match conn.request(&request).await {
-                        Ok(Message::SyncResponse { updates, tombstones, .. }) => {
+                        Ok(Message::SyncResponse {
+                            updates,
+                            tombstones,
+                            ..
+                        }) => {
                             // Apply updates from peer
                             for (key, versions) in updates {
                                 // Skip if we have a tombstone for this key
@@ -955,19 +997,28 @@ async fn run_anti_entropy(
                                     tracing::trace!("Skipping update for deleted key {:?}", key);
                                     continue;
                                 }
-                                
+
                                 for version in versions {
                                     // TODO: Use vector clock merge instead of blind put
-                                    if let Err(e) = storage.put(&key.namespace, &key.key, (*version.value).clone()) {
-                                        tracing::debug!("Failed to apply anti-entropy update: {}", e);
+                                    if let Err(e) = storage.put(
+                                        &key.namespace,
+                                        &key.key,
+                                        (*version.value).clone(),
+                                    ) {
+                                        tracing::debug!(
+                                            "Failed to apply anti-entropy update: {}",
+                                            e
+                                        );
                                     }
                                 }
                             }
-                            
+
                             // Apply tombstones from peer
                             for tombstone in tombstones {
                                 // Check if we already have this key
-                                if let Ok(existing) = storage.get(&tombstone.key.namespace, &tombstone.key.key) {
+                                if let Ok(existing) =
+                                    storage.get(&tombstone.key.namespace, &tombstone.key.key)
+                                {
                                     // Check if the peer's tombstone causally supersedes our value
                                     match tombstone.vector_clock.compare(existing.vector_clock()) {
                                         Some(std::cmp::Ordering::Greater) => {
@@ -994,16 +1045,21 @@ async fn run_anti_entropy(
                                             );
                                         }
                                     }
-                                } else if !storage.has_tombstone(&tombstone.key.namespace, &tombstone.key.key) {
+                                } else if !storage
+                                    .has_tombstone(&tombstone.key.namespace, &tombstone.key.key)
+                                {
                                     // We don't have this key and don't have a tombstone - record the tombstone
                                     storage.insert_tombstone(tombstone);
                                 }
                             }
-                            
+
                             tracing::trace!("Anti-entropy completed with {}", peer.node_id);
                         }
                         Ok(_) => {
-                            tracing::debug!("Unexpected response from {} during anti-entropy", peer.node_id);
+                            tracing::debug!(
+                                "Unexpected response from {} during anti-entropy",
+                                peer.node_id
+                            );
                         }
                         Err(e) => {
                             tracing::debug!("Anti-entropy failed with {}: {}", peer.node_id, e);
@@ -1011,7 +1067,11 @@ async fn run_anti_entropy(
                     }
                 }
                 Err(e) => {
-                    tracing::debug!("Failed to connect to {} for anti-entropy: {}", peer.node_id, e);
+                    tracing::debug!(
+                        "Failed to connect to {} for anti-entropy: {}",
+                        peer.node_id,
+                        e
+                    );
                 }
             }
         });

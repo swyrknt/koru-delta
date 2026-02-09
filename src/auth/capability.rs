@@ -135,7 +135,9 @@ pub fn create_revocation(
 
 /// Check if a capability is revoked.
 pub fn is_revoked(_capability: &Capability, revocations: &[Revocation]) -> bool {
-    revocations.iter().any(|r| r.capability_id == _capability.id)
+    revocations
+        .iter()
+        .any(|r| r.capability_id == _capability.id)
 }
 
 /// Check authorization for a resource.
@@ -202,7 +204,15 @@ pub fn check_permission(
     capabilities: &[Capability],
     revocations: &[Revocation],
 ) -> bool {
-    authorize(identity_key, namespace, key, permission, capabilities, revocations).is_ok()
+    authorize(
+        identity_key,
+        namespace,
+        key,
+        permission,
+        capabilities,
+        revocations,
+    )
+    .is_ok()
 }
 
 /// Build a capability reference for storage.
@@ -386,11 +396,25 @@ mod tests {
         assert!(result.is_ok());
 
         // Wrong permission
-        let result = authorize(&grantee, "test", "resource", Permission::Write, std::slice::from_ref(&cap), &[]);
+        let result = authorize(
+            &grantee,
+            "test",
+            "resource",
+            Permission::Write,
+            std::slice::from_ref(&cap),
+            &[],
+        );
         assert!(matches!(result, Err(AuthError::Unauthorized)));
 
         // Wrong resource
-        let result = authorize(&grantee, "test", "other", Permission::Read, std::slice::from_ref(&cap), &[]);
+        let result = authorize(
+            &grantee,
+            "test",
+            "other",
+            Permission::Read,
+            std::slice::from_ref(&cap),
+            &[],
+        );
         assert!(matches!(result, Err(AuthError::Unauthorized)));
     }
 
@@ -410,9 +434,33 @@ mod tests {
         .unwrap();
 
         // Admin includes Read, Write, Admin
-        assert!(authorize(&grantee, "test", "anything", Permission::Read, std::slice::from_ref(&cap), &[]).is_ok());
-        assert!(authorize(&grantee, "test", "anything", Permission::Write, std::slice::from_ref(&cap), &[]).is_ok());
-        assert!(authorize(&grantee, "test", "anything", Permission::Admin, std::slice::from_ref(&cap), &[]).is_ok());
+        assert!(authorize(
+            &grantee,
+            "test",
+            "anything",
+            Permission::Read,
+            std::slice::from_ref(&cap),
+            &[]
+        )
+        .is_ok());
+        assert!(authorize(
+            &grantee,
+            "test",
+            "anything",
+            Permission::Write,
+            std::slice::from_ref(&cap),
+            &[]
+        )
+        .is_ok());
+        assert!(authorize(
+            &grantee,
+            "test",
+            "anything",
+            Permission::Admin,
+            std::slice::from_ref(&cap),
+            &[]
+        )
+        .is_ok());
     }
 
     #[test]
@@ -431,16 +479,29 @@ mod tests {
         .unwrap();
 
         // Initially authorized
-        assert!(
-            authorize(&grantee, "test", "resource", Permission::Read, std::slice::from_ref(&cap), &[]).is_ok()
-        );
+        assert!(authorize(
+            &grantee,
+            "test",
+            "resource",
+            Permission::Read,
+            std::slice::from_ref(&cap),
+            &[]
+        )
+        .is_ok());
 
         // Create revocation
         let revocation = create_revocation(&cap, &secret_key, Some("Testing".to_string())).unwrap();
 
         // Now unauthorized
         assert!(matches!(
-            authorize(&grantee, "test", "resource", Permission::Read, std::slice::from_ref(&cap), &[revocation]),
+            authorize(
+                &grantee,
+                "test",
+                "resource",
+                Permission::Read,
+                std::slice::from_ref(&cap),
+                &[revocation]
+            ),
             Err(AuthError::Unauthorized)
         ));
     }
@@ -525,10 +586,33 @@ mod tests {
         )
         .unwrap();
 
-        assert!(authorize(&grantee, "users", "alice:profile", Permission::Read, std::slice::from_ref(&cap), &[]).is_ok());
-        assert!(authorize(&grantee, "users", "alice:settings", Permission::Read, std::slice::from_ref(&cap), &[]).is_ok());
+        assert!(authorize(
+            &grantee,
+            "users",
+            "alice:profile",
+            Permission::Read,
+            std::slice::from_ref(&cap),
+            &[]
+        )
+        .is_ok());
+        assert!(authorize(
+            &grantee,
+            "users",
+            "alice:settings",
+            Permission::Read,
+            std::slice::from_ref(&cap),
+            &[]
+        )
+        .is_ok());
         assert!(matches!(
-            authorize(&grantee, "users", "bob:profile", Permission::Read, std::slice::from_ref(&cap), &[]),
+            authorize(
+                &grantee,
+                "users",
+                "bob:profile",
+                Permission::Read,
+                std::slice::from_ref(&cap),
+                &[]
+            ),
             Err(AuthError::Unauthorized)
         ));
     }

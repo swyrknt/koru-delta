@@ -226,8 +226,8 @@ impl Capability {
             .into_vec()
             .map_err(|_| AuthError::InvalidSignature)?;
 
-        let signature = Signature::from_slice(&signature_bytes)
-            .map_err(|_| AuthError::InvalidSignature)?;
+        let signature =
+            Signature::from_slice(&signature_bytes).map_err(|_| AuthError::InvalidSignature)?;
 
         // Create message to verify
         let message = self.signature_message();
@@ -305,11 +305,13 @@ pub enum Permission {
 impl Permission {
     /// Check if this permission includes another.
     pub fn includes(&self, other: Permission) -> bool {
-        matches!((self, other), 
-            (Permission::Admin, _) | 
-            (Permission::Write, Permission::Read) | 
-            (Permission::Write, Permission::Write) | 
-            (Permission::Read, Permission::Read))
+        matches!(
+            (self, other),
+            (Permission::Admin, _)
+                | (Permission::Write, Permission::Read)
+                | (Permission::Write, Permission::Write)
+                | (Permission::Read, Permission::Read)
+        )
     }
 
     /// String representation for signatures.
@@ -400,7 +402,7 @@ mod tests {
     #[test]
     fn test_count_leading_hex_zeros() {
         // 0x00 = 0,0 (both digits zero) = 2 zeros
-        // 0x01 = 0,1 (high digit zero) = 1 zero  
+        // 0x01 = 0,1 (high digit zero) = 1 zero
         // Total: 2 + 1 = 3
         assert_eq!(count_leading_hex_zeros(&[0x00, 0x01]), 3);
         // 0x00, 0x00 = 2 + 2 = 4 zeros, 0x12 stops at first non-zero (1)

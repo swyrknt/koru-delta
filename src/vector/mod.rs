@@ -129,7 +129,10 @@ pub trait VectorStorage {
 
 /// Serialize a vector to JSON for storage.
 #[allow(dead_code)]
-pub(crate) fn vector_to_json(vector: &Vector, metadata: Option<serde_json::Value>) -> serde_json::Value {
+pub(crate) fn vector_to_json(
+    vector: &Vector,
+    metadata: Option<serde_json::Value>,
+) -> serde_json::Value {
     let mut obj = json!({
         "vector": vector.as_slice(),
         "model": vector.model(),

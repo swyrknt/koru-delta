@@ -30,7 +30,7 @@ impl ProcessRunner {
             genome_update: GenomeUpdateProcess::new(),
         }
     }
-    
+
     /// Create with custom configurations.
     pub fn with_config(
         consolidation: ConsolidationConfig,
@@ -43,17 +43,17 @@ impl ProcessRunner {
             genome_update: GenomeUpdateProcess::with_config(genome),
         }
     }
-    
+
     /// Get the consolidation process.
     pub fn consolidation(&self) -> &ConsolidationProcess {
         &self.consolidation
     }
-    
+
     /// Get the distillation process.
     pub fn distillation(&self) -> &DistillationProcess {
         &self.distillation
     }
-    
+
     /// Get the genome update process.
     pub fn genome_update(&self) -> &GenomeUpdateProcess {
         &self.genome_update
@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn test_process_runner_new() {
         let runner = ProcessRunner::new();
-        
+
         // Should have all three processes
         assert_eq!(runner.consolidation().cycle_count(), 0);
         assert_eq!(runner.distillation().stats().distinctions_evaluated, 0);
@@ -100,7 +100,7 @@ mod tests {
                 auto_cleanup: true,
             },
         );
-        
+
         // Verify configs were applied
         assert_eq!(config.consolidation().interval().as_secs(), 3600);
         assert_eq!(config.distillation().fitness_threshold(), 3);

@@ -25,9 +25,9 @@
 /// - Epoch N: Newest, less compressed
 /// - Each epoch has an index for fast lookup
 use crate::causal_graph::DistinctionId;
-use crate::types::{FullKey, VersionedValue};
 #[cfg(test)]
 use crate::types::VectorClock;
+use crate::types::{FullKey, VersionedValue};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use std::collections::HashMap;
@@ -38,13 +38,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub struct ColdConfig {
     /// Number of epochs to maintain
     pub epoch_count: usize,
-    
+
     /// Epoch duration (how much time per epoch)
     pub epoch_duration: Duration,
-    
+
     /// Maximum distinctions per epoch before compression
     pub max_distinctions_per_epoch: usize,
-    
+
     /// Fitness threshold for keeping (references >= this)
     pub fitness_threshold: usize,
 }
@@ -52,10 +52,10 @@ pub struct ColdConfig {
 impl Default for ColdConfig {
     fn default() -> Self {
         Self {
-            epoch_count: 7,                           // 7 epochs (like days/weeks)
-            epoch_duration: Duration::days(1),        // Daily epochs
-            max_distinctions_per_epoch: 100_000,      // Compress after 100K
-            fitness_threshold: 2,                     // 2+ references = keep
+            epoch_count: 7,                      // 7 epochs (like days/weeks)
+            epoch_duration: Duration::days(1),   // Daily epochs
+            max_distinctions_per_epoch: 100_000, // Compress after 100K
+            fitness_threshold: 2,                // 2+ references = keep
         }
     }
 }
@@ -66,14 +66,14 @@ impl Default for ColdConfig {
 pub struct ColdMemory {
     /// Configuration
     config: ColdConfig,
-    
+
     /// Epochs (0 = oldest, N = newest)
     /// Each epoch has its own index and data
     epochs: DashMap<usize, Epoch>,
-    
+
     /// Current epoch number
     current_epoch: AtomicU64,
-    
+
     /// Statistics
     consolidations: AtomicU64,
     compressions: AtomicU64,
@@ -86,14 +86,14 @@ pub struct ColdMemory {
 struct Epoch {
     /// Epoch number
     number: usize,
-    
+
     /// Time range
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
-    
+
     /// Index: distinction_id → metadata
     index: HashMap<DistinctionId, EpochEntry>,
-    
+
     /// Approximate size (for compression decisions)
     distinction_count: usize,
 }
@@ -117,7 +117,7 @@ impl ColdMemory {
     pub fn new() -> Self {
         Self::with_config(ColdConfig::default())
     }
-    
+
     /// Create new cold memory with custom configuration.
     pub fn with_config(config: ColdConfig) -> Self {
         let memory = Self {
@@ -128,13 +128,13 @@ impl ColdMemory {
             compressions: AtomicU64::new(0),
             archives: AtomicU64::new(0),
         };
-        
+
         // Initialize first epoch
         memory.create_epoch(0);
-        
+
         memory
     }
-    
+
     /// Consolidate data from Warm into Cold.
     ///
     /// Takes distinctions from Warm that are old enough and:
@@ -147,21 +147,15 @@ impl ColdMemory {
     ) -> ConsolidationResult {
         let mut kept = 0;
         let mut archived = 0;
-        
+
         let epoch_num = self.current_epoch.load(Ordering::Relaxed) as usize;
-        
+
         for (id, key, versioned, ref_count) in distinctions {
             let fitness = ref_count;
-            
+
             if fitness >= self.config.fitness_threshold {
                 // Keep in cold memory
-                self.add_to_epoch(
-                    epoch_num,
-                    id,
-                    key,
-                    versioned.timestamp,
-                    fitness,
-                );
+                self.add_to_epoch(epoch_num, id, key, versioned.timestamp, fitness);
                 kept += 1;
             } else {
                 // Archive (would go to Deep)
@@ -169,21 +163,21 @@ impl ColdMemory {
                 self.archives.fetch_add(1, Ordering::Relaxed);
             }
         }
-        
+
         self.consolidations.fetch_add(1, Ordering::Relaxed);
-        
+
         // Check if current epoch needs compression
         self.maybe_compress_epoch(epoch_num);
-        
+
         ConsolidationResult { kept, archived }
     }
-    
+
     /// Get a value from cold memory.
     ///
     /// Searches through epochs from newest to oldest.
     pub fn get(&self, id: &DistinctionId) -> Option<(FullKey, String)> {
         let current = self.current_epoch.load(Ordering::Relaxed) as usize;
-        
+
         // Search from newest to oldest
         for epoch_num in (0..=current).rev() {
             if let Some(epoch) = self.epochs.get(&epoch_num) {
@@ -192,16 +186,16 @@ impl ColdMemory {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Get distinction ID by key (reverse lookup).
     ///
     /// Searches through epochs from newest to oldest.
     pub fn get_by_key(&self, key: &FullKey) -> Option<DistinctionId> {
         let current = self.current_epoch.load(Ordering::Relaxed) as usize;
-        
+
         // Search from newest to oldest
         for epoch_num in (0..=current).rev() {
             if let Some(epoch) = self.epochs.get(&epoch_num) {
@@ -213,49 +207,46 @@ impl ColdMemory {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Check if a distinction is in cold memory.
     pub fn contains(&self, id: &DistinctionId) -> bool {
         self.get(id).is_some()
     }
-    
+
     /// Rotate to a new epoch (called periodically).
     pub fn rotate_epoch(&self) {
         let current = self.current_epoch.load(Ordering::Relaxed);
         let new_epoch = current + 1;
-        
+
         // Remove oldest epoch if we have too many
         let to_remove = new_epoch as i64 - self.config.epoch_count as i64;
         if to_remove >= 0 {
             self.epochs.remove(&(to_remove as usize));
         }
-        
+
         // Create new epoch
         self.create_epoch(new_epoch as usize);
         self.current_epoch.store(new_epoch, Ordering::Relaxed);
     }
-    
+
     /// Get current epoch number.
     pub fn current_epoch(&self) -> usize {
         self.current_epoch.load(Ordering::Relaxed) as usize
     }
-    
+
     /// Get epoch count.
     pub fn epoch_count(&self) -> usize {
         self.epochs.len()
     }
-    
+
     /// Get total distinctions across all epochs.
     pub fn total_distinctions(&self) -> usize {
-        self.epochs
-            .iter()
-            .map(|e| e.distinction_count)
-            .sum()
+        self.epochs.iter().map(|e| e.distinction_count).sum()
     }
-    
+
     /// Get statistics.
     pub fn stats(&self) -> ColdStats {
         ColdStats {
@@ -266,7 +257,7 @@ impl ColdMemory {
             total_distinctions: self.total_distinctions(),
         }
     }
-    
+
     /// Extract patterns from an epoch (for Deep memory).
     ///
     /// Returns common patterns across distinctions.
@@ -278,7 +269,7 @@ impl ColdMemory {
         }
         vec![]
     }
-    
+
     /// Create a new epoch.
     fn create_epoch(&self, number: usize) {
         let now = Utc::now();
@@ -289,10 +280,10 @@ impl ColdMemory {
             index: HashMap::new(),
             distinction_count: 0,
         };
-        
+
         self.epochs.insert(number, epoch);
     }
-    
+
     /// Add a distinction to an epoch.
     fn add_to_epoch(
         &self,
@@ -303,16 +294,19 @@ impl ColdMemory {
         fitness: usize,
     ) {
         if let Some(mut epoch) = self.epochs.get_mut(&epoch_num) {
-            epoch.index.insert(id.clone(), EpochEntry {
-                key,
-                timestamp,
-                fitness,
-                data_ref: format!("epoch_{}/data_{}", epoch_num, id),
-            });
+            epoch.index.insert(
+                id.clone(),
+                EpochEntry {
+                    key,
+                    timestamp,
+                    fitness,
+                    data_ref: format!("epoch_{}/data_{}", epoch_num, id),
+                },
+            );
             epoch.distinction_count += 1;
         }
     }
-    
+
     /// Compress an epoch if it's too large.
     fn maybe_compress_epoch(&self, epoch_num: usize) {
         let should_compress = self
@@ -320,26 +314,26 @@ impl ColdMemory {
             .get(&epoch_num)
             .map(|e| e.distinction_count >= self.config.max_distinctions_per_epoch)
             .unwrap_or(false);
-        
+
         if should_compress {
             // TODO: Implement compression
             self.compressions.fetch_add(1, Ordering::Relaxed);
         }
     }
-    
+
     /// Consolidate a distinction into cold memory.
-    /// 
+    ///
     /// Adds the distinction to the current epoch.
     pub fn consolidate_distinction(&self, _id: &DistinctionId) {
         // In real implementation, would fetch from storage and add to epoch
         // For now, just increment counter
         self.consolidations.fetch_add(1, Ordering::Relaxed);
     }
-    
+
     /// Compress old epochs to save space.
     pub fn compress_old_epochs(&self) {
         let current = self.current_epoch.load(Ordering::Relaxed) as usize;
-        
+
         // Compress all epochs except the current one
         for epoch_num in 0..current {
             self.maybe_compress_epoch(epoch_num);
@@ -390,8 +384,8 @@ mod tests {
         VersionedValue::new(
             Arc::new(value),
             Utc::now(),
-            id.to_string(),           // write_id
-            id.to_string(),           // distinction_id (same for tests)
+            id.to_string(), // write_id
+            id.to_string(), // distinction_id (same for tests)
             None,
             VectorClock::new(),
         )
@@ -400,7 +394,7 @@ mod tests {
     #[test]
     fn test_new_cold_memory() {
         let cold = ColdMemory::new();
-        
+
         assert_eq!(cold.current_epoch(), 0);
         assert_eq!(cold.epoch_count(), 1);
     }
@@ -408,20 +402,35 @@ mod tests {
     #[test]
     fn test_consolidate() {
         let cold = ColdMemory::new();
-        
+
         // Create distinctions with varying fitness
         let distinctions = vec![
-            ("v1".to_string(), FullKey::new("ns", "k1"), create_versioned(json!(1), "v1"), 5), // High fitness
-            ("v2".to_string(), FullKey::new("ns", "k2"), create_versioned(json!(2), "v2"), 1), // Low fitness
-            ("v3".to_string(), FullKey::new("ns", "k3"), create_versioned(json!(3), "v3"), 3), // Medium fitness
+            (
+                "v1".to_string(),
+                FullKey::new("ns", "k1"),
+                create_versioned(json!(1), "v1"),
+                5,
+            ), // High fitness
+            (
+                "v2".to_string(),
+                FullKey::new("ns", "k2"),
+                create_versioned(json!(2), "v2"),
+                1,
+            ), // Low fitness
+            (
+                "v3".to_string(),
+                FullKey::new("ns", "k3"),
+                create_versioned(json!(3), "v3"),
+                3,
+            ), // Medium fitness
         ];
-        
+
         let result = cold.consolidate(distinctions);
-        
+
         // Threshold is 2, so v2 (fitness 1) should be archived
         assert_eq!(result.kept, 2);
         assert_eq!(result.archived, 1);
-        
+
         // Check stats
         let stats = cold.stats();
         assert_eq!(stats.consolidations, 1);
@@ -431,13 +440,16 @@ mod tests {
     #[test]
     fn test_contains() {
         let cold = ColdMemory::new();
-        
-        let distinctions = vec![
-            ("v1".to_string(), FullKey::new("ns", "k1"), create_versioned(json!(1), "v1"), 5),
-        ];
-        
+
+        let distinctions = vec![(
+            "v1".to_string(),
+            FullKey::new("ns", "k1"),
+            create_versioned(json!(1), "v1"),
+            5,
+        )];
+
         cold.consolidate(distinctions);
-        
+
         assert!(cold.contains(&"v1".to_string()));
         assert!(!cold.contains(&"v2".to_string()));
     }
@@ -445,13 +457,13 @@ mod tests {
     #[test]
     fn test_rotate_epoch() {
         let cold = ColdMemory::new();
-        
+
         assert_eq!(cold.current_epoch(), 0);
-        
+
         cold.rotate_epoch();
         assert_eq!(cold.current_epoch(), 1);
         assert_eq!(cold.epoch_count(), 2);
-        
+
         cold.rotate_epoch();
         assert_eq!(cold.current_epoch(), 2);
         assert_eq!(cold.epoch_count(), 3);
@@ -466,12 +478,12 @@ mod tests {
             fitness_threshold: 2,
         };
         let cold = ColdMemory::with_config(config);
-        
+
         // Rotate past limit
         for _ in 0..5 {
             cold.rotate_epoch();
         }
-        
+
         // Should only have 3 epochs (current + 2 previous)
         assert_eq!(cold.epoch_count(), 3);
         assert_eq!(cold.current_epoch(), 5);
@@ -480,14 +492,24 @@ mod tests {
     #[test]
     fn test_total_distinctions() {
         let cold = ColdMemory::new();
-        
+
         let distinctions = vec![
-            ("v1".to_string(), FullKey::new("ns", "k1"), create_versioned(json!(1), "v1"), 5),
-            ("v2".to_string(), FullKey::new("ns", "k2"), create_versioned(json!(2), "v2"), 3),
+            (
+                "v1".to_string(),
+                FullKey::new("ns", "k1"),
+                create_versioned(json!(1), "v1"),
+                5,
+            ),
+            (
+                "v2".to_string(),
+                FullKey::new("ns", "k2"),
+                create_versioned(json!(2), "v2"),
+                3,
+            ),
         ];
-        
+
         cold.consolidate(distinctions);
-        
+
         assert_eq!(cold.total_distinctions(), 2);
     }
 
@@ -500,14 +522,24 @@ mod tests {
             fitness_threshold: 5,
         };
         let cold = ColdMemory::with_config(config);
-        
+
         let distinctions = vec![
-            ("v1".to_string(), FullKey::new("ns", "k1"), create_versioned(json!(1), "v1"), 3), // Below threshold
-            ("v2".to_string(), FullKey::new("ns", "k2"), create_versioned(json!(2), "v2"), 5), // At threshold
+            (
+                "v1".to_string(),
+                FullKey::new("ns", "k1"),
+                create_versioned(json!(1), "v1"),
+                3,
+            ), // Below threshold
+            (
+                "v2".to_string(),
+                FullKey::new("ns", "k2"),
+                create_versioned(json!(2), "v2"),
+                5,
+            ), // At threshold
         ];
-        
+
         let result = cold.consolidate(distinctions);
-        
+
         // Threshold is 5, so v1 (fitness 3) should be archived
         assert_eq!(result.kept, 1);
         assert_eq!(result.archived, 1);

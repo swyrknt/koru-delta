@@ -168,8 +168,9 @@ mod native_impl {
             F: Future + Send + 'static,
             F::Output: Send,
         {
-            let timeout: Pin<Box<dyn Future<Output = Result<F::Output, tokio::time::error::Elapsed>> + Send>> = 
-                Box::pin(tokio::time::timeout(duration, future));
+            let timeout: Pin<
+                Box<dyn Future<Output = Result<F::Output, tokio::time::error::Elapsed>> + Send>,
+            > = Box::pin(tokio::time::timeout(duration, future));
             super::Timeout {
                 inner: super::TimeoutInner::Tokio { timeout },
             }
@@ -311,7 +312,7 @@ mod wasm_impl {
         {
             let state = Arc::new(Mutex::new(initial));
             let (tx, rx) = mpsc::channel(1);
-            
+
             (
                 super::WatchSender {
                     inner: super::WatchSenderInner::Wasm {
@@ -650,9 +651,7 @@ impl Instant {
     pub fn duration_since(&self, earlier: Instant) -> Duration {
         match (&self.inner, earlier.inner) {
             #[cfg(not(target_arch = "wasm32"))]
-            (InstantInner::Tokio(now), InstantInner::Tokio(then)) => {
-                now.duration_since(then)
-            }
+            (InstantInner::Tokio(now), InstantInner::Tokio(then)) => now.duration_since(then),
             #[cfg(target_arch = "wasm32")]
             (InstantInner::Wasm(now), InstantInner::Wasm(then)) => {
                 Duration::from_millis((now - then) as u64)
@@ -818,7 +817,11 @@ impl<T: Clone> Clone for WatchReceiverInner<T> {
 impl<T: Clone> Clone for WatchReceiverInner<T> {
     fn clone(&self) -> Self {
         match self {
-            WatchReceiverInner::Wasm { state, receiver: _, current } => {
+            WatchReceiverInner::Wasm {
+                state,
+                receiver: _,
+                current,
+            } => {
                 // Create a new channel for this receiver
                 let (_tx, new_rx) = futures::channel::mpsc::channel(1);
                 WatchReceiverInner::Wasm {
@@ -839,7 +842,11 @@ impl<T: Clone + Send + Sync> Clone for WatchReceiver<T> {
                 inner: WatchReceiverInner::Tokio(rx.clone()),
             },
             #[cfg(target_arch = "wasm32")]
-            WatchReceiverInner::Wasm { state, receiver: _, current } => {
+            WatchReceiverInner::Wasm {
+                state,
+                receiver: _,
+                current,
+            } => {
                 // Create a new channel for this receiver
                 let (_tx, new_rx) = futures::channel::mpsc::channel(1);
                 Self {
@@ -905,9 +912,7 @@ impl<T: Clone + Send + Sync + PartialEq> WatchReceiver<T> {
     pub fn borrow_and_update(&mut self) -> T {
         match &mut self.inner {
             #[cfg(not(target_arch = "wasm32"))]
-            WatchReceiverInner::Tokio(rx) => {
-                rx.borrow_and_update().clone()
-            }
+            WatchReceiverInner::Tokio(rx) => rx.borrow_and_update().clone(),
             #[cfg(target_arch = "wasm32")]
             WatchReceiverInner::Wasm { state, current, .. } => {
                 let s = state.lock().unwrap();
@@ -984,7 +989,7 @@ mod tests {
     async fn test_runtime_channel() {
         let runtime = TokioRuntime::new();
         let (tx, mut rx) = runtime.channel::<i32>(10);
-        
+
         tx.send(42).await.unwrap();
         let value = rx.recv().await.unwrap();
         assert_eq!(value, 42);
@@ -995,7 +1000,7 @@ mod tests {
     async fn test_runtime_interval() {
         let runtime = TokioRuntime::new();
         let mut interval = runtime.interval(Duration::from_millis(10));
-        
+
         interval.tick().await;
         interval.tick().await;
         // If we get here, the interval is working
@@ -1006,7 +1011,7 @@ mod tests {
     async fn test_runtime_watch_channel() {
         let runtime = TokioRuntime::new();
         let (tx, mut rx) = runtime.watch_channel(false);
-        
+
         tx.send(true).unwrap();
         rx.changed().await.unwrap();
         let value = rx.borrow_and_update();

@@ -63,10 +63,7 @@ pub struct MinedIdentity {
 /// println!("Hashes computed: {}", mined.hashes_computed);
 /// # }
 /// ```
-pub async fn mine_identity(
-    user_data: IdentityUserData,
-    difficulty: u8,
-) -> MinedIdentity {
+pub async fn mine_identity(user_data: IdentityUserData, difficulty: u8) -> MinedIdentity {
     let difficulty = difficulty.clamp(MIN_DIFFICULTY, MAX_DIFFICULTY);
     let start_time = std::time::Instant::now();
 
@@ -118,10 +115,7 @@ pub async fn mine_identity(
 }
 
 /// Synchronous version of identity mining for non-async contexts.
-pub fn mine_identity_sync(
-    user_data: IdentityUserData,
-    difficulty: u8,
-) -> MinedIdentity {
+pub fn mine_identity_sync(user_data: IdentityUserData, difficulty: u8) -> MinedIdentity {
     let difficulty = difficulty.clamp(MIN_DIFFICULTY, MAX_DIFFICULTY);
     let start_time = std::time::Instant::now();
 
@@ -256,7 +250,10 @@ pub fn estimate_mining_time_ms(difficulty: u8) -> u64 {
 }
 
 /// Sign a message with an identity's secret key.
-pub fn sign_message(secret_key: &[u8], message: &[u8]) -> Result<Vec<u8>, crate::auth::types::AuthError> {
+pub fn sign_message(
+    secret_key: &[u8],
+    message: &[u8],
+) -> Result<Vec<u8>, crate::auth::types::AuthError> {
     let key_bytes: [u8; 32] = secret_key
         .try_into()
         .map_err(|_| crate::auth::types::AuthError::InvalidKeyFormat)?;
@@ -290,12 +287,12 @@ pub fn verify_signature(
         .into_vec()
         .map_err(|_| crate::auth::types::AuthError::InvalidKeyFormat)?;
 
-    let verifying_key =
-        VerifyingKey::try_from(&public_key_bytes[..]).map_err(|_| crate::auth::types::AuthError::InvalidKeyFormat)?;
+    let verifying_key = VerifyingKey::try_from(&public_key_bytes[..])
+        .map_err(|_| crate::auth::types::AuthError::InvalidKeyFormat)?;
 
     // Decode signature
-    let signature =
-        Signature::from_slice(signature).map_err(|_| crate::auth::types::AuthError::InvalidSignature)?;
+    let signature = Signature::from_slice(signature)
+        .map_err(|_| crate::auth::types::AuthError::InvalidSignature)?;
 
     // Verify
     Ok(verifying_key.verify_strict(message, &signature).is_ok())
@@ -327,10 +324,10 @@ mod tests {
         };
 
         let mut mined = mine_identity_sync(user_data, 2);
-        
+
         // Tamper with the nonce
         mined.identity.nonce += 1;
-        
+
         assert!(!verify_identity_pow(&mined.identity));
     }
 

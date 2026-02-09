@@ -18,7 +18,7 @@ async fn test_basic_vector_storage() {
     // Retrieve the vector
     let retrieved = db.get_embed("embeddings", "vec1").await.unwrap();
     assert!(retrieved.is_some());
-    
+
     let retrieved = retrieved.unwrap();
     assert_eq!(retrieved.dimensions(), 4);
     assert_eq!(retrieved.model(), "test-model");
@@ -31,7 +31,7 @@ async fn test_vector_with_metadata() {
 
     let vector = Vector::new(vec![0.1, 0.2, 0.3], "test-model");
     let metadata = json!({"title": "Test Document", "category": "AI"});
-    
+
     let result = db.embed("docs", "doc1", vector, Some(metadata)).await;
     assert!(result.is_ok());
 
@@ -58,14 +58,15 @@ async fn test_vector_similarity_search() {
 
     // Search with v1
     let query = Vector::new(vec![1.0, 0.0, 0.0], "test-model");
-    let results = db.embed_search(Some("vectors"), &query, VectorSearchOptions::new().top_k(2))
+    let results = db
+        .embed_search(Some("vectors"), &query, VectorSearchOptions::new().top_k(2))
         .await
         .unwrap();
 
     assert_eq!(results.len(), 2);
     assert_eq!(results[0].key, "vec1"); // Most similar to itself
     assert_eq!(results[1].key, "vec3"); // Second most similar
-    
+
     // v1 and v3 should have high similarity
     assert!(results[0].score > 0.99);
     assert!(results[1].score > 0.9);
@@ -210,7 +211,9 @@ async fn test_vector_concurrent_access() {
     let handle1 = tokio::spawn(async move {
         for i in 0..10 {
             let v = Vector::new(vec![i as f32, 0.0, 0.0], "test-model");
-            db.embed("concurrent", &format!("vec{}", i), v, None).await.unwrap();
+            db.embed("concurrent", &format!("vec{}", i), v, None)
+                .await
+                .unwrap();
         }
     });
 
@@ -218,7 +221,13 @@ async fn test_vector_concurrent_access() {
     let handle2 = tokio::spawn(async move {
         for _ in 0..10 {
             let query = Vector::new(vec![1.0, 0.0, 0.0], "test-model");
-            let _ = db_clone.embed_search(Some("concurrent"), &query, VectorSearchOptions::new().top_k(5)).await;
+            let _ = db_clone
+                .embed_search(
+                    Some("concurrent"),
+                    &query,
+                    VectorSearchOptions::new().top_k(5),
+                )
+                .await;
             tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
         }
     });

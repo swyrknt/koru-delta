@@ -1,3 +1,5 @@
+pub mod cold;
+pub mod deep;
 /// Memory tiering subsystem and workspaces.
 ///
 /// This module provides:
@@ -36,15 +38,16 @@
 /// ```
 pub mod hot;
 pub mod warm;
-pub mod cold;
-pub mod deep;
 pub mod workspace;
 
-pub use workspace::{
-    AgentContext, ConsolidationSummary, MemoryPattern, SearchOptions, Workspace,
-    WorkspaceItem, WorkspaceSearchResult, WorkspaceStats,
+pub use cold::{ColdConfig, ColdMemory, ColdStats, ConsolidationResult, Pattern};
+pub use deep::{
+    CausalTopology, DeepConfig, DeepMemory, DeepStats, EpochSummary, ExpressionResult, Genome,
+    ReferencePattern,
 };
 pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
 pub use warm::{WarmConfig, WarmMemory, WarmStats};
-pub use cold::{ColdConfig, ColdMemory, ColdStats, ConsolidationResult, Pattern};
-pub use deep::{CausalTopology, DeepConfig, DeepMemory, DeepStats, EpochSummary, ExpressionResult, Genome, ReferencePattern};
+pub use workspace::{
+    AgentContext, ConsolidationSummary, MemoryPattern, SearchOptions, Workspace, WorkspaceItem,
+    WorkspaceSearchResult, WorkspaceStats,
+};

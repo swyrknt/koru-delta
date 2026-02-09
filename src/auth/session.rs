@@ -225,8 +225,8 @@ pub fn create_session_token(
 
     let message = format!("session:{}", timestamp.timestamp());
 
-    let mut mac =
-        HmacSha256::new_from_slice(&session_keys.auth_key).map_err(|_| AuthError::InvalidKeyFormat)?;
+    let mut mac = HmacSha256::new_from_slice(&session_keys.auth_key)
+        .map_err(|_| AuthError::InvalidKeyFormat)?;
     mac.update(message.as_bytes());
     let signature = mac.finalize().into_bytes();
 
@@ -256,15 +256,13 @@ pub fn validate_session_token(
     }
 
     let session_id = parts[0];
-    let timestamp_secs: i64 = parts[1]
-        .parse()
-        .map_err(|_| AuthError::InvalidSignature)?;
+    let timestamp_secs: i64 = parts[1].parse().map_err(|_| AuthError::InvalidSignature)?;
     let signature = bs58::decode(parts[2])
         .into_vec()
         .map_err(|_| AuthError::InvalidSignature)?;
 
-    let timestamp = DateTime::from_timestamp(timestamp_secs, 0)
-        .ok_or(AuthError::InvalidSignature)?;
+    let timestamp =
+        DateTime::from_timestamp(timestamp_secs, 0).ok_or(AuthError::InvalidSignature)?;
 
     // Check age
     let age = Utc::now().signed_duration_since(timestamp);
@@ -278,8 +276,7 @@ pub fn validate_session_token(
         .into_vec()
         .map_err(|_| AuthError::InvalidKeyFormat)?;
 
-    let mut mac =
-        HmacSha256::new_from_slice(&auth_key).map_err(|_| AuthError::InvalidKeyFormat)?;
+    let mut mac = HmacSha256::new_from_slice(&auth_key).map_err(|_| AuthError::InvalidKeyFormat)?;
     mac.update(message.as_bytes());
 
     mac.verify_slice(&signature)

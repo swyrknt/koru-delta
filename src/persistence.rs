@@ -45,7 +45,7 @@
 /// ```
 use crate::error::{DeltaError, DeltaResult};
 use crate::storage::CausalStorage;
-use crate::types::{FullKey, VersionedValue, VectorClock};
+use crate::types::{FullKey, VectorClock, VersionedValue};
 use chrono::{DateTime, Utc};
 use koru_lambda_core::DistinctionEngine;
 use serde::{Deserialize, Serialize};
@@ -159,9 +159,11 @@ pub async fn append_write(
     // Ensure directories exist
     let wal_dir = db_path.join("wal");
     let values_dir = db_path.join("values");
-    fs::create_dir_all(&wal_dir).await
+    fs::create_dir_all(&wal_dir)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to create WAL dir: {}", e)))?;
-    fs::create_dir_all(&values_dir).await
+    fs::create_dir_all(&values_dir)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to create values dir: {}", e)))?;
 
     // Get or load metadata
@@ -211,8 +213,9 @@ pub async fn append_write(
 
     // Check if we need to rotate
     let should_rotate = if segment_path.exists() {
-        let metadata = fs::metadata(&segment_path).await
-            .map_err(|e| DeltaError::StorageError(format!("Failed to read segment metadata: {}", e)))?;
+        let metadata = fs::metadata(&segment_path).await.map_err(|e| {
+            DeltaError::StorageError(format!("Failed to read segment metadata: {}", e))
+        })?;
         metadata.len() > MAX_SEGMENT_SIZE
     } else {
         false
@@ -232,12 +235,10 @@ pub async fn append_write(
         .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to open WAL: {}", e)))?;
 
-    file
-        .write_all(line.as_bytes())
+    file.write_all(line.as_bytes())
         .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write WAL: {}", e)))?;
-    file
-        .write_all(b"\n")
+    file.write_all(b"\n")
         .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write WAL: {}", e)))?;
 
@@ -256,15 +257,9 @@ pub async fn append_write(
 ///
 /// Values are stored in a directory structure based on their hash:
 /// `values/AB/CD...` where AB are the first 2 chars and CD... is the rest.
-async fn store_value(
-    values_dir: &Path,
-    value_hash: &str,
-    value: &JsonValue,
-) -> DeltaResult<()> {
+async fn store_value(values_dir: &Path, value_hash: &str, value: &JsonValue) -> DeltaResult<()> {
     if value_hash.len() < 4 {
-        return Err(DeltaError::StorageError(
-            "Value hash too short".to_string(),
-        ));
+        return Err(DeltaError::StorageError("Value hash too short".to_string()));
     }
 
     // Create path: values/AB/CD...
@@ -278,15 +273,18 @@ async fn store_value(
         return Ok(());
     }
 
-    fs::create_dir_all(&value_dir).await
+    fs::create_dir_all(&value_dir)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to create value dir: {}", e)))?;
 
     // Write value atomically
     let temp_path = value_path.with_extension("tmp");
     let json = serde_json::to_vec(value)?;
-    fs::write(&temp_path, &json).await
+    fs::write(&temp_path, &json)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write value: {}", e)))?;
-    fs::rename(&temp_path, &value_path).await
+    fs::rename(&temp_path, &value_path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to rename value: {}", e)))?;
 
     Ok(())
@@ -306,7 +304,8 @@ async fn load_value(values_dir: &Path, value_hash: &str) -> DeltaResult<Option<J
         return Ok(None);
     }
 
-    let bytes = fs::read(&value_path).await
+    let bytes = fs::read(&value_path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to read value: {}", e)))?;
     let value: JsonValue = serde_json::from_slice(&bytes)?;
     Ok(Some(value))
@@ -315,7 +314,8 @@ async fn load_value(values_dir: &Path, value_hash: &str) -> DeltaResult<Option<J
 /// Load WAL metadata.
 async fn load_metadata(wal_dir: &Path) -> DeltaResult<WalMetadata> {
     let metadata_path = wal_dir.join("metadata.json");
-    let bytes = fs::read(&metadata_path).await
+    let bytes = fs::read(&metadata_path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to read metadata: {}", e)))?;
     let metadata: WalMetadata = serde_json::from_slice(&bytes)?;
     Ok(metadata)
@@ -326,9 +326,11 @@ async fn save_metadata(wal_dir: &Path, metadata: &WalMetadata) -> DeltaResult<()
     let metadata_path = wal_dir.join("metadata.json");
     let temp_path = metadata_path.with_extension("tmp");
     let json = serde_json::to_vec(metadata)?;
-    fs::write(&temp_path, &json).await
+    fs::write(&temp_path, &json)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write metadata: {}", e)))?;
-    fs::rename(&temp_path, &metadata_path).await
+    fs::rename(&temp_path, &metadata_path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to rename metadata: {}", e)))?;
     Ok(())
 }
@@ -351,12 +353,16 @@ pub async fn load_from_wal(
     }
 
     // Get all WAL segments in order
-    let mut read_dir = fs::read_dir(&wal_dir).await
+    let mut read_dir = fs::read_dir(&wal_dir)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to read WAL dir: {}", e)))?;
-    
+
     let mut segments = Vec::new();
-    while let Some(entry) = read_dir.next_entry().await
-        .map_err(|e| DeltaError::StorageError(format!("Failed to read WAL entry: {}", e)))? {
+    while let Some(entry) = read_dir
+        .next_entry()
+        .await
+        .map_err(|e| DeltaError::StorageError(format!("Failed to read WAL entry: {}", e)))?
+    {
         if let Some(name) = entry.file_name().to_str() {
             if name.ends_with(".wal") {
                 segments.push(name.to_string());
@@ -381,13 +387,17 @@ async fn replay_segment(
     values_dir: &Path,
     storage: &CausalStorage,
 ) -> DeltaResult<()> {
-    let file = fs::File::open(segment_path).await
+    let file = fs::File::open(segment_path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to open segment: {}", e)))?;
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
-    while let Some(line) = lines.next_line().await
-        .map_err(|e| DeltaError::StorageError(format!("Failed to read line: {}", e)))? {
+    while let Some(line) = lines
+        .next_line()
+        .await
+        .map_err(|e| DeltaError::StorageError(format!("Failed to read line: {}", e)))?
+    {
         if line.trim().is_empty() {
             continue;
         }
@@ -414,23 +424,24 @@ async fn replay_segment(
             if let Some(value) = load_value(values_dir, &entry.value_hash).await? {
                 // Reconstruct versioned value
                 // For replay: write_id = value_hash + timestamp_nanos to match original
-                let write_id = format!("{}_{}", entry.value_hash, entry.timestamp.timestamp_nanos_opt().unwrap_or(0));
+                let write_id = format!(
+                    "{}_{}",
+                    entry.value_hash,
+                    entry.timestamp.timestamp_nanos_opt().unwrap_or(0)
+                );
                 let versioned = VersionedValue::new(
                     Arc::new(value),
                     entry.timestamp,
-                    write_id,                      // unique write_id for replay
-                    entry.value_hash.clone(),      // distinction_id = content hash
-                    entry.prev_hash.clone(),       // previous version
-                    VectorClock::new(),            // Initialize empty vector clock
+                    write_id,                 // unique write_id for replay
+                    entry.value_hash.clone(), // distinction_id = content hash
+                    entry.prev_hash.clone(),  // previous version
+                    VectorClock::new(),       // Initialize empty vector clock
                 );
 
                 // Store in storage using direct insert to preserve original IDs
                 let _ = storage.insert_direct(&entry.ns, &entry.key, versioned);
             } else {
-                eprintln!(
-                    "Warning: Value not found for hash {}",
-                    entry.value_hash
-                );
+                eprintln!("Warning: Value not found for hash {}", entry.value_hash);
             }
         }
     }
@@ -460,17 +471,19 @@ pub enum LockState {
 /// - `Err(...)` if another process is currently holding the lock
 pub async fn acquire_lock(db_path: &Path) -> DeltaResult<LockState> {
     let lock_path = db_path.join(LOCK_FILE);
-    
+
     // Check if lock file exists
     if lock_path.exists() {
-        let content = fs::read_to_string(&lock_path).await
+        let content = fs::read_to_string(&lock_path)
+            .await
             .map_err(|e| DeltaError::StorageError(format!("Failed to read lock file: {}", e)))?;
-        
+
         match content.trim() {
             "RUNNING" => {
                 return Err(DeltaError::StorageError(
                     "Database is already running (lock file exists). \
-                     If this is incorrect, remove the lock file manually.".to_string()
+                     If this is incorrect, remove the lock file manually."
+                        .to_string(),
                 ));
             }
             "CLEAN" => {
@@ -479,26 +492,30 @@ pub async fn acquire_lock(db_path: &Path) -> DeltaResult<LockState> {
             _ => {
                 // Unclean shutdown detected (or unknown state)
                 // Write RUNNING state
-                fs::write(&lock_path, "RUNNING").await
-                    .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
+                fs::write(&lock_path, "RUNNING").await.map_err(|e| {
+                    DeltaError::StorageError(format!("Failed to write lock file: {}", e))
+                })?;
                 return Ok(LockState::Unclean);
             }
         }
     }
-    
+
     // Create lock file with RUNNING state
-    fs::create_dir_all(db_path).await
+    fs::create_dir_all(db_path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to create db directory: {}", e)))?;
-    fs::write(&lock_path, "RUNNING").await
+    fs::write(&lock_path, "RUNNING")
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
-    
+
     Ok(LockState::Clean)
 }
 
 /// Mark the database as cleanly shut down.
 pub async fn release_lock(db_path: &Path) -> DeltaResult<()> {
     let lock_path = db_path.join(LOCK_FILE);
-    fs::write(&lock_path, "CLEAN").await
+    fs::write(&lock_path, "CLEAN")
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
     Ok(())
 }
@@ -507,19 +524,18 @@ pub async fn release_lock(db_path: &Path) -> DeltaResult<()> {
 #[allow(dead_code)]
 pub async fn mark_unclean_shutdown(db_path: &Path) -> DeltaResult<()> {
     let lock_path = db_path.join(LOCK_FILE);
-    fs::write(&lock_path, "UNCLEAN").await
+    fs::write(&lock_path, "UNCLEAN")
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write lock file: {}", e)))?;
     Ok(())
 }
 
 /// Create a snapshot from current storage (for migration or compaction).
-pub async fn create_snapshot(
-    storage: &CausalStorage,
-    snapshot_path: &Path,
-) -> DeltaResult<()> {
-    fs::create_dir_all(snapshot_path.parent().unwrap_or(Path::new("."))).await
+pub async fn create_snapshot(storage: &CausalStorage, snapshot_path: &Path) -> DeltaResult<()> {
+    fs::create_dir_all(snapshot_path.parent().unwrap_or(Path::new(".")))
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to create snapshot dir: {}", e)))?;
-    
+
     let (current_state, history_log) = storage.create_snapshot();
 
     #[derive(Serialize)]
@@ -556,9 +572,11 @@ pub async fn create_snapshot(
 
     let temp_path = snapshot_path.with_extension("tmp");
     let bytes = serde_json::to_vec(&snapshot)?;
-    fs::write(&temp_path, &bytes).await
+    fs::write(&temp_path, &bytes)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to write snapshot: {}", e)))?;
-    fs::rename(&temp_path, snapshot_path).await
+    fs::rename(&temp_path, snapshot_path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to rename snapshot: {}", e)))?;
 
     Ok(())
@@ -577,32 +595,28 @@ pub async fn exists(path: &Path) -> bool {
             return true;
         }
     }
-    
+
     // Check for legacy format
     fs::try_exists(path).await.unwrap_or(false)
 }
 
 /// Save database to disk using WAL format.
-/// 
+///
 /// The `path` should be a directory where the WAL and value store will be created.
 /// For example: `~/.korudelta/db/`
 pub async fn save(storage: &CausalStorage, path: &Path) -> DeltaResult<()> {
     // Ensure the directory exists
-    fs::create_dir_all(path).await
+    fs::create_dir_all(path)
+        .await
         .map_err(|e| DeltaError::StorageError(format!("Failed to create db dir: {}", e)))?;
 
     // Get all history and write to WAL (preserves full history)
     let (_current_state, history_log) = storage.create_snapshot();
-    
+
     // Write all historical versions to WAL (in chronological order)
     for (full_key, versions) in history_log {
         for versioned in versions {
-            append_write(
-                path,
-                &full_key.namespace,
-                &full_key.key,
-                &versioned,
-            ).await?;
+            append_write(path, &full_key.namespace, &full_key.key, &versioned).await?;
         }
     }
 
@@ -618,22 +632,23 @@ pub async fn load(path: &Path, engine: Arc<DistinctionEngine>) -> DeltaResult<Ca
     if !fs::try_exists(path).await.unwrap_or(false) {
         return Ok(CausalStorage::new(engine));
     }
-    
+
     // Check if this looks like a WAL directory
     let wal_dir = path.join("wal");
     let is_wal = fs::try_exists(&wal_dir).await.unwrap_or(false);
-    
+
     if is_wal {
         // Load from WAL format
         return load_from_wal(path, engine).await;
     }
-    
+
     // Check if it's a legacy snapshot file
     if let Ok(metadata) = fs::metadata(path).await {
         if metadata.is_file() {
             // Fall back to legacy snapshot format
-            let bytes = fs::read(path).await
-                .map_err(|e| DeltaError::StorageError(format!("Failed to read database file: {}", e)))?;
+            let bytes = fs::read(path).await.map_err(|e| {
+                DeltaError::StorageError(format!("Failed to read database file: {}", e))
+            })?;
 
             #[derive(Deserialize)]
             struct LegacySnapshot {
@@ -652,13 +667,17 @@ pub async fn load(path: &Path, engine: Arc<DistinctionEngine>) -> DeltaResult<Ca
 
             // Restore current state
             for (full_key, versioned) in snapshot.current_state {
-                let _ = storage.put(&full_key.namespace, &full_key.key, versioned.value().clone());
+                let _ = storage.put(
+                    &full_key.namespace,
+                    &full_key.key,
+                    versioned.value().clone(),
+                );
             }
 
             return Ok(storage);
         }
     }
-    
+
     // If directory exists but is empty (no WAL yet), return empty storage
     Ok(CausalStorage::new(engine))
 }
@@ -694,18 +713,23 @@ mod tests {
     #[allow(dead_code)]
     pub async fn get_disk_usage(db_path: &Path) -> DeltaResult<u64> {
         let mut total_size = 0u64;
-        
+
         // Walk the directory tree
         if db_path.exists() {
-            let mut entries = fs::read_dir(db_path).await
+            let mut entries = fs::read_dir(db_path)
+                .await
                 .map_err(|e| DeltaError::StorageError(format!("Failed to read db dir: {}", e)))?;
-            
-            while let Some(entry) = entries.next_entry().await
-                .map_err(|e| DeltaError::StorageError(format!("Failed to read entry: {}", e)))? {
+
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| DeltaError::StorageError(format!("Failed to read entry: {}", e)))?
+            {
                 let path = entry.path();
-                let metadata = entry.metadata().await
-                    .map_err(|e| DeltaError::StorageError(format!("Failed to read metadata: {}", e)))?;
-                
+                let metadata = entry.metadata().await.map_err(|e| {
+                    DeltaError::StorageError(format!("Failed to read metadata: {}", e))
+                })?;
+
                 if metadata.is_file() {
                     total_size += metadata.len();
                 } else if metadata.is_dir() {
@@ -714,30 +738,36 @@ mod tests {
                 }
             }
         }
-        
+
         Ok(total_size)
     }
-    
+
     /// Helper to recursively calculate directory size.
     #[allow(dead_code)]
     async fn get_dir_size(dir: &Path) -> DeltaResult<u64> {
         let mut total_size = 0u64;
-        
-        let mut entries = fs::read_dir(dir).await
+
+        let mut entries = fs::read_dir(dir)
+            .await
             .map_err(|e| DeltaError::StorageError(format!("Failed to read dir: {}", e)))?;
-        
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| DeltaError::StorageError(format!("Failed to read entry: {}", e)))? {
-            let metadata = entry.metadata().await
+
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| DeltaError::StorageError(format!("Failed to read entry: {}", e)))?
+        {
+            let metadata = entry
+                .metadata()
+                .await
                 .map_err(|e| DeltaError::StorageError(format!("Failed to read metadata: {}", e)))?;
-            
+
             if metadata.is_file() {
                 total_size += metadata.len();
             } else if metadata.is_dir() {
                 total_size += Box::pin(get_dir_size(&entry.path())).await?;
             }
         }
-        
+
         Ok(total_size)
     }
 
@@ -750,10 +780,10 @@ mod tests {
         let versioned = VersionedValue::new(
             Arc::new(json!({"test": "value"})),
             Utc::now(),
-            "hash123".to_string(),  // write_id
-            "hash123".to_string(),  // distinction_id (same for test)
+            "hash123".to_string(), // write_id
+            "hash123".to_string(), // distinction_id (same for test)
             None,
-            VectorClock::new(),     // Initialize empty vector clock
+            VectorClock::new(), // Initialize empty vector clock
         );
 
         // Append write

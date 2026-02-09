@@ -53,8 +53,7 @@ impl BloomFilter {
     /// ```
     pub fn new(expected_items: usize, false_positive_rate: f64) -> Self {
         // Calculate optimal bit array size: m = -n * ln(p) / (ln(2)^2)
-        let m = ((-(expected_items as f64) * false_positive_rate.ln())
-            / (2.0_f64.ln().powi(2)))
+        let m = ((-(expected_items as f64) * false_positive_rate.ln()) / (2.0_f64.ln().powi(2)))
             .ceil() as usize;
 
         // Calculate optimal number of hash functions: k = m/n * ln(2)
@@ -233,7 +232,7 @@ mod tests {
     #[test]
     fn test_no_false_negatives() {
         let mut filter = BloomFilter::new(1000, 0.01);
-        
+
         // Insert many items
         for i in 0..100 {
             filter.insert(&format!("item_{}", i));
@@ -253,7 +252,7 @@ mod tests {
     fn test_false_positive_rate() {
         // With 1% target FP rate, most items not inserted should return false
         let mut filter = BloomFilter::new(10000, 0.01);
-        
+
         for i in 0..1000 {
             filter.insert(&format!("item_{}", i));
         }
@@ -294,7 +293,7 @@ mod tests {
     #[test]
     fn test_fp_rate_estimation() {
         let mut filter = BloomFilter::new(1000, 0.01);
-        
+
         // Add more items than expected
         for i in 0..2000 {
             filter.insert(&format!("item_{}", i));

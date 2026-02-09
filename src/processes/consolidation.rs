@@ -15,13 +15,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub struct ConsolidationConfig {
     /// How often to run consolidation (seconds)
     pub interval_secs: u64,
-    
+
     /// Batch size for moving distinctions
     pub batch_size: usize,
-    
+
     /// Idle threshold for demotion from Warm to Cold
     pub demotion_idle_threshold: std::time::Duration,
-    
+
     /// Ratio of distinctions to consolidate (0.0-1.0)
     pub consolidation_ratio: f64,
 }
@@ -50,7 +50,7 @@ impl ConsolidationProcess {
     pub fn new() -> Self {
         Self::with_config(ConsolidationConfig::default())
     }
-    
+
     /// Create with custom config.
     pub fn with_config(config: ConsolidationConfig) -> Self {
         Self {
@@ -60,25 +60,20 @@ impl ConsolidationProcess {
             cycle_count: AtomicU64::new(0),
         }
     }
-    
+
     /// Get the cycle count.
     pub fn cycle_count(&self) -> u64 {
         self.cycle_count.load(Ordering::Relaxed)
     }
-    
+
     /// Handle eviction from Hot memory - move to Warm.
     ///
     /// Called when HotMemory evicts a value.
-    pub fn handle_hot_eviction(
-        &self,
-        warm: &WarmMemory,
-        key: FullKey,
-        versioned: VersionedValue,
-    ) {
+    pub fn handle_hot_eviction(&self, warm: &WarmMemory, key: FullKey, versioned: VersionedValue) {
         warm.put(key, versioned);
         self.hot_to_warm.fetch_add(1, Ordering::Relaxed);
     }
-    
+
     /// Consolidate Warm to Cold based on idle time.
     ///
     /// Finds idle distinctions in Warm and moves them to Cold.
@@ -90,16 +85,16 @@ impl ConsolidationProcess {
     ) -> ConsolidationResult {
         // Find demotion candidates from Warm
         let candidates = warm.find_demotion_candidates(self.config.batch_size);
-        
+
         let mut moved = 0;
         let mut failed = 0;
-        
+
         for id in candidates {
             // Get the distinction details from Warm
             if let Some((key, _versioned)) = warm.get(&id) {
                 // Get reference count for fitness
                 let ref_count = reference_counts.get(&id).copied().unwrap_or(0);
-                
+
                 // Create placeholder versioned value (in real impl, would get actual data)
                 let versioned = crate::types::VersionedValue::new(
                     std::sync::Arc::new(serde_json::json!({})),
@@ -109,30 +104,30 @@ impl ConsolidationProcess {
                     None,
                     VectorClock::new(),
                 );
-                
+
                 // Consolidate to Cold
                 let distinctions = vec![(id.clone(), key, versioned, ref_count)];
                 let result = cold.consolidate(distinctions);
-                
+
                 moved += result.kept;
-                
+
                 // Demote from Warm (remove from index)
                 warm.demote(&id);
-                
+
                 if result.archived > 0 {
                     failed += result.archived;
                 }
             }
         }
-        
+
         self.warm_to_cold.fetch_add(moved as u64, Ordering::Relaxed);
-        
+
         ConsolidationResult {
             distinctions_moved: moved,
             distinctions_failed: failed,
         }
     }
-    
+
     /// Promote frequently accessed items from Warm to Hot.
     ///
     /// Called to bring hot candidates back into fast memory.
@@ -144,7 +139,7 @@ impl ConsolidationProcess {
         limit: usize,
     ) -> usize {
         let candidates = warm.find_promotion_candidates(limit);
-        
+
         let mut promoted = 0;
         for (key, id) in candidates {
             // In real impl, would fetch actual value from Warm storage
@@ -156,14 +151,14 @@ impl ConsolidationProcess {
                 None,
                 VectorClock::new(),
             );
-            
+
             hot.put(key, versioned);
             promoted += 1;
         }
-        
+
         promoted
     }
-    
+
     /// Get statistics.
     pub fn stats(&self) -> ConsolidationStats {
         ConsolidationStats {
@@ -171,7 +166,7 @@ impl ConsolidationProcess {
             warm_to_cold: self.warm_to_cold.load(Ordering::Relaxed),
         }
     }
-    
+
     /// Get interval.
     pub fn interval(&self) -> std::time::Duration {
         std::time::Duration::from_secs(self.config.interval_secs)
@@ -222,9 +217,9 @@ mod tests {
         let warm = WarmMemory::new();
         let key = crate::types::FullKey::new("ns", "key1");
         let versioned = create_versioned("v1");
-        
+
         consolidation.handle_hot_eviction(&warm, key.clone(), versioned);
-        
+
         assert!(warm.contains_key(&key));
         assert_eq!(consolidation.stats().hot_to_warm, 1);
     }
@@ -233,14 +228,14 @@ mod tests {
     fn test_consolidation_stats() {
         let consolidation = ConsolidationProcess::new();
         let warm = WarmMemory::new();
-        
+
         // Simulate some evictions
         for i in 0..5 {
             let key = crate::types::FullKey::new("ns", format!("key{}", i));
             let versioned = create_versioned(&format!("v{}", i));
             consolidation.handle_hot_eviction(&warm, key, versioned);
         }
-        
+
         let stats = consolidation.stats();
         assert_eq!(stats.hot_to_warm, 5);
     }
@@ -254,7 +249,7 @@ mod tests {
             consolidation_ratio: 0.5,
         };
         let consolidation = ConsolidationProcess::with_config(config);
-        
+
         assert_eq!(consolidation.interval().as_secs(), 600);
     }
 }

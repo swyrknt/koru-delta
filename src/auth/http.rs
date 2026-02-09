@@ -259,7 +259,10 @@ pub fn auth_routes(auth: Arc<AuthManager>) -> Router {
         .route("/api/v1/auth/challenge", post(handle_challenge))
         .route("/api/v1/auth/verify", post(handle_verify))
         // Session management
-        .route("/api/v1/auth/session/validate", post(handle_validate_session))
+        .route(
+            "/api/v1/auth/session/validate",
+            post(handle_validate_session),
+        )
         // Capabilities
         .route("/api/v1/auth/capabilities", get(handle_list_capabilities))
         .with_state(auth)
@@ -271,13 +274,17 @@ pub fn protected_routes(auth: Arc<AuthManager>) -> Router {
         // Session management
         .route("/api/v1/auth/session/revoke", post(handle_revoke_session))
         // Capabilities
-        .route("/api/v1/auth/capability/grant", post(handle_grant_capability))
-        .route("/api/v1/auth/capability/revoke", post(handle_revoke_capability))
+        .route(
+            "/api/v1/auth/capability/grant",
+            post(handle_grant_capability),
+        )
+        .route(
+            "/api/v1/auth/capability/revoke",
+            post(handle_revoke_capability),
+        )
         .route("/api/v1/auth/authorize", post(handle_authorize))
         .with_state(auth)
 }
-
-
 
 // ============================================================================
 // Middleware (axum 0.7 compatible)
@@ -320,7 +327,9 @@ pub async fn extract_auth_context(
 
     match session_id {
         Some(session_id) => {
-            let session = auth.validate_session(session_id).map_err(|_| StatusCode::UNAUTHORIZED)?;
+            let session = auth
+                .validate_session(session_id)
+                .map_err(|_| StatusCode::UNAUTHORIZED)?;
             let identity = auth
                 .get_identity(&session.identity_key)
                 .map_err(|_| StatusCode::UNAUTHORIZED)?
@@ -342,7 +351,9 @@ pub async fn require_auth_context(
         .and_then(|h| h.strip_prefix("Bearer "))
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let session = auth.validate_session(session_id).map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = auth
+        .validate_session(session_id)
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
     let identity = auth
         .get_identity(&session.identity_key)
         .map_err(|_| StatusCode::UNAUTHORIZED)?
@@ -431,9 +442,15 @@ async fn handle_revoke_session(
     Json(request): Json<ValidateSessionRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
     // Require authentication
-    let _ = require_auth_context(&headers, &auth)
-        .await
-        .map_err(|e| (e, Json(AuthErrorResponse { error: "Unauthorized".to_string(), code: "UNAUTHORIZED".to_string() })));
+    let _ = require_auth_context(&headers, &auth).await.map_err(|e| {
+        (
+            e,
+            Json(AuthErrorResponse {
+                error: "Unauthorized".to_string(),
+                code: "UNAUTHORIZED".to_string(),
+            }),
+        )
+    });
 
     // Revoke the session
     match auth.revoke_session(&request.session_id) {
@@ -449,9 +466,15 @@ async fn handle_grant_capability(
     Json(request): Json<GrantCapabilityRequest>,
 ) -> Result<Json<CapabilityResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     // Require authentication
-    let (_identity, _) = require_auth_context(&headers, &auth)
-        .await
-        .map_err(|e| (e, Json(AuthErrorResponse { error: "Unauthorized".to_string(), code: "UNAUTHORIZED".to_string() })))?;
+    let (_identity, _) = require_auth_context(&headers, &auth).await.map_err(|e| {
+        (
+            e,
+            Json(AuthErrorResponse {
+                error: "Unauthorized".to_string(),
+                code: "UNAUTHORIZED".to_string(),
+            }),
+        )
+    })?;
 
     // Get identity secret key (in production, this would come from secure storage)
     // For now, we return error as we can't sign without the secret key
@@ -459,20 +482,28 @@ async fn handle_grant_capability(
     // or the client would sign the capability
 
     // Parse resource pattern
-    let _pattern = parse_resource_pattern(&request.resource)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(AuthErrorResponse { error: e, code: "INVALID_RESOURCE".to_string() })))?;
+    let _pattern = parse_resource_pattern(&request.resource).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(AuthErrorResponse {
+                error: e,
+                code: "INVALID_RESOURCE".to_string(),
+            }),
+        )
+    })?;
 
     // Calculate expiry
-    let _expires_at = request.expires_in_seconds.map(|secs| {
-        chrono::Utc::now() + chrono::Duration::seconds(secs)
-    });
+    let _expires_at = request
+        .expires_in_seconds
+        .map(|secs| chrono::Utc::now() + chrono::Duration::seconds(secs));
 
     // NOTE: This is a placeholder - in production, capability signing
     // should happen client-side or with proper key management
     Err((
         StatusCode::NOT_IMPLEMENTED,
         Json(AuthErrorResponse {
-            error: "Capability granting requires client-side signing or secure key storage".to_string(),
+            error: "Capability granting requires client-side signing or secure key storage"
+                .to_string(),
             code: "NOT_IMPLEMENTED".to_string(),
         }),
     ))
@@ -485,9 +516,15 @@ async fn handle_revoke_capability(
     Json(_request): Json<RevokeCapabilityRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
     // Require authentication
-    let _ = require_auth_context(&headers, &auth)
-        .await
-        .map_err(|e| (e, Json(AuthErrorResponse { error: "Unauthorized".to_string(), code: "UNAUTHORIZED".to_string() })))?;
+    let _ = require_auth_context(&headers, &auth).await.map_err(|e| {
+        (
+            e,
+            Json(AuthErrorResponse {
+                error: "Unauthorized".to_string(),
+                code: "UNAUTHORIZED".to_string(),
+            }),
+        )
+    })?;
 
     // Get the capability
     // NOTE: This is a placeholder - full implementation needs capability lookup
@@ -507,9 +544,15 @@ async fn handle_authorize(
     Json(request): Json<AuthorizeRequest>,
 ) -> Result<Json<AuthorizeResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     // Require authentication
-    let (identity, _) = require_auth_context(&headers, &auth)
-        .await
-        .map_err(|e| (e, Json(AuthErrorResponse { error: "Unauthorized".to_string(), code: "UNAUTHORIZED".to_string() })))?;
+    let (identity, _) = require_auth_context(&headers, &auth).await.map_err(|e| {
+        (
+            e,
+            Json(AuthErrorResponse {
+                error: "Unauthorized".to_string(),
+                code: "UNAUTHORIZED".to_string(),
+            }),
+        )
+    })?;
 
     // Check authorization
     let authorized = auth.check_permission(
@@ -531,18 +574,22 @@ async fn handle_list_capabilities(
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<Capability>>, (StatusCode, Json<AuthErrorResponse>)> {
     // Get identity key from headers (may be unauthenticated)
-    let ctx = extract_auth_context(&headers, &auth)
-        .await
-        .map_err(|e| (e, Json(AuthErrorResponse { error: "Unauthorized".to_string(), code: "UNAUTHORIZED".to_string() })))?;
+    let ctx = extract_auth_context(&headers, &auth).await.map_err(|e| {
+        (
+            e,
+            Json(AuthErrorResponse {
+                error: "Unauthorized".to_string(),
+                code: "UNAUTHORIZED".to_string(),
+            }),
+        )
+    })?;
     let identity_key = match ctx.identity_key() {
         Some(key) => key,
         None => return Ok(Json(vec![])),
     };
 
     // Get capabilities
-    let capabilities = auth
-        .get_capabilities(identity_key)
-        .map_err(auth_error)?;
+    let capabilities = auth.get_capabilities(identity_key).map_err(auth_error)?;
 
     Ok(Json(capabilities))
 }

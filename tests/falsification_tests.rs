@@ -35,15 +35,12 @@ use tokio::time::sleep;
 #[tokio::test]
 async fn falsify_causal_chain_rapid_sequential_writes() {
     let db = KoruDelta::start().await.unwrap();
-    let mut write_ids: Vec<String> = Vec::new();  // Store write_ids for chain verification
+    let mut write_ids: Vec<String> = Vec::new(); // Store write_ids for chain verification
     let mut prev_versions: Vec<Option<String>> = Vec::new();
 
     // Rapid fire 100 writes
     for i in 0..100 {
-        let v = db
-            .put("chain", "key", json!({"seq": i}))
-            .await
-            .unwrap();
+        let v = db.put("chain", "key", json!({"seq": i})).await.unwrap();
         // previous_version() returns write_id (unique per write with timestamp)
         write_ids.push(v.write_id().to_string());
         prev_versions.push(v.previous_version().map(|s| s.to_string()));
@@ -140,8 +137,8 @@ async fn falsify_causal_chain_repeated_values() {
 
     // Write A -> B -> A -> B -> A (alternating values)
     let values = ["A", "B", "A", "B", "A"];
-    let mut version_ids = Vec::new();  // distinction_ids (content hashes)
-    let mut write_ids = Vec::new();    // write_ids (unique per write)
+    let mut version_ids = Vec::new(); // distinction_ids (content hashes)
+    let mut write_ids = Vec::new(); // write_ids (unique per write)
     let mut prev_versions = Vec::new();
 
     for (i, val) in values.iter().enumerate() {
@@ -150,19 +147,21 @@ async fn falsify_causal_chain_repeated_values() {
             .put("cycle", "test", json!({"value": val}))
             .await
             .unwrap();
-        version_ids.push(v.version_id().to_string());  // content hash
-        write_ids.push(v.write_id().to_string());      // unique write id
+        version_ids.push(v.version_id().to_string()); // content hash
+        write_ids.push(v.write_id().to_string()); // unique write id
         prev_versions.push(v.previous_version().map(|s| s.to_string()));
 
         // Content-addressed: same value = same version_id (distinction_id)
         if i >= 2 && values[i] == values[i - 2] {
             assert_eq!(
-                version_ids[i], version_ids[i - 2],
+                version_ids[i],
+                version_ids[i - 2],
                 "Content addressing broken: same value should produce same version_id"
             );
             // But write_ids should be different (unique per write)
             assert_ne!(
-                write_ids[i], write_ids[i - 2],
+                write_ids[i],
+                write_ids[i - 2],
                 "Write IDs should be unique even for same content"
             );
         }
@@ -183,7 +182,10 @@ async fn falsify_causal_chain_repeated_values() {
 
     // Verify the previous_version chain from put results
     // First entry has no predecessor
-    assert!(prev_versions[0].is_none(), "First write should have no predecessor");
+    assert!(
+        prev_versions[0].is_none(),
+        "First write should have no predecessor"
+    );
 
     // Each subsequent entry should link to the previous via write_id
     // (previous_version returns write_id, not version_id)
@@ -191,7 +193,8 @@ async fn falsify_causal_chain_repeated_values() {
         assert_eq!(
             prev_versions[i].as_ref(),
             Some(&write_ids[i - 1]),
-            "previous_version chain broken at index {}", i
+            "previous_version chain broken at index {}",
+            i
         );
     }
 }
@@ -222,17 +225,26 @@ async fn falsify_time_travel_exact_boundary() {
 
     // Query at EXACT t1 should return v1
     let at_t1 = db.get_at("boundary", "key", t1).await.unwrap();
-    assert_eq!(at_t1.value()["version"], 1, "Query at exact t1 should return v1");
+    assert_eq!(
+        at_t1.value()["version"],
+        1,
+        "Query at exact t1 should return v1"
+    );
 
     // Query at EXACT t2 should return v2
     let at_t2 = db.get_at("boundary", "key", t2).await.unwrap();
-    assert_eq!(at_t2.value()["version"], 2, "Query at exact t2 should return v2");
+    assert_eq!(
+        at_t2.value()["version"],
+        2,
+        "Query at exact t2 should return v2"
+    );
 
     // Query at t1 + 1 nanosecond should still return v1
     let t1_plus = t1 + Duration::nanoseconds(1);
     let at_t1_plus = db.get_at("boundary", "key", t1_plus).await.unwrap();
     assert_eq!(
-        at_t1_plus.value()["version"], 1,
+        at_t1_plus.value()["version"],
+        1,
         "Query just after t1 should still return v1"
     );
 
@@ -240,7 +252,8 @@ async fn falsify_time_travel_exact_boundary() {
     let t2_minus = t2 - Duration::nanoseconds(1);
     let at_t2_minus = db.get_at("boundary", "key", t2_minus).await.unwrap();
     assert_eq!(
-        at_t2_minus.value()["version"], 1,
+        at_t2_minus.value()["version"],
+        1,
         "Query just before t2 should return v1"
     );
 }
@@ -267,7 +280,8 @@ async fn falsify_time_travel_far_future() {
     let far_future = Utc::now() + Duration::days(365 * 1000);
     let at_future = db.get_at("future", "key", far_future).await.unwrap();
     assert_eq!(
-        at_future.value()["version"], 3,
+        at_future.value()["version"],
+        3,
         "Far future query should return latest version"
     );
 
@@ -284,10 +298,7 @@ async fn falsify_time_travel_microsecond_precision() {
     // Write rapidly, capturing timestamps
     let mut timestamps = Vec::new();
     for i in 0..10 {
-        let v = db
-            .put("precision", "key", json!({"seq": i}))
-            .await
-            .unwrap();
+        let v = db.put("precision", "key", json!({"seq": i})).await.unwrap();
         timestamps.push((i, v.timestamp()));
         // NO sleep - push system to limit
     }
@@ -347,7 +358,11 @@ async fn falsify_deduplication_cross_namespace() {
     // Store same value in 100 different namespace/key combinations
     for i in 0..100 {
         let v = db
-            .put(&format!("ns{}", i), &format!("key{}", i), shared_value.clone())
+            .put(
+                &format!("ns{}", i),
+                &format!("key{}", i),
+                shared_value.clone(),
+            )
             .await
             .unwrap();
         version_ids.insert(v.version_id().to_string());
@@ -410,10 +425,7 @@ async fn falsify_deduplication_float_edge_cases() {
     let db = KoruDelta::start().await.unwrap();
 
     // Test various float representations
-    let v1 = db
-        .put("float", "int_as_float", json!(1.0))
-        .await
-        .unwrap();
+    let v1 = db.put("float", "int_as_float", json!(1.0)).await.unwrap();
     let v2 = db.put("float", "int", json!(1)).await.unwrap();
 
     // 1.0 and 1 are different JSON values
@@ -445,8 +457,8 @@ async fn falsify_deduplication_unicode() {
         ("emoji", json!("Hello 👋 World 🌍")),
         ("rtl", json!("مرحبا")),
         ("cjk", json!("你好世界")),
-        ("combining", json!("e\u{0301}")),    // e + combining acute = é
-        ("precomposed", json!("\u{00E9}")),   // precomposed é
+        ("combining", json!("e\u{0301}")), // e + combining acute = é
+        ("precomposed", json!("\u{00E9}")), // precomposed é
         ("null_byte", json!("hello\u{0000}world")),
         ("bom", json!("\u{FEFF}text")),
         ("zwj", json!("👨\u{200D}👩\u{200D}👧")), // Family emoji with ZWJ
@@ -455,7 +467,12 @@ async fn falsify_deduplication_unicode() {
     for (name, value) in test_cases {
         db.put("unicode", name, value.clone()).await.unwrap();
         let retrieved = db.get("unicode", name).await.unwrap();
-        assert_eq!(retrieved.value().clone(), value, "Unicode roundtrip failed for {}", name);
+        assert_eq!(
+            retrieved.value().clone(),
+            value,
+            "Unicode roundtrip failed for {}",
+            name
+        );
     }
 }
 
@@ -468,9 +485,13 @@ async fn falsify_deduplication_unicode() {
 async fn falsify_query_null_handling() {
     let db = KoruDelta::start().await.unwrap();
 
-    db.put("nulls", "with_field", json!({"status": "active", "count": 10}))
-        .await
-        .unwrap();
+    db.put(
+        "nulls",
+        "with_field",
+        json!({"status": "active", "count": 10}),
+    )
+    .await
+    .unwrap();
     db.put("nulls", "null_field", json!({"status": null, "count": 5}))
         .await
         .unwrap();
@@ -480,7 +501,10 @@ async fn falsify_query_null_handling() {
 
     // Eq with null
     let result = db
-        .query("nulls", Query::new().filter(Filter::eq("status", json!(null))))
+        .query(
+            "nulls",
+            Query::new().filter(Filter::eq("status", json!(null))),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -495,7 +519,11 @@ async fn falsify_query_null_handling() {
         .query("nulls", Query::new().filter(Filter::exists("status")))
         .await
         .unwrap();
-    assert_eq!(result.records.len(), 1, "Exists should exclude null and missing");
+    assert_eq!(
+        result.records.len(),
+        1,
+        "Exists should exclude null and missing"
+    );
     assert_eq!(result.records[0].key, "with_field");
 
     // Ne (not equals) - should include missing fields?
@@ -544,10 +572,7 @@ async fn falsify_query_numeric_comparisons() {
         .await
         .unwrap();
     let keys: HashSet<_> = result.records.iter().map(|r| r.key.as_str()).collect();
-    assert!(
-        keys.contains("small_pos"),
-        "0.0001 should be > 0"
-    );
+    assert!(keys.contains("small_pos"), "0.0001 should be > 0");
     assert!(keys.contains("large"), "1e100 should be > 0");
     assert!(!keys.contains("zero"), "0 should not be > 0");
 
@@ -675,9 +700,13 @@ async fn falsify_query_deep_nesting() {
     .await
     .unwrap();
 
-    db.put("nested", "array_access", json!({"items": [{"x": 1}, {"x": 2}, {"x": 3}]}))
-        .await
-        .unwrap();
+    db.put(
+        "nested",
+        "array_access",
+        json!({"items": [{"x": 1}, {"x": 2}, {"x": 3}]}),
+    )
+    .await
+    .unwrap();
 
     // Deep field access
     let result = db
@@ -692,17 +721,10 @@ async fn falsify_query_deep_nesting() {
 
     // Partial path (stops at null)
     let result = db
-        .query(
-            "nested",
-            Query::new().filter(Filter::exists("a.b.c.d")),
-        )
+        .query("nested", Query::new().filter(Filter::exists("a.b.c.d")))
         .await
         .unwrap();
-    assert_eq!(
-        result.records.len(),
-        1,
-        "Only 'deep' has a.b.c.d existing"
-    );
+    assert_eq!(result.records.len(), 1, "Only 'deep' has a.b.c.d existing");
 
     // Array index access
     let result = db
@@ -863,46 +885,31 @@ async fn falsify_aggregation_empty() {
 
     // Query non-existent collection
     let _result = db
-        .query(
-            "empty",
-            Query::new().aggregate(Aggregation::count()),
-        )
+        .query("empty", Query::new().aggregate(Aggregation::count()))
         .await
         .unwrap();
     // assert_eq!(result.aggregation, Some(json!(0))); // TODO: aggregation
 
     let _result = db
-        .query(
-            "empty",
-            Query::new().aggregate(Aggregation::sum("value")),
-        )
+        .query("empty", Query::new().aggregate(Aggregation::sum("value")))
         .await
         .unwrap();
     // assert_eq!(result.aggregation, Some(json!(0.0))); // TODO: aggregation
 
     let _result = db
-        .query(
-            "empty",
-            Query::new().aggregate(Aggregation::avg("value")),
-        )
+        .query("empty", Query::new().aggregate(Aggregation::avg("value")))
         .await
         .unwrap();
     // assert_eq!(result.aggregation, Some(json!(null))); // TODO: aggregation
 
     let _result = db
-        .query(
-            "empty",
-            Query::new().aggregate(Aggregation::min("value")),
-        )
+        .query("empty", Query::new().aggregate(Aggregation::min("value")))
         .await
         .unwrap();
     // assert_eq!(result.aggregation, Some(json!(null))); // TODO: aggregation
 
     let _result = db
-        .query(
-            "empty",
-            Query::new().aggregate(Aggregation::max("value")),
-        )
+        .query("empty", Query::new().aggregate(Aggregation::max("value")))
         .await
         .unwrap();
     // assert_eq!(result.aggregation, Some(json!(null))); // TODO: aggregation
@@ -930,10 +937,7 @@ async fn falsify_aggregation_mixed_types() {
 
     // Sum should only sum numbers, skip non-numeric
     let _result = db
-        .query(
-            "mixed",
-            Query::new().aggregate(Aggregation::sum("value")),
-        )
+        .query("mixed", Query::new().aggregate(Aggregation::sum("value")))
         .await
         .unwrap();
     // TODO: aggregation
@@ -945,10 +949,7 @@ async fn falsify_aggregation_mixed_types() {
 
     // Avg should only average numbers
     let _result = db
-        .query(
-            "mixed",
-            Query::new().aggregate(Aggregation::avg("value")),
-        )
+        .query("mixed", Query::new().aggregate(Aggregation::avg("value")))
         .await
         .unwrap();
     // TODO: aggregation
@@ -960,10 +961,7 @@ async fn falsify_aggregation_mixed_types() {
 
     // Count should count all records
     let _result = db
-        .query(
-            "mixed",
-            Query::new().aggregate(Aggregation::count()),
-        )
+        .query("mixed", Query::new().aggregate(Aggregation::count()))
         .await
         .unwrap();
     // assert_eq!(result.aggregation, Some(json!(5))); // TODO: aggregation
@@ -1068,25 +1066,14 @@ async fn falsify_sort_stability() {
 async fn falsify_sort_multi_key() {
     let db = KoruDelta::start().await.unwrap();
 
-    db.put("multi", "a", json!({"x": 1, "y": 3}))
-        .await
-        .unwrap();
-    db.put("multi", "b", json!({"x": 1, "y": 1}))
-        .await
-        .unwrap();
-    db.put("multi", "c", json!({"x": 2, "y": 2}))
-        .await
-        .unwrap();
-    db.put("multi", "d", json!({"x": 1, "y": 2}))
-        .await
-        .unwrap();
+    db.put("multi", "a", json!({"x": 1, "y": 3})).await.unwrap();
+    db.put("multi", "b", json!({"x": 1, "y": 1})).await.unwrap();
+    db.put("multi", "c", json!({"x": 2, "y": 2})).await.unwrap();
+    db.put("multi", "d", json!({"x": 1, "y": 2})).await.unwrap();
 
     // Sort by x asc, then y asc
     let result = db
-        .query(
-            "multi",
-            Query::new().sort_by("x", true).sort_by("y", true),
-        )
+        .query("multi", Query::new().sort_by("x", true).sort_by("y", true))
         .await
         .unwrap();
 
@@ -1155,7 +1142,11 @@ async fn stress_concurrent_writes_different_keys() {
         let errors = Arc::clone(&error_count);
         let handle = tokio::spawn(async move {
             match db_clone
-                .put("stress", &format!("key{}", i), json!({"writer": i, "data": "x".repeat(1000)}))
+                .put(
+                    "stress",
+                    &format!("key{}", i),
+                    json!({"writer": i, "data": "x".repeat(1000)}),
+                )
                 .await
             {
                 Ok(_) => {
@@ -1341,10 +1332,7 @@ async fn stress_concurrent_queries() {
                 }
                 _ => {
                     // Full scan
-                    db_clone
-                        .query("query_stress", Query::new())
-                        .await
-                        .unwrap();
+                    db_clone.query("query_stress", Query::new()).await.unwrap();
                 }
             }
         });
@@ -1368,9 +1356,7 @@ async fn falsify_subscription_change_types() {
     let (_id, mut rx) = db.subscribe(Subscription::all()).await;
 
     // Insert (first write to a key)
-    db.put_notify("sub", "key1", json!({"v": 1}))
-        .await
-        .unwrap();
+    db.put_notify("sub", "key1", json!({"v": 1})).await.unwrap();
     let event = tokio::time::timeout(StdDuration::from_millis(100), rx.recv())
         .await
         .unwrap()
@@ -1379,9 +1365,7 @@ async fn falsify_subscription_change_types() {
     assert!(event.previous_value.is_none());
 
     // Update (second write to same key)
-    db.put_notify("sub", "key1", json!({"v": 2}))
-        .await
-        .unwrap();
+    db.put_notify("sub", "key1", json!({"v": 2})).await.unwrap();
     let event = tokio::time::timeout(StdDuration::from_millis(100), rx.recv())
         .await
         .unwrap()
@@ -1477,11 +1461,7 @@ async fn falsify_subscription_rapid_writes() {
 
     // Should receive all 50 events (unless channel overflowed)
     // Note: Default channel size is 256, so 50 should be fine
-    assert_eq!(
-        received, 50,
-        "Should receive all events, got {}",
-        received
-    );
+    assert_eq!(received, 50, "Should receive all events, got {}", received);
 }
 
 // ============================================================================
@@ -1642,7 +1622,7 @@ mod persistence_tests {
     #[tokio::test]
     async fn falsify_persistence_roundtrip() {
         let dir = tempdir().unwrap();
-        let db_path = dir.path().join("db");  // Directory for WAL format
+        let db_path = dir.path().join("db"); // Directory for WAL format
 
         // Create and populate database
         {
@@ -1700,7 +1680,7 @@ mod persistence_tests {
     #[tokio::test]
     async fn falsify_persistence_deduplication() {
         let dir = tempdir().unwrap();
-        let db_path = dir.path().join("dedup_db");  // Directory for WAL format
+        let db_path = dir.path().join("dedup_db"); // Directory for WAL format
 
         let shared_value = json!({"status": "active"});
         let mut original_version_id = String::new();
@@ -1748,7 +1728,7 @@ mod persistence_tests {
     #[tokio::test]
     async fn falsify_persistence_empty() {
         let dir = tempdir().unwrap();
-        let db_path = dir.path().join("empty_db");  // Directory for WAL format
+        let db_path = dir.path().join("empty_db"); // Directory for WAL format
 
         {
             let db = KoruDelta::start().await.unwrap();
@@ -1811,9 +1791,7 @@ async fn falsify_error_invalid_view() {
     db.create_view(ViewDefinition::new("myview", "data"))
         .await
         .unwrap();
-    let result = db
-        .create_view(ViewDefinition::new("myview", "data"))
-        .await;
+    let result = db.create_view(ViewDefinition::new("myview", "data")).await;
     assert!(result.is_err(), "Duplicate view creation should fail");
 }
 
@@ -1916,18 +1894,13 @@ async fn falsify_history_query_time_bounds() {
 
     // Create history with known timestamps
     for i in 0..10 {
-        let v = db
-            .put("hq", "key", json!({"seq": i}))
-            .await
-            .unwrap();
+        let v = db.put("hq", "key", json!({"seq": i})).await.unwrap();
         timestamps.push(v.timestamp());
         sleep(StdDuration::from_millis(20)).await;
     }
 
     // Query middle time range (entries 3-6)
-    let query = HistoryQuery::new()
-        .from(timestamps[3])
-        .to(timestamps[6]);
+    let query = HistoryQuery::new().from(timestamps[3]).to(timestamps[6]);
 
     let results = db.query_history("hq", "key", query).await.unwrap();
 
@@ -1946,19 +1919,15 @@ async fn falsify_history_query_with_filter() {
 
     // Create history with alternating values
     for i in 0..20 {
-        db.put(
-            "hq_filter",
-            "key",
-            json!({"value": i, "even": i % 2 == 0}),
-        )
-        .await
-        .unwrap();
+        db.put("hq_filter", "key", json!({"value": i, "even": i % 2 == 0}))
+            .await
+            .unwrap();
         sleep(StdDuration::from_millis(5)).await;
     }
 
     // Query only even entries
-    let query = HistoryQuery::new()
-        .with_query(Query::new().filter(Filter::eq("even", json!(true))));
+    let query =
+        HistoryQuery::new().with_query(Query::new().filter(Filter::eq("even", json!(true))));
 
     let results = db.query_history("hq_filter", "key", query).await.unwrap();
 
@@ -1984,6 +1953,9 @@ async fn falsify_history_query_latest() {
     assert_eq!(results.len(), 5);
 
     // Should be the last 5 entries (15-19)
-    let seqs: Vec<i64> = results.iter().map(|e| e.value["seq"].as_i64().unwrap()).collect();
+    let seqs: Vec<i64> = results
+        .iter()
+        .map(|e| e.value["seq"].as_i64().unwrap())
+        .collect();
     assert!(seqs.iter().all(|&s| s >= 15));
 }

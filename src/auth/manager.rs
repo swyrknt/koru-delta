@@ -93,8 +93,6 @@ impl AuthManager {
         &self,
         user_data: IdentityUserData,
     ) -> Result<(Identity, Vec<u8>), AuthError> {
-
-
         let mined = mine_identity_sync(user_data, self.config.identity_difficulty);
 
         // Store the identity
@@ -188,9 +186,9 @@ impl AuthManager {
             .collect();
 
         // Create session
-        let (session, _keys) =
-            self.sessions
-                .create_session(public_key, challenge, capability_refs);
+        let (session, _keys) = self
+            .sessions
+            .create_session(public_key, challenge, capability_refs);
 
         Ok(session)
     }
@@ -340,7 +338,8 @@ impl AuthManager {
         key: &str,
         permission: Permission,
     ) -> bool {
-        self.authorize(identity_key, namespace, key, permission).is_ok()
+        self.authorize(identity_key, namespace, key, permission)
+            .is_ok()
     }
 
     /// Get all capabilities for an identity.
@@ -400,9 +399,9 @@ mod tests {
     use super::*;
 
     fn create_test_manager() -> AuthManager {
-        let storage = Arc::new(CausalStorage::new(
-            std::sync::Arc::new(koru_lambda_core::DistinctionEngine::new()),
-        ));
+        let storage = Arc::new(CausalStorage::new(std::sync::Arc::new(
+            koru_lambda_core::DistinctionEngine::new(),
+        )));
         AuthManager::new(storage)
     }
 
@@ -476,10 +475,14 @@ mod tests {
         let mut manager = create_test_manager();
 
         // Create granter
-        let (granter, granter_key) = manager.create_identity(IdentityUserData::default()).unwrap();
+        let (granter, granter_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
 
         // Create grantee
-        let (grantee, _grantee_key) = manager.create_identity(IdentityUserData::default()).unwrap();
+        let (grantee, _grantee_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
 
         // Grant capability
         let cap = manager
@@ -497,8 +500,18 @@ mod tests {
         assert_eq!(cap.grantee, grantee.public_key);
 
         // Check authorization
-        assert!(manager.check_permission(&grantee.public_key, "test", "resource", Permission::Read));
-        assert!(!manager.check_permission(&grantee.public_key, "test", "resource", Permission::Write));
+        assert!(manager.check_permission(
+            &grantee.public_key,
+            "test",
+            "resource",
+            Permission::Read
+        ));
+        assert!(!manager.check_permission(
+            &grantee.public_key,
+            "test",
+            "resource",
+            Permission::Write
+        ));
 
         // Get capabilities
         let caps = manager.get_capabilities(&grantee.public_key).unwrap();
@@ -508,7 +521,12 @@ mod tests {
         manager.revoke_capability(&cap, &granter_key, None).unwrap();
 
         // Should no longer be authorized
-        assert!(!manager.check_permission(&grantee.public_key, "test", "resource", Permission::Read));
+        assert!(!manager.check_permission(
+            &grantee.public_key,
+            "test",
+            "resource",
+            Permission::Read
+        ));
     }
 
     #[test]
@@ -516,18 +534,29 @@ mod tests {
         let manager = create_test_manager();
 
         // Create identity but don't grant any capabilities
-        let (identity, _secret_key) = manager.create_identity(IdentityUserData::default()).unwrap();
+        let (identity, _secret_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
 
         // Should not be authorized for anything
-        assert!(!manager.check_permission(&identity.public_key, "any", "resource", Permission::Read));
+        assert!(!manager.check_permission(
+            &identity.public_key,
+            "any",
+            "resource",
+            Permission::Read
+        ));
     }
 
     #[test]
     fn test_admin_permission() {
         let mut manager = create_test_manager();
 
-        let (granter, granter_key) = manager.create_identity(IdentityUserData::default()).unwrap();
-        let (grantee, _grantee_key) = manager.create_identity(IdentityUserData::default()).unwrap();
+        let (granter, granter_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
+        let (grantee, _grantee_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
 
         // Grant Admin capability
         manager
@@ -542,9 +571,24 @@ mod tests {
             .unwrap();
 
         // Admin includes Read, Write, Admin
-        assert!(manager.check_permission(&grantee.public_key, "test", "anything", Permission::Read));
-        assert!(manager.check_permission(&grantee.public_key, "test", "anything", Permission::Write));
-        assert!(manager.check_permission(&grantee.public_key, "test", "anything", Permission::Admin));
+        assert!(manager.check_permission(
+            &grantee.public_key,
+            "test",
+            "anything",
+            Permission::Read
+        ));
+        assert!(manager.check_permission(
+            &grantee.public_key,
+            "test",
+            "anything",
+            Permission::Write
+        ));
+        assert!(manager.check_permission(
+            &grantee.public_key,
+            "test",
+            "anything",
+            Permission::Admin
+        ));
     }
 
     #[test]
@@ -552,7 +596,9 @@ mod tests {
         let manager = create_test_manager();
 
         // Create identity and challenge
-        let (identity, _secret_key) = manager.create_identity(IdentityUserData::default()).unwrap();
+        let (identity, _secret_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
         let _challenge = manager.create_challenge(&identity.public_key).unwrap();
 
         assert_eq!(manager.stats().active_challenges, 1);
@@ -568,7 +614,9 @@ mod tests {
     fn test_invalid_challenge_response() {
         let manager = create_test_manager();
 
-        let (identity, _secret_key) = manager.create_identity(IdentityUserData::default()).unwrap();
+        let (identity, _secret_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
         let challenge = manager.create_challenge(&identity.public_key).unwrap();
 
         // Wrong response

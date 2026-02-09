@@ -50,11 +50,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace};
 
+use crate::core::KoruDeltaGeneric;
 use crate::error::{DeltaError, DeltaResult};
 use crate::runtime::Runtime;
 use crate::types::VersionedValue;
 use crate::vector::Vector;
-use crate::core::KoruDeltaGeneric;
 
 /// Memory patterns for organizing workspace data.
 ///
@@ -408,10 +408,9 @@ impl<R: Runtime> Workspace<R> {
         pattern: MemoryPattern,
     ) -> DeltaResult<VersionedValue> {
         let key = key.into();
-        
+
         // Serialize content
-        let value = serde_json::to_value(content)
-            .map_err(DeltaError::SerializationError)?;
+        let value = serde_json::to_value(content).map_err(DeltaError::SerializationError)?;
 
         // Store in database
         let versioned = self.db.put(&self.name, &key, value).await?;
@@ -489,7 +488,7 @@ impl<R: Runtime> Workspace<R> {
                         causal_context: None,
                         source: None,
                     };
-                    
+
                     results.push(WorkspaceSearchResult {
                         item,
                         relevance: 0.5, // Would be calculated properly
@@ -500,8 +499,12 @@ impl<R: Runtime> Workspace<R> {
         }
 
         // Sort by relevance
-        results.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
-        
+        results.sort_by(|a, b| {
+            b.relevance
+                .partial_cmp(&a.relevance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
         // Apply limit
         results.truncate(opts.limit);
 
@@ -553,7 +556,7 @@ impl<R: Runtime> Workspace<R> {
     /// Get workspace statistics.
     pub async fn stats(&self) -> WorkspaceStats {
         let keys = self.db.list_keys(&self.name).await;
-        
+
         WorkspaceStats {
             total_items: keys.len(),
             workspace_name: self.name.clone(),
@@ -626,16 +629,18 @@ impl<R: Runtime> AgentContext<R> {
     ) -> DeltaResult<VersionedValue> {
         let content = content.into();
         let key = format!("episode:{}", generate_id(&content));
-        
-        self.workspace.store(
-            &key,
-            serde_json::json!({
-                "type": "episodic",
-                "content": content,
-                "importance": importance,
-            }),
-            MemoryPattern::Event,
-        ).await
+
+        self.workspace
+            .store(
+                &key,
+                serde_json::json!({
+                    "type": "episodic",
+                    "content": content,
+                    "importance": importance,
+                }),
+                MemoryPattern::Event,
+            )
+            .await
     }
 
     /// Remember a fact (semantic memory).
@@ -647,16 +652,18 @@ impl<R: Runtime> AgentContext<R> {
     ) -> DeltaResult<VersionedValue> {
         let key = format!("fact:{}", key.into());
         let content = content.into();
-        
-        self.workspace.store(
-            &key,
-            serde_json::json!({
-                "type": "semantic",
-                "content": content,
-                "tags": tags,
-            }),
-            MemoryPattern::Reference,
-        ).await
+
+        self.workspace
+            .store(
+                &key,
+                serde_json::json!({
+                    "type": "semantic",
+                    "content": content,
+                    "tags": tags,
+                }),
+                MemoryPattern::Reference,
+            )
+            .await
     }
 
     /// Remember a procedure (procedural memory).
@@ -669,17 +676,19 @@ impl<R: Runtime> AgentContext<R> {
         let name = name.into();
         let key = format!("procedure:{}", name);
         let steps = steps.into();
-        
-        self.workspace.store(
-            &key,
-            serde_json::json!({
-                "type": "procedural",
-                "name": name,
-                "steps": steps,
-                "success_rate": success_rate.unwrap_or(0.5),
-            }),
-            MemoryPattern::Procedure,
-        ).await
+
+        self.workspace
+            .store(
+                &key,
+                serde_json::json!({
+                    "type": "procedural",
+                    "name": name,
+                    "steps": steps,
+                    "success_rate": success_rate.unwrap_or(0.5),
+                }),
+                MemoryPattern::Procedure,
+            )
+            .await
     }
 
     /// Recall relevant memories.
@@ -688,7 +697,9 @@ impl<R: Runtime> AgentContext<R> {
         query: impl Into<String>,
         limit: usize,
     ) -> DeltaResult<Vec<WorkspaceSearchResult>> {
-        self.workspace.search(query, SearchOptions::new().limit(limit)).await
+        self.workspace
+            .search(query, SearchOptions::new().limit(limit))
+            .await
     }
 }
 

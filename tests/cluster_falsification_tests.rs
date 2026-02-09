@@ -57,7 +57,10 @@ async fn test_tombstone_prevents_resurrection() {
     sleep(Duration::from_millis(300)).await;
 
     // Verify both nodes have the key.
-    assert!(storage1.contains_key("test", "key1"), "Node1 should have key1");
+    assert!(
+        storage1.contains_key("test", "key1"),
+        "Node1 should have key1"
+    );
     // Note: Broadcast is fire-and-forget, node2 might not have it yet.
     // That's okay - we'll proceed with the test regardless.
 
@@ -68,15 +71,21 @@ async fn test_tombstone_prevents_resurrection() {
     assert!(tombstone.is_ok(), "Delete should succeed");
 
     // Verify key is deleted on node1.
-    assert!(!storage1.contains_key("test", "key1"), "Key should be deleted on node1");
-    assert!(storage1.has_tombstone("test", "key1"), "Tombstone should exist on node1");
+    assert!(
+        !storage1.contains_key("test", "key1"),
+        "Key should be deleted on node1"
+    );
+    assert!(
+        storage1.has_tombstone("test", "key1"),
+        "Tombstone should exist on node1"
+    );
 
     // Node2 writes a CONCURRENT value (simulating a partition scenario).
     // This simulates the case where node2 missed the delete.
     let mut clock2 = VectorClock::new();
     clock2.increment(&node2.node_id().to_string());
     let _result = storage2.put_causal("test", "key1", json!("concurrent_value"), clock2);
-    
+
     // The write might succeed or be a conflict depending on timing.
     // The important thing is what happens during anti-entropy.
 
@@ -92,7 +101,11 @@ async fn test_tombstone_prevents_resurrection() {
     // Verify the tombstone has proper causality tracking.
     let ts = storage1.get_tombstone("test", "key1").unwrap();
     assert_eq!(ts.key, key, "Tombstone key mismatch");
-    assert_eq!(ts.deleted_by, node1.node_id().to_string(), "Tombstone deleted_by mismatch");
+    assert_eq!(
+        ts.deleted_by,
+        node1.node_id().to_string(),
+        "Tombstone deleted_by mismatch"
+    );
 
     // Clean up.
     node1.stop().await.unwrap();
@@ -109,41 +122,52 @@ async fn test_concurrent_write_conflict_detection() {
     let (storage2, _engine2) = create_test_storage();
 
     // Both nodes start with the same initial value (causally related).
-    storage1.put("test", "conflict_key", json!("initial")).unwrap();
+    storage1
+        .put("test", "conflict_key", json!("initial"))
+        .unwrap();
     let initial = storage1.get("test", "conflict_key").unwrap();
     let initial_clock = initial.vector_clock().clone();
 
     // Simulate concurrent writes (both increment from same parent).
     let mut clock1 = initial_clock.clone();
     clock1.increment("node1");
-    
+
     let mut clock2 = initial_clock.clone();
     clock2.increment("node2");
 
     // Node1's write.
     let _result1 = storage1.put_causal("test", "conflict_key", json!("value_from_node1"), clock1);
-    
+
     // Node2's concurrent write (on different storage).
     // First put the initial value on storage2 with same clock.
-    storage2.put("test", "conflict_key", json!("initial")).unwrap();
+    storage2
+        .put("test", "conflict_key", json!("initial"))
+        .unwrap();
     // We need to manually update the vector clock to match initial_clock
     // Since put_causal creates a new clock, we test conflict differently.
-    
+
     // Test: Verify that put_causal detects concurrent writes properly.
     // Put initial on storage2.
-    storage2.put("test", "conflict_key", json!("initial")).unwrap();
-    
+    storage2
+        .put("test", "conflict_key", json!("initial"))
+        .unwrap();
+
     // Now node1 writes with a clock that dominates initial.
     let mut dominating_clock = initial_clock.clone();
     dominating_clock.increment("node1");
-    let result1 = storage1.put_causal("test", "conflict_key", json!("node1_value"), dominating_clock.clone());
+    let result1 = storage1.put_causal(
+        "test",
+        "conflict_key",
+        json!("node1_value"),
+        dominating_clock.clone(),
+    );
     assert!(result1.is_ok(), "Causal write should succeed");
-    
+
     // Node2 writes with a clock that is CONCURRENT with node1's write.
     // This means node2's write happened without seeing node1's write.
     let mut concurrent_clock = initial_clock.clone();
     concurrent_clock.increment("node2");
-    
+
     // The result should show the conflict is handled.
     if let Ok(CausalWriteResult::Applied(_)) = result1 {
         // Node1's write was applied - good.
@@ -160,7 +184,7 @@ async fn test_concurrent_write_conflict_detection() {
         concurrent_clock,
     );
     assert!(merged.is_ok(), "Merge should succeed");
-    
+
     let _merged_value = merged.unwrap();
     // Merged clock should contain both node1 and node2 entries.
     // (The actual contents depend on timestamp ordering for LWW)
@@ -179,10 +203,10 @@ fn test_vector_clock_causality_properties() {
     let mut clock_a = VectorClock::new();
     clock_a.increment("node1");
     clock_a.increment("node1");
-    
+
     let mut clock_b = clock_a.clone();
     clock_b.increment("node1");
-    
+
     assert_eq!(
         clock_a.compare(&clock_b),
         Some(std::cmp::Ordering::Less),
@@ -198,11 +222,11 @@ fn test_vector_clock_causality_properties() {
     let mut clock_c = VectorClock::new();
     clock_c.increment("node1");
     clock_c.increment("node1");
-    
+
     let mut clock_d = VectorClock::new();
     clock_d.increment("node2");
     clock_d.increment("node2");
-    
+
     assert_eq!(
         clock_c.compare(&clock_d),
         None,
@@ -216,7 +240,7 @@ fn test_vector_clock_causality_properties() {
     // Test 3: After merge, causality is established.
     let mut clock_e = clock_c.clone();
     clock_e.merge(&clock_d);
-    
+
     assert_eq!(
         clock_c.compare(&clock_e),
         Some(std::cmp::Ordering::Less),
@@ -239,13 +263,13 @@ fn test_vector_clock_causality_properties() {
     // Test 5: Complex scenario - transitive causality.
     let mut clock_g = VectorClock::new();
     clock_g.increment("node1");
-    
+
     let mut clock_h = clock_g.clone();
     clock_h.increment("node2");
-    
+
     let mut clock_i = clock_h.clone();
     clock_i.increment("node3");
-    
+
     assert_eq!(
         clock_g.compare(&clock_i),
         Some(std::cmp::Ordering::Less),
@@ -280,10 +304,10 @@ async fn test_partition_quorum_requirement() {
 
     node1.start().await.unwrap();
     sleep(Duration::from_millis(50)).await;
-    
+
     node2.start().await.unwrap();
     sleep(Duration::from_millis(50)).await;
-    
+
     node3.start().await.unwrap();
     sleep(Duration::from_millis(200)).await;
 
@@ -336,7 +360,7 @@ async fn test_anti_entropy_convergence() {
 
     // Node1 updates to v2.
     storage1.put("convergence", "key", json!("v2")).unwrap();
-    
+
     // Broadcast the update.
     let key = FullKey::new("convergence", "key");
     let value = storage1.get("convergence", "key").unwrap();
@@ -360,14 +384,18 @@ fn test_tombstone_causality_dominance() {
     let (storage, _engine) = create_test_storage();
 
     // Create initial value.
-    storage.put("tombstone_test", "key", json!("initial")).unwrap();
+    storage
+        .put("tombstone_test", "key", json!("initial"))
+        .unwrap();
     let initial = storage.get("tombstone_test", "key").unwrap();
     let initial_clock = initial.vector_clock().clone();
 
     // Delete the key (creates tombstone).
     let mut delete_clock = initial_clock.clone();
     delete_clock.increment("deleter");
-    let tombstone = storage.delete_causal("tombstone_test", "key", delete_clock.clone(), "node1").unwrap();
+    let tombstone = storage
+        .delete_causal("tombstone_test", "key", delete_clock.clone(), "node1")
+        .unwrap();
 
     // Verify tombstone exists and key is deleted.
     assert!(storage.has_tombstone("tombstone_test", "key"));
@@ -391,8 +419,10 @@ fn test_tombstone_causality_dominance() {
 
     // The result depends on implementation - key point is the tombstone exists
     // and causality tracking is correct.
-    assert!(storage.has_tombstone("tombstone_test", "key"), 
-        "Tombstone should still exist after attempted stale write");
+    assert!(
+        storage.has_tombstone("tombstone_test", "key"),
+        "Tombstone should still exist after attempted stale write"
+    );
 }
 
 /// Falsification Test: Node failure must not corrupt cluster state.
@@ -410,7 +440,9 @@ async fn test_node_recovery_after_failure() {
 
     // Write some data.
     for i in 0..5 {
-        storage1.put("recovery", format!("key{}", i), json!(i)).unwrap();
+        storage1
+            .put("recovery", format!("key{}", i), json!(i))
+            .unwrap();
     }
 
     // Node2 joins.
@@ -424,7 +456,9 @@ async fn test_node_recovery_after_failure() {
     node1.stop().await.unwrap();
 
     // Node2 writes while node1 is down.
-    storage2.put("recovery", "key_during_partition", json!("from_node2")).unwrap();
+    storage2
+        .put("recovery", "key_during_partition", json!("from_node2"))
+        .unwrap();
 
     // "Recover" node1 by creating a new node with same storage.
     // (In real scenario, this would be the same node restarting)
@@ -468,11 +502,11 @@ async fn test_large_cluster_stress() {
             // Note: This is simplified - real test would track bind addresses.
             random_port_config()
         };
-        
+
         let node = ClusterNode::new(storage.clone(), engine, config);
         node.start().await.unwrap();
         sleep(Duration::from_millis(50)).await;
-        
+
         nodes.push(node);
         storages.push(storage);
     }
