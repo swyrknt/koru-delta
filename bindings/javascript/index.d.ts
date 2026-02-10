@@ -88,6 +88,26 @@ export class KoruDeltaWasm {
   put(namespace: string, key: string, value: any): Promise<VersionedValue>;
 
   /**
+   * Store multiple values as a batch operation.
+   * 
+   * This is significantly faster than calling put() multiple times,
+   * especially when persistence is enabled, as it performs a single
+   * fsync for all items in the batch.
+   * 
+   * @param items - Array of objects with namespace, key, and value properties
+   * @returns A Promise that resolves to an array of versioned stored values
+   * @example
+   * ```typescript
+   * const items = [
+   *   { namespace: 'users', key: 'alice', value: { name: 'Alice' } },
+   *   { namespace: 'users', key: 'bob', value: { name: 'Bob' } },
+   * ];
+   * const results = await db.putBatch(items);
+   * ```
+   */
+  putBatch(items: Array<{ namespace: string; key: string; value: any }>): Promise<VersionedValue[]>;
+
+  /**
    * Retrieve the current value for a key.
    * 
    * @param namespace - The namespace

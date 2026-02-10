@@ -66,3 +66,26 @@ async def test_stats():
         stats = await db.stats()
         assert "key_count" in stats
         assert "namespace_count" in stats
+
+
+@pytest.mark.asyncio
+async def test_put_batch():
+    """Test batch put operation."""
+    async with Database() as db:
+        items = [
+            ("users", "alice", {"name": "Alice"}),
+            ("users", "bob", {"name": "Bob"}),
+            ("products", "p1", {"name": "Widget", "price": 9.99}),
+        ]
+        count = await db.put_batch(items)
+        assert count == 3
+        
+        # Verify all items were stored
+        alice = await db.get("users", "alice")
+        assert alice["name"] == "Alice"
+        
+        bob = await db.get("users", "bob")
+        assert bob["name"] == "Bob"
+        
+        product = await db.get("products", "p1")
+        assert product["name"] == "Widget"

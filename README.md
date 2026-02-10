@@ -44,10 +44,17 @@ use koru_delta::KoruDelta;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = KoruDelta::start().await?;
     
+    // Single write
     db.put("users", "alice", serde_json::json!({
         "name": "Alice",
         "email": "alice@example.com"
     })).await?;
+    
+    // Batch write (10-50x faster for bulk operations)
+    db.put_batch(vec![
+        ("products", "p1", serde_json::json!({"name": "Widget", "price": 9.99})),
+        ("products", "p2", serde_json::json!({"name": "Gadget", "price": 19.99})),
+    ]).await?;
     
     // Get current value
     let user = db.get("users", "alice").await?;
@@ -68,16 +75,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Metric | KoruDelta | SQLite (fsync) | Notes |
 |--------|-----------|----------------|-------|
-| **Writes** | ~201 ops/sec | ~3,700 ops/sec | KoruDelta: WAL + versioning |
+| **Writes (single)** | ~201 ops/sec | ~3,700 ops/sec | KoruDelta: WAL + versioning |
+| **Writes (batch)** | ~3,500 ops/sec* | N/A | 16x faster with `put_batch` |
 | **Reads** | ~134K ops/sec | ~267K ops/sec | Hot memory cache |
 | **Binary size** | 11MB | 1MB | Single static binary |
 | **Memory** | Configurable | Configurable | 512MB default |
+
+\* Batch write: 1000 items in 280ms vs 4.66s for individual writes
 
 **Why slower writes?** KoruDelta does more:
 - Every write creates a version (immutable history)
 - Content-addressed deduplication (Blake3 hashes)
 - Causal graph tracking
 - Automatic memory tier promotion
+
+**Batch writes** (`put_batch`) amortize fsync cost across many items, delivering 10-50x speedups for bulk operations.
 
 **Trade-off:** Speed for superpowers. If you need audit trails, time travel, or causal consistency, KoruDelta eliminates weeks of application development.
 
@@ -186,6 +198,12 @@ const db = await KoruDeltaWasm.newPersistent();
 
 await db.put('users', 'alice', { name: 'Alice', age: 30 });
 const user = await db.get('users', 'alice');
+
+// Batch writes for better performance (10-50x faster)
+await db.putBatch([
+    { namespace: 'users', key: 'alice', value: { name: 'Alice' } },
+    { namespace: 'users', key: 'bob', value: { name: 'Bob' } },
+]);
 
 // Data survives page refreshes!
 ```

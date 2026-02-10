@@ -57,6 +57,57 @@ impl PyDatabase {
         })
     }
 
+    /// Store multiple values as a batch operation
+    /// 
+    /// This is significantly faster than calling put() multiple times,
+    /// especially when persistence is enabled, as it performs a single fsync
+    /// for all items in the batch.
+    ///
+    /// Args:
+    ///     items: List of tuples (namespace, key, value)
+    ///
+    /// Returns:
+    ///     Number of items stored
+    ///
+    /// Example:
+    ///     items = [
+    ///         ("users", "alice", {"name": "Alice"}),
+    ///         ("users", "bob", {"name": "Bob"}),
+    ///     ]
+    ///     await db.put_batch(items)
+    fn put_batch<'py>(
+        &self,
+        py: Python<'py>,
+        items: &PyList,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        
+        // Convert Python list of tuples to Rust Vec
+        let mut batch_items: Vec<(String, String, serde_json::Value)> = Vec::new();
+        for item in items.iter() {
+            let tuple = item.downcast::<PyTuple>()
+                .map_err(|_| PyValueError::new_err("Each item must be a tuple of (namespace, key, value)"))?;
+            
+            if tuple.len() != 3 {
+                return Err(PyValueError::new_err("Each tuple must have exactly 3 elements: (namespace, key, value)"));
+            }
+            
+            let namespace: String = tuple.get_item(0)?.extract()?;
+            let key: String = tuple.get_item(1)?.extract()?;
+            let value = pyobject_to_json(tuple.get_item(2)?)?;
+            
+            batch_items.push((namespace, key, value));
+        }
+
+        let item_count = batch_items.len();
+        future_into_py(py, async move {
+            db.put_batch(batch_items)
+                .await
+                .map_err(to_python_error)?;
+            Ok(item_count)
+        })
+    }
+
     /// Retrieve a value
     fn get<'py>(
         &self,
@@ -322,5 +373,5 @@ impl PyDatabase {
     }
 }
 
-use pyo3::types::PyList;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyTuple;

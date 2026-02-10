@@ -31,6 +31,7 @@ mod storage;
 
 use crate::vector::{Vector, VectorSearchOptions};
 use crate::{DeltaError, HistoryEntry, KoruDelta, VersionedValue, ViewDefinition};
+use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use storage::{is_indexeddb_supported, IndexedDbStorage};
 use wasm_bindgen::prelude::*;
@@ -40,6 +41,14 @@ use wasm_bindgen::prelude::*;
 pub struct KoruDeltaWasm {
     db: KoruDelta,
     storage: Option<IndexedDbStorage>,
+}
+
+/// Helper struct for batch operations from JavaScript
+#[derive(Deserialize)]
+struct BatchItem {
+    namespace: String,
+    key: String,
+    value: serde_json::Value,
 }
 
 #[wasm_bindgen]
@@ -208,6 +217,63 @@ impl KoruDeltaWasm {
         }
 
         versioned_to_js(&versioned)
+    }
+
+    /// Store multiple key-value pairs as a batch operation
+    ///
+    /// This is significantly faster than calling put() multiple times, especially
+    /// when persistence is enabled, as it performs a single fsync for all items.
+    ///
+    /// # Arguments
+    /// * `items` - A JavaScript array of objects with `namespace`, `key`, and `value` properties
+    ///
+    /// # Returns
+    /// A JavaScript array of versioned metadata objects for each stored item
+    ///
+    /// # Example (JavaScript)
+    /// ```javascript
+    /// const items = [
+    ///     { namespace: 'users', key: 'alice', value: { name: 'Alice', age: 30 } },
+    ///     { namespace: 'users', key: 'bob', value: { name: 'Bob', age: 25 } }
+    /// ];
+    /// const results = await db.putBatch(items);
+    /// ```
+    #[wasm_bindgen(js_name = putBatch)]
+    pub async fn put_batch_js(&self, items: JsValue) -> Result<JsValue, JsValue> {
+        // Convert JavaScript array to Vec of batch items
+        let batch_items: Vec<BatchItem> = serde_wasm_bindgen::from_value(items)
+            .map_err(|e| JsValue::from_str(&format!("Invalid batch items: {}", e)))?;
+
+        if batch_items.is_empty() {
+            return Ok(JsValue::from_str("[]"));
+        }
+
+        // Convert BatchItems to tuples for put_batch
+        let tuples: Vec<(String, String, serde_json::Value)> = batch_items
+            .into_iter()
+            .map(|item| (item.namespace, item.key, item.value))
+            .collect();
+
+        // Perform the batch write
+        let versioned = self
+            .db
+            .put_batch(tuples)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Batch write failed: {}", e)))?;
+
+        // Convert results back to JavaScript array
+        let js_results: Vec<JsValue> = versioned
+            .iter()
+            .map(versioned_to_js)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Create JavaScript array from results
+        let array = js_sys::Array::new();
+        for result in js_results {
+            array.push(&result);
+        }
+
+        Ok(array.into())
     }
 
     /// Retrieve the current value for a key

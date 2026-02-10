@@ -136,6 +136,36 @@ class Database:
         db = self._check_initialized()
         return await db.put(namespace, key, value)
     
+    async def put_batch(self, items: list[tuple[str, str, object]]) -> int:
+        """
+        Store multiple values as a batch operation.
+        
+        This is significantly faster than calling put() multiple times,
+        especially when persistence is enabled, as it performs a single
+        fsync for all items in the batch.
+        
+        Args:
+            items: List of (namespace, key, value) tuples
+        
+        Returns:
+            Number of items stored
+        
+        Raises:
+            ValidationError: If any namespace or key is invalid
+            SerializationError: If any value cannot be serialized
+        
+        Example:
+            >>> items = [
+            ...     ("users", "alice", {"name": "Alice"}),
+            ...     ("users", "bob", {"name": "Bob"}),
+            ...     ("products", "p1", {"name": "Widget", "price": 9.99}),
+            ... ]
+            >>> count = await db.put_batch(items)
+            >>> print(f"Stored {count} items")  # Stored 3 items
+        """
+        db = self._check_initialized()
+        return await db.put_batch(items)
+    
     async def get(self, namespace: str, key: str) -> object:
         """
         Retrieve a value.
