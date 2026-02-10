@@ -603,7 +603,7 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
   - Note: Publish step deferred until release
 
 **5.3 Repository Documentation Cleanup**
-- [ ] Delete progress/status documentation (outdated):
+- [x] Delete progress/status documentation (outdated):
   - All PHASE*.md files (PHASE6_*, PHASE7_*, PHASE8_*)
   - All *_ASSESSMENT.md, *_REPORT.md, *_STATUS.md
   - *_CHECKLIST.md (except AGENT_KIMI_CHECKLIST.md)
@@ -613,7 +613,7 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
   - REALITY_CHECK.md, STAKEHOLDER_VISION.md
   - CORE_IDENTITY.md (redundant with DESIGN.md)
   - ROADMAP.md (replace with CHANGELOG.md reference)
-- [ ] Consolidate if needed: Merge CORE_IDENTITY insights into DESIGN.md
+- [x] Consolidate if needed: Merge CORE_IDENTITY insights into DESIGN.md
 
 **5.4 GitHub Release**
 - [ ] Tag: `v2.0.0`
