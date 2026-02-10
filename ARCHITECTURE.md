@@ -15,6 +15,9 @@ KoruDelta is architected in layers that enable distinction-driven operations:
 │         KoruDelta Public API            │  ← Simple, async interface
 │    (put, get, history, get_at)          │
 ├─────────────────────────────────────────┤
+│      Vector Search Layer (v2)           │  ← AI/ML embeddings
+│  (SNSW, HNSW, CausalIndex)              │
+├─────────────────────────────────────────┤
 │       Auth Layer (v2)                   │  ← Self-sovereign identity
 │  (Identity, Session, Capability)        │
 ├─────────────────────────────────────────┤
@@ -56,7 +59,46 @@ db.put("users", "alice", json!({"name": "Alice"})).await?;
 let value = db.get("users", "alice").await?;
 ```
 
-### Layer 2: Causal Storage (`src/storage.rs`)
+### Layer 2: Vector Search (`src/vector/`)
+
+Native vector storage and similarity search for AI embeddings. **Fully implemented in Phase 4.**
+
+**Key Components:**
+- `Vector` - Embedding with model metadata and serialization
+- `VectorStorage` trait - Extension trait for `KoruDelta` adding `embed()` and `embed_search()`
+- `SNSW` (Synthesis-Navigable Small World) - Distinction-based ANN search
+- `HNSW` (Hierarchical Navigable Small World) - Traditional ANN implementation
+- `CausalVectorIndex` - Time-travel vector search (query historical embeddings)
+
+**Design Principles:**
+- **Content-addressed**: Blake3 hash = vector identity (automatic deduplication)
+- **Causal-aware**: Vector history preserved like any data
+- **Time-travel search**: `similar_at()` queries embeddings at past timestamps
+- **Model-agnostic**: Works with OpenAI, local models, any embedding
+
+**Search Tiers (SNSW):**
+```
+🔥 Hot (Exact Cache)    → O(1) hash lookup
+🌤️ Warm-Fast           → Beam search, low ef
+🌤️ Warm-Thorough       → Deep synthesis navigation
+❄️ Cold (Exact)        → Linear scan with proximity
+```
+
+**API Example:**
+```rust
+// Store embedding
+let embedding = Vector::new(vec![0.1, 0.2, 0.3], "text-embedding-3-small");
+db.embed("documents", "doc1", embedding, Some(json!({"title": "AI"}))).await?;
+
+// Search similar vectors
+let query = Vector::new(vec![0.1, 0.2, 0.3], "text-embedding-3-small");
+let results = db.embed_search(Some("documents"), &query, VectorSearchOptions::new().top_k(5)).await?;
+
+// Time-travel search (what was similar yesterday?)
+let past_results = db.similar_at(Some("documents"), &query, "2026-02-01T00:00:00Z", opts).await?;
+```
+
+### Layer 3: Causal Storage (`src/storage.rs`)
 
 Manages versioned key-value storage with complete causal history.
 
@@ -88,7 +130,7 @@ write_id: hash + timestamp_nanos
 previous_version: links via write_id
 ```
 
-### Layer 3: Document Mapping (`src/mapper.rs`)
+### Layer 4: Document Mapping (`src/mapper.rs`)
 
 Bridge between JSON data and distinction structures.
 
@@ -105,7 +147,7 @@ Bridge between JSON data and distinction structures.
 - Deterministic (order-independent for objects, order-dependent for arrays)
 - Efficient via koru-lambda-core's byte caching
 
-### Layer 4: Memory Tiering ✅ (`src/memory/`)
+### Layer 5: Memory Tiering ✅ (`src/memory/`)
 
 Brain-like memory hierarchy for efficient resource usage. **Fully implemented in Phase 7.**
 
@@ -133,7 +175,7 @@ User → get(key)
 - **Distillation** (1 hour): Fitness-based selection
 - **Genome Update** (daily): Extract causal topology
 
-### Layer 5: Evolutionary Processes ✅ (`src/processes/`)
+### Layer 6: Evolutionary Processes ✅ (`src/processes/`)
 
 Automated memory management through natural selection. **Running in Phase 7.**
 
@@ -157,7 +199,7 @@ tokio::spawn(async move {
 });
 ```
 
-### Layer 6: Reconciliation (`src/reconciliation/`)
+### Layer 7: Reconciliation (`src/reconciliation/`)
 
 Efficient distributed sync via set reconciliation.
 
@@ -174,7 +216,7 @@ Efficient distributed sync via set reconciliation.
 4. Merge causal graphs (conflicts become branches)
 ```
 
-### Layer 7: Auth Layer (`src/auth/`)
+### Layer 8: Auth Layer (`src/auth/`)
 
 Self-sovereign identity and capability-based authorization using distinctions.
 

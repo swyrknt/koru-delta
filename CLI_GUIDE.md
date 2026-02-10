@@ -429,6 +429,261 @@ View 'active_users' results: (42 records)
 - Filter syntax: `field = "value"`, `field > 10`, `field != null`
 - Views are stored in the `__views` namespace
 
+### `kdelta serve` - HTTP API Server
+
+Start an HTTP server that exposes the KoruDelta API over REST for remote clients.
+
+**Usage:**
+```bash
+kdelta serve [OPTIONS]
+```
+
+**Options:**
+- `-p, --port <PORT>` - Port to listen on (default: 8080)
+- `-b, --bind <ADDR>` - Address to bind to (default: 0.0.0.0)
+
+**Examples:**
+
+```bash
+# Start HTTP server on default port 8080
+kdelta serve
+
+# Start on custom port
+kdelta serve --port 3000
+
+# Bind to localhost only
+kdelta serve --bind 127.0.0.1
+
+# Custom port and bind address
+kdelta serve -p 8080 -b 0.0.0.0
+```
+
+**API Endpoints:**
+- `GET /health` - Health check
+- `GET /api/v1/keys/{namespace}/{key}` - Get value
+- `POST /api/v1/keys/{namespace}/{key}` - Set value
+- `GET /api/v1/namespaces/{namespace}` - List keys in namespace
+- `GET /api/v1/namespaces` - List all namespaces
+
+**Use Cases:**
+- Remote database access
+- Multi-language clients
+- Web application backends
+
+### `kdelta watch` - Real-time Subscriptions
+
+Watch for changes in real-time. Subscribe to namespaces or specific keys and receive notifications.
+
+**Usage:**
+```bash
+kdelta watch [TARGET] [OPTIONS]
+```
+
+**Arguments:**
+- `TARGET` - Namespace or namespace/key to watch (optional)
+
+**Options:**
+- `--all` - Watch all changes across all namespaces
+- `--inserts-only` - Only show insert operations
+- `--updates-only` - Only show update operations
+
+**Examples:**
+
+```bash
+# Watch all changes in a namespace
+kdelta watch users
+
+# Watch a specific key
+kdelta watch users/alice
+
+# Watch all changes in the database
+kdelta watch --all
+
+# Only watch for new inserts
+kdelta watch users --inserts-only
+
+# Only watch for updates
+kdelta watch users --updates-only
+```
+
+**Output:**
+```
+● Insert in users: bob
+  {"name": "Bob", "role": "user"}
+
+● Update in users: alice
+  {"name": "Alice", "role": "admin"}
+```
+
+**Notes:**
+- Runs until interrupted (Ctrl+C)
+- Shows change type (Insert, Update, Delete)
+- Displays the new value after change
+
+### `kdelta auth` - Authentication & Authorization
+
+Manage self-sovereign identities and capability-based access control.
+
+**Subcommands:**
+- `auth create` - Create a new identity
+- `auth list` - List all identities
+- `auth grant` - Grant a capability to another identity
+- `auth list-caps` - List capabilities for current identity
+- `auth revoke` - Revoke a capability
+
+#### `kdelta auth create`
+
+Create a new identity with Ed25519 keypair and proof-of-work.
+
+**Usage:**
+```bash
+kdelta auth create [OPTIONS]
+```
+
+**Options:**
+- `-n, --name <NAME>` - Display name for the identity
+
+**Example:**
+```bash
+# Create identity with name
+kdelta auth create --name "Alice Admin"
+
+# Create anonymous identity
+kdelta auth create
+```
+
+**Output:**
+```
+Identity created: did:koru:abc123...
+Public Key: ed25519:xyz789...
+Name: Alice Admin
+```
+
+#### `kdelta auth list`
+
+List all identities stored in the database.
+
+**Usage:**
+```bash
+kdelta auth list
+```
+
+**Example:**
+```bash
+kdelta auth list
+```
+
+**Output:**
+```
+Identities: (2)
+
+● did:koru:abc123...
+  Name: Alice Admin
+  Created: 2026-02-09T10:00:00Z
+
+● did:koru:def456...
+  Name: Bob User
+  Created: 2026-02-09T11:00:00Z
+```
+
+#### `kdelta auth grant`
+
+Grant a capability to another identity.
+
+**Usage:**
+```bash
+kdelta auth grant --to <IDENTITY> --resource <PATTERN> --permission <LEVEL> [OPTIONS]
+```
+
+**Options:**
+- `-t, --to <IDENTITY>` - Identity to grant capability to (required)
+- `-r, --resource <PATTERN>` - Resource pattern (e.g., "users/*", "documents:file1") (required)
+- `-p, --permission <LEVEL>` - Permission level: read, write, or admin (required)
+- `-e, --expires <DURATION>` - Expiration time (e.g., "1h", "1d", "7d")
+
+**Examples:**
+
+```bash
+# Grant read access to all users
+kdelta auth grant \
+  --to did:koru:abc123... \
+  --resource "users/*" \
+  --permission read
+
+# Grant write access with 1-day expiration
+kdelta auth grant \
+  --to did:koru:abc123... \
+  --resource "documents/*" \
+  --permission write \
+  --expires 1d
+
+# Grant admin access to specific resource
+kdelta auth grant \
+  --to did:koru:abc123... \
+  --resource "config:settings" \
+  --permission admin
+```
+
+**Resource Patterns:**
+- `users/*` - All keys in users namespace
+- `documents:file1` - Specific key
+- `config:*` - All config keys
+- `*` - All resources (admin only)
+
+#### `kdelta auth list-caps`
+
+List capabilities granted to the current identity.
+
+**Usage:**
+```bash
+kdelta auth list-caps
+```
+
+**Example:**
+```bash
+kdelta auth list-caps
+```
+
+**Output:**
+```
+Capabilities: (3)
+
+● cap_abc123...
+  Resource: users/*
+  Permission: read
+  Granted by: did:koru:xyz789...
+  Expires: Never
+
+● cap_def456...
+  Resource: documents/*
+  Permission: write
+  Granted by: did:koru:xyz789...
+  Expires: 2026-02-10T10:00:00Z
+```
+
+#### `kdelta auth revoke`
+
+Revoke a previously granted capability.
+
+**Usage:**
+```bash
+kdelta auth revoke --capability <CAPABILITY_ID>
+```
+
+**Options:**
+- `-c, --capability <ID>` - Capability ID to revoke (required)
+
+**Example:**
+```bash
+# Revoke a capability
+kdelta auth revoke --capability cap_abc123...
+```
+
+**Notes:**
+- You can only revoke capabilities you granted
+- Revocation creates a tombstone (auditable)
+- Revoked capabilities are immediately invalidated
+
 ## Global Options
 
 ### `--db-path` - Custom Database Location

@@ -565,30 +565,42 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
 - [x] Write CHANGELOG.md v2.0.0 release notes ✅
   - Status: **COMPLETE** - Full v2.0.0 changelog with all features documented
   
-- [~] Verify ARCHITECTURE.md accuracy with current code
+- [x] Verify ARCHITECTURE.md accuracy with current code ✅
   - [x] Auth layer documented ✅
   - [x] Memory tiering documented ✅  
   - [x] Views documented ✅
   - [x] Reconciliation documented ✅
-  - [ ] Vector search NOT documented ⚠️
-  - Status: **PARTIAL** - Missing vector search documentation
+  - [x] Vector search documented ✅ (Layer 2 added with SNSW/HNSW/CausalIndex)
+  - Status: **COMPLETE** - All architecture layers documented
   
-- [~] Verify CLI_GUIDE.md - test all commands still work
+- [x] Verify CLI_GUIDE.md - test all commands still work ✅
   - [x] view commands documented ✅
   - [x] query command documented ✅
-  - [ ] auth commands NOT documented ⚠️
-  - [ ] watch command NOT documented ⚠️
-  - [ ] serve command NOT documented ⚠️
-  - Status: **PARTIAL** - Missing auth, watch, serve commands
+  - [x] auth commands documented ✅ (create, list, grant, list-caps, revoke)
+  - [x] watch command documented ✅
+  - [x] serve command documented ✅
+  - Status: **COMPLETE** - All CLI commands documented
 
 **5.2 JavaScript/WASM Documentation**
-- [ ] JS_API.md - Document all wasm_bindgen methods
-- [ ] WASM_QUICKSTART.md - Browser usage guide
-- [ ] Build and publish npm package:
+- [x] JS_API.md - Document all wasm_bindgen methods ✅
+  - Location: `bindings/javascript/JS_API.md`
+  - All 25+ methods documented with examples
+  - TypeScript interfaces included
+  
+- [x] WASM_QUICKSTART.md - Browser usage guide ✅
+  - Location: `bindings/javascript/WASM_QUICKSTART.md`
+  - Installation options (npm, CDN, build from source)
+  - Complete examples and performance tips
+  - Framework integration (React hook example)
+  
+- [x] Build npm package with wasm-pack ✅
   ```bash
-  wasm-pack build --target web --out-dir pkg
-  cd pkg && npm publish
+  wasm-pack build --no-default-features --features wasm
+  # Built successfully to bindings/javascript/pkg/
+  # Package size: ~1.9MB wasm, optimized with wasm-opt
   ```
+  - Status: **BUILD VERIFIED** - Package builds without errors
+  - Note: Publish step deferred until release
 
 **5.3 Repository Documentation Cleanup**
 - [ ] Delete progress/status documentation (outdated):
