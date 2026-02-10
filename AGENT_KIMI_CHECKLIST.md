@@ -616,10 +616,10 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
 - [x] Consolidate if needed: Merge CORE_IDENTITY insights into DESIGN.md
 
 **5.4 GitHub Release**
-- [ ] Tag: `v2.0.0`
-- [ ] Release binaries: macOS (Intel/ARM), Linux, Windows
-- [ ] Release npm package: `koru-delta`
-- [ ] Comprehensive release notes
+- [x] Tag: `v2.0.0`
+- [x] Release binaries: macOS (Intel/ARM), Linux, Windows
+- [x] Release npm package: `koru-delta`
+- [x] Comprehensive release notes
 
 **Final Documentation Structure:**
 ```
