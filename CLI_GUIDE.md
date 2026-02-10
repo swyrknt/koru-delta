@@ -303,6 +303,132 @@ Keys in 'users':
   ● users/bob
 ```
 
+### `kdelta query` - Query Engine
+
+Execute filtered, sorted, and aggregated queries.
+
+**Format:**
+```bash
+kdelta query <namespace> [OPTIONS]
+```
+
+**Options:**
+- `-f, --filter <expr>` - Filter expression
+- `-s, --sort <field>` - Sort field
+- `--desc` - Sort descending
+- `-l, --limit <n>` - Limit results
+- `-c, --count` - Count only (no data)
+
+**Filter Syntax:**
+- `field = "value"` - Equality
+- `field != "value"` - Not equal
+- `field > 10` - Greater than
+- `field >= 10` - Greater or equal
+- `field < 10` - Less than
+- `field <= 10` - Less or equal
+- `field ~ "pattern"` - Contains substring
+
+**Examples:**
+
+```bash
+# Query all users
+kdelta query users
+
+# Filter active users
+kdelta query users --filter 'status = "active"'
+
+# Filter with multiple conditions (AND)
+kdelta query users --filter 'age > 30' --filter 'status = "active"'
+
+# Sort and limit
+kdelta query users --sort age --desc --limit 10
+
+# Count only
+kdelta query users --filter 'status = "active"' --count
+```
+
+**Output:**
+```
+Query results: (2 records)
+
+  ● alice
+    {
+      "age": 30,
+      "name": "Alice",
+      "status": "active"
+    }
+  ● bob
+    {
+      "age": 35,
+      "name": "Bob",
+      "status": "active"
+    }
+```
+
+### `kdelta view` - Materialized Views
+
+Create and manage materialized views for cached query results.
+
+**Subcommands:**
+- `view create <name> <source> [OPTIONS]` - Create a new view
+- `view list` - List all views
+- `view query <name>` - Query a view
+- `view refresh <name>` - Manually refresh a view
+- `view delete <name>` - Delete a view
+
+**Create Options:**
+- `-f, --filter <filter>` - Filter expression (e.g., 'status = "active"')
+- `-s, --sort <field>` - Sort field
+- `--desc` - Sort descending
+- `-d, --description <text>` - View description
+
+**Examples:**
+
+```bash
+# Create a view of active users
+kdelta view create active_users users --filter 'status = "active"'
+
+# Create with description and sorting
+kdelta view create premium_customers users \
+  --filter 'tier = "premium"' \
+  --sort created_at --desc \
+  --description "High-value customers"
+
+# List all views
+kdelta view list
+
+# Query a view (instant, cached results)
+kdelta view query active_users
+
+# Refresh view (auto-refreshes on writes by default)
+kdelta view refresh active_users
+
+# Delete a view
+kdelta view delete active_users
+```
+
+**View Output:**
+```
+View 'active_users' results: (42 records)
+
+  ● alice
+    {
+      "name": "Alice",
+      "status": "active"
+    }
+  ● bob
+    {
+      "name": "Bob",
+      "status": "active"
+    }
+```
+
+**Notes:**
+- Views persist across database restarts
+- Auto-refresh on writes (can be disabled)
+- Filter syntax: `field = "value"`, `field > 10`, `field != null`
+- Views are stored in the `__views` namespace
+
 ## Global Options
 
 ### `--db-path` - Custom Database Location
