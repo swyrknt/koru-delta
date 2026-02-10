@@ -79,6 +79,15 @@ Production-ready causal database with complete feature set: materialized views, 
   - `stress_test` - Load & edge case validation
   - `batch_performance_demo` - Batch write performance validation
 - **CLI commands verified** against documentation
+- **Live tested**: CLI, Python bindings, JS/WASM bindings - all functional
+
+### Known Issues
+
+Minor polish items identified during final validation:
+
+- **CLI auth**: Identity mining not yet exposed via CLI (use Rust API directly)
+- **Python bindings**: `delete()` may have delayed visibility in `contains()` due to async boundary
+- **Query filters**: Syntax differs between Python (`Field`) and JS (object notation) - will unify in v2.1.0
 
 ### Documentation
 
