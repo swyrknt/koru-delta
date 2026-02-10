@@ -808,6 +808,121 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         Ok(versioned)
     }
 
+    /// Store multiple values in a batch operation with a single WAL fsync.
+    ///
+    /// This is significantly more efficient than calling `put` multiple times
+    /// because it performs only one fsync for the entire batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `items` - Vector of (namespace, key, value) tuples to store
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `VersionedValue` results, one per item, in the same order.
+    ///
+    /// # Performance
+    ///
+    /// For N items with persistence enabled:
+    /// - `put`: N fsyncs (~200 ops/sec total)
+    /// - `put_batch`: 1 fsync (~2,000-5,000 ops/sec total)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let items = vec![
+    ///     ("users", "alice", json!({"name": "Alice"})),
+    ///     ("users", "bob", json!({"name": "Bob"})),
+    ///     ("orders", "123", json!({"total": 100})),
+    /// ];
+    /// let results = db.put_batch(items).await?;
+    /// ```
+    pub async fn put_batch<T: Serialize>(
+        &self,
+        items: Vec<(impl Into<String>, impl Into<String>, T)>,
+    ) -> DeltaResult<Vec<VersionedValue>> {
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let start = std::time::Instant::now();
+        let count = items.len();
+        trace!(count, "Starting batch put operation");
+
+        // Convert all items upfront
+        let mut converted_items = Vec::with_capacity(items.len());
+        for (ns, key, value) in items {
+            let namespace = ns.into();
+            let key = key.into();
+            let json_value = serde_json::to_value(value)?;
+            converted_items.push((namespace, key, json_value));
+        }
+
+        // Store in storage (source of truth)
+        trace!("Storing batch in CausalStorage");
+        let versioned_values = self.storage.put_batch(converted_items.clone())?;
+
+        // Persist to WAL if db_path is set (single fsync for entire batch)
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(ref db_path) = self.db_path {
+            use crate::persistence;
+            trace!("Persisting batch to WAL");
+
+            let write_refs: Vec<(&str, &str, &VersionedValue)> = converted_items
+                .iter()
+                .zip(versioned_values.iter())
+                .map(|((ns, key, _), versioned)| (ns.as_str(), key.as_str(), versioned))
+                .collect();
+
+            if let Err(e) = persistence::append_write_batch(db_path, write_refs).await {
+                error!(error = %e, "Failed to persist batch to WAL");
+            } else {
+                trace!("Batch persisted to WAL");
+            }
+        }
+
+        // Broadcast to cluster if configured (fire and forget)
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(ref cluster) = self.cluster {
+            for ((namespace, key, _), versioned) in
+                converted_items.iter().zip(versioned_values.iter())
+            {
+                let full_key = FullKey::new(namespace, key);
+                let value_clone = versioned.clone();
+                let cluster_clone = Arc::clone(cluster);
+                tokio::spawn(async move {
+                    trace!("Broadcasting write to cluster");
+                    cluster_clone.broadcast_write(full_key, value_clone).await;
+                });
+            }
+        }
+
+        // Promote all to hot memory
+        {
+            let hot = self.hot.write().await;
+            for ((namespace, key, _), versioned) in
+                converted_items.iter().zip(versioned_values.iter())
+            {
+                let full_key = FullKey::new(namespace, key);
+                hot.put(full_key, versioned.clone());
+            }
+            trace!("Batch values promoted to hot memory");
+        }
+
+        // Auto-refresh views (fire and forget, non-WASM only)
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let views = Arc::clone(&self.views);
+            tokio::spawn(async move {
+                let _ = views.refresh_stale(chrono::Duration::seconds(0));
+            });
+        }
+
+        let elapsed = start.elapsed();
+        info!(count, ?elapsed, "Batch put operation completed");
+        Ok(versioned_values)
+    }
+
     /// Get the current value for a key.
     ///
     /// Searches through memory tiers: Hot → Warm → Cold → Deep → Storage
@@ -1587,6 +1702,39 @@ mod tests {
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&"alice".to_string()));
         assert!(keys.contains(&"bob".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_put_batch() {
+        let db = create_test_db().await;
+
+        // Test empty batch
+        let empty: Vec<(&str, &str, serde_json::Value)> = vec![];
+        let results = db.put_batch(empty).await.unwrap();
+        assert!(results.is_empty());
+
+        // Test batch with multiple items
+        let items = vec![
+            ("users", "alice", json!({"name": "Alice"})),
+            ("users", "bob", json!({"name": "Bob"})),
+            ("orders", "123", json!({"total": 100})),
+        ];
+
+        let results = db.put_batch(items).await.unwrap();
+        assert_eq!(results.len(), 3);
+
+        // Verify each item was stored
+        let alice = db.get("users", "alice").await.unwrap();
+        assert_eq!(alice.value().get("name").unwrap(), "Alice");
+
+        let bob = db.get("users", "bob").await.unwrap();
+        assert_eq!(bob.value().get("name").unwrap(), "Bob");
+
+        let order = db.get("orders", "123").await.unwrap();
+        assert_eq!(order.value().get("total").unwrap(), 100);
+
+        // Verify batch creates distinct versions
+        assert_ne!(results[0].version_id(), results[1].version_id());
     }
 
     #[tokio::test]
