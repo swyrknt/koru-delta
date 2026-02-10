@@ -554,15 +554,32 @@ from koru_delta.integrations.llamaindex import KoruDeltaVectorStore as LlamaStor
 ### Phase 5: Documentation Cleanup & Release (2-3 days)
 
 **5.1 Core Documentation Updates**
-- [ ] Update README.md for v2.0.0:
-  - Final feature list (views, auth, vectors, subscriptions, WASM)
-  - Current performance numbers
-  - Quickstart with `cargo install`
-  - Links to comprehensive examples
-  - Clear "single-node production ready" messaging
-- [ ] Verify ARCHITECTURE.md accuracy with current code
-- [ ] Verify CLI_GUIDE.md - test all commands still work
-- [ ] Write CHANGELOG.md v2.0.0 release notes
+- [x] Update README.md for v2.0.0:
+  - [x] Final feature list (views, auth, vectors, subscriptions, WASM) ✅
+  - [x] Current performance numbers ✅ (batch operations included)
+  - [x] Quickstart with `cargo install` ✅
+  - [x] Links to comprehensive examples ✅ (ecommerce, cluster, stress test demos)
+  - [x] Clear "single-node production ready" messaging ✅
+  - Status: **COMPLETE** - README fully updated with all v2.0.0 features
+  
+- [x] Write CHANGELOG.md v2.0.0 release notes ✅
+  - Status: **COMPLETE** - Full v2.0.0 changelog with all features documented
+  
+- [~] Verify ARCHITECTURE.md accuracy with current code
+  - [x] Auth layer documented ✅
+  - [x] Memory tiering documented ✅  
+  - [x] Views documented ✅
+  - [x] Reconciliation documented ✅
+  - [ ] Vector search NOT documented ⚠️
+  - Status: **PARTIAL** - Missing vector search documentation
+  
+- [~] Verify CLI_GUIDE.md - test all commands still work
+  - [x] view commands documented ✅
+  - [x] query command documented ✅
+  - [ ] auth commands NOT documented ⚠️
+  - [ ] watch command NOT documented ⚠️
+  - [ ] serve command NOT documented ⚠️
+  - Status: **PARTIAL** - Missing auth, watch, serve commands
 
 **5.2 JavaScript/WASM Documentation**
 - [ ] JS_API.md - Document all wasm_bindgen methods
