@@ -12,9 +12,9 @@ This checklist aligns all remaining components to follow the LCA (Local Causal A
 **The Law:** `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
 
 ### Current State
-- **8 agents** fully implement `LocalCausalAgent` trait ✅
-- **7 agents** follow pattern but don't implement trait ⚠️
-- **6 managers** have NO LCA at all 🔴
+- **9 agents** fully implement `LocalCausalAgent` trait ✅
+- **6 agents** follow pattern but don't implement trait ⚠️
+- **5 managers** have NO LCA at all 🔴
 - **Goal:** 100% trait implementation across all interactive components
 
 ### Alignment Strategy
@@ -33,6 +33,64 @@ This checklist aligns all remaining components to follow the LCA (Local Causal A
 **File:** `src/storage_agent.rs` (new - 540 lines)
 
 **Status:** All tasks completed, 430 tests passing, zero warnings.
+
+---
+
+### A.2 LifecycleManager → LifecycleAgent ✅ COMPLETE
+
+**File:** `src/lifecycle/mod.rs` (refactored - ~300 lines added)
+
+**Status:** All tasks completed, 437 tests passing, zero warnings.
+
+**Implementation:**
+```rust
+pub struct LifecycleAgent {
+    local_root: Distinction,           // ✅ RootType::Lifecycle (NEW)
+    _field: SharedEngine,              // ✅ LCA field handle
+    engine: Arc<DistinctionEngine>,
+    config: LifecycleConfig,
+    access_tracker: Arc<RwLock<AccessTracker>>,
+    importance_scorer: Arc<RwLock<ImportanceScorer>>,
+    transition_planner: Arc<RwLock<TransitionPlanner>>,
+    stats: Arc<RwLock<LifecycleStats>>,
+    shutdown: Arc<AtomicBool>,
+}
+
+impl LocalCausalAgent for LifecycleAgent {
+    type ActionData = LifecycleAction;
+    
+    fn synthesize_action(&mut self, action: LifecycleAction, engine: &Arc<DistinctionEngine>) 
+        -> Distinction {
+        // ✅ Formula: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+```
+
+**Actions Added:**
+- `EvaluateAccess { distinction_id, full_key }`
+- `Promote { distinction_id, from_tier, to_tier }`
+- `Demote { distinction_id, from_tier, to_tier }`
+- `Transition { transitions: Vec<Transition> }`
+- `UpdateThresholds { thresholds: serde_json::Value }`
+- `Consolidate`
+- `ExtractGenome`
+
+**New Tests (7 added):**
+- `test_lifecycle_agent_implements_lca_trait`
+- `test_lifecycle_agent_has_unique_local_root`
+- `test_evaluate_access_synthesizes`
+- `test_promote_synthesizes`
+- `test_demote_synthesizes`
+- `test_transition_synthesizes`
+- `test_update_thresholds_synthesizes`
+
+**Backward Compatibility:**
+- `pub type LifecycleManager = LifecycleAgent;` (type alias for existing code)
+- `with_config()` constructor for config-based initialization
 
 **Implementation:**
 ```rust

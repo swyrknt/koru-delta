@@ -352,7 +352,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleManager::with_config(&shared_engine, LifecycleConfig::default()));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -438,7 +438,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleManager::with_config(&shared_engine, LifecycleConfig::default()));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -741,7 +741,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleManager::new(LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleManager::with_config(&shared_engine, LifecycleConfig::default()));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);

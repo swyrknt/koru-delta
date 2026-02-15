@@ -79,6 +79,8 @@ pub enum KoruAction {
     Workspace(WorkspaceAction),
     /// Vector operations - embedding and similarity search.
     Vector(VectorAction),
+    /// Lifecycle operations - memory tier transitions.
+    Lifecycle(LifecycleAction),
 }
 
 impl From<PulseAction> for KoruAction {
@@ -117,6 +119,7 @@ impl KoruAction {
             KoruAction::Pulse(_) => "PULSE",
             KoruAction::Workspace(_) => "WORKSPACE",
             KoruAction::Vector(_) => "VECTOR",
+            KoruAction::Lifecycle(_) => "LIFECYCLE",
         }
     }
 
@@ -139,6 +142,7 @@ impl KoruAction {
             KoruAction::Pulse(action) => action.validate(),
             KoruAction::Workspace(action) => action.validate(),
             KoruAction::Vector(action) => action.validate(),
+            KoruAction::Lifecycle(action) => action.validate(),
         }
     }
 }
@@ -161,6 +165,7 @@ impl Canonicalizable for KoruAction {
             KoruAction::Pulse(action) => action.to_canonical_structure(engine),
             KoruAction::Workspace(action) => action.to_canonical_structure(engine),
             KoruAction::Vector(action) => action.to_canonical_structure(engine),
+            KoruAction::Lifecycle(action) => action.to_canonical_structure(engine),
         }
     }
 }
@@ -201,6 +206,7 @@ pub(crate) enum ActionSerializable {
     Pulse(PulseActionSerializable),
     Workspace(WorkspaceActionSerializable),
     Vector(VectorActionSerializable),
+    Lifecycle(LifecycleActionSerializable),
 }
 
 impl From<&KoruAction> for ActionSerializable {
@@ -220,6 +226,7 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Pulse(a) => ActionSerializable::Pulse(a.into()),
             KoruAction::Workspace(a) => ActionSerializable::Workspace(a.into()),
             KoruAction::Vector(a) => ActionSerializable::Vector(a.into()),
+            KoruAction::Lifecycle(a) => ActionSerializable::Lifecycle(a.into()),
         }
     }
 }
@@ -1704,6 +1711,160 @@ impl VectorAction {
 impl Canonicalizable for VectorAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
         let serializable = VectorActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+/// Actions for the lifecycle agent.
+///
+/// The lifecycle agent manages memory tier transitions with LCA architecture.
+/// All lifecycle operations are synthesized into the unified field.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LifecycleAction {
+    /// Evaluate access patterns for a distinction.
+    EvaluateAccess {
+        /// Distinction ID to evaluate.
+        distinction_id: String,
+        /// Full key for the distinction.
+        full_key: crate::types::FullKey,
+    },
+    /// Promote a distinction to a higher tier.
+    Promote {
+        /// Distinction ID to promote.
+        distinction_id: String,
+        /// Source tier.
+        from_tier: crate::lifecycle::MemoryTier,
+        /// Target tier.
+        to_tier: crate::lifecycle::MemoryTier,
+    },
+    /// Demote a distinction to a lower tier.
+    Demote {
+        /// Distinction ID to demote.
+        distinction_id: String,
+        /// Source tier.
+        from_tier: crate::lifecycle::MemoryTier,
+        /// Target tier.
+        to_tier: crate::lifecycle::MemoryTier,
+    },
+    /// Execute a batch of transitions.
+    Transition {
+        /// Transitions to execute.
+        transitions: Vec<crate::lifecycle::Transition>,
+    },
+    /// Update lifecycle thresholds.
+    UpdateThresholds {
+        /// New threshold configuration.
+        thresholds: serde_json::Value,
+    },
+    /// Run memory consolidation.
+    Consolidate,
+    /// Extract genome for deep storage.
+    ExtractGenome,
+}
+
+/// Serializable version of LifecycleAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum LifecycleActionSerializable {
+    EvaluateAccess { distinction_id: String, full_key: crate::types::FullKey },
+    Promote { distinction_id: String, from_tier: String, to_tier: String },
+    Demote { distinction_id: String, from_tier: String, to_tier: String },
+    Transition { transitions: Vec<crate::lifecycle::Transition> },
+    UpdateThresholds { thresholds: serde_json::Value },
+    Consolidate,
+    ExtractGenome,
+}
+
+impl From<&LifecycleAction> for LifecycleActionSerializable {
+    fn from(action: &LifecycleAction) -> Self {
+        match action {
+            LifecycleAction::EvaluateAccess { distinction_id, full_key } => {
+                LifecycleActionSerializable::EvaluateAccess {
+                    distinction_id: distinction_id.clone(),
+                    full_key: full_key.clone(),
+                }
+            }
+            LifecycleAction::Promote { distinction_id, from_tier, to_tier } => {
+                LifecycleActionSerializable::Promote {
+                    distinction_id: distinction_id.clone(),
+                    from_tier: from_tier.to_string(),
+                    to_tier: to_tier.to_string(),
+                }
+            }
+            LifecycleAction::Demote { distinction_id, from_tier, to_tier } => {
+                LifecycleActionSerializable::Demote {
+                    distinction_id: distinction_id.clone(),
+                    from_tier: from_tier.to_string(),
+                    to_tier: to_tier.to_string(),
+                }
+            }
+            LifecycleAction::Transition { transitions } => {
+                LifecycleActionSerializable::Transition {
+                    transitions: transitions.clone(),
+                }
+            }
+            LifecycleAction::UpdateThresholds { thresholds } => {
+                LifecycleActionSerializable::UpdateThresholds {
+                    thresholds: thresholds.clone(),
+                }
+            }
+            LifecycleAction::Consolidate => LifecycleActionSerializable::Consolidate,
+            LifecycleAction::ExtractGenome => LifecycleActionSerializable::ExtractGenome,
+        }
+    }
+}
+
+impl LifecycleAction {
+    /// Validate the lifecycle action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            LifecycleAction::EvaluateAccess { distinction_id, .. } => {
+                if distinction_id.is_empty() {
+                    return Err("LifecycleAction::EvaluateAccess: distinction_id is empty".to_string());
+                }
+                Ok(())
+            }
+            LifecycleAction::Promote { distinction_id, from_tier, to_tier } => {
+                if distinction_id.is_empty() {
+                    return Err("LifecycleAction::Promote: distinction_id is empty".to_string());
+                }
+                if from_tier == to_tier {
+                    return Err("LifecycleAction::Promote: from_tier equals to_tier".to_string());
+                }
+                Ok(())
+            }
+            LifecycleAction::Demote { distinction_id, from_tier, to_tier } => {
+                if distinction_id.is_empty() {
+                    return Err("LifecycleAction::Demote: distinction_id is empty".to_string());
+                }
+                if from_tier == to_tier {
+                    return Err("LifecycleAction::Demote: from_tier equals to_tier".to_string());
+                }
+                Ok(())
+            }
+            LifecycleAction::Transition { transitions } => {
+                if transitions.is_empty() {
+                    return Err("LifecycleAction::Transition: transitions is empty".to_string());
+                }
+                Ok(())
+            }
+            LifecycleAction::UpdateThresholds { thresholds } => {
+                if thresholds.is_null() {
+                    return Err("LifecycleAction::UpdateThresholds: thresholds is null".to_string());
+                }
+                Ok(())
+            }
+            LifecycleAction::Consolidate => Ok(()),
+            LifecycleAction::ExtractGenome => Ok(()),
+        }
+    }
+}
+
+impl Canonicalizable for LifecycleAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = LifecycleActionSerializable::from(self);
         match bincode::serialize(&serializable) {
             Ok(bytes) => bytes_to_distinction(&bytes, engine),
             Err(_) => engine.d0().clone(),

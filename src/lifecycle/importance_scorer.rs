@@ -83,6 +83,7 @@ impl ImportanceScore {
 ///
 /// This is a lightweight "neural network" (really just linear regression with learned weights)
 /// that predicts importance based on features extracted from access patterns.
+#[derive(Debug)]
 pub struct ImportanceModel {
     /// Feature weights (learned)
     weights: ModelWeights,

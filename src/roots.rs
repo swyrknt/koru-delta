@@ -138,6 +138,12 @@ pub struct KoruRoots {
     /// Anchors all vector operations. Embeddings are synthesized
     /// from this root with vector actions.
     pub vector: Distinction,
+
+    /// Lifecycle root - perspective of memory tier transitions (Root: LIFECYCLE).
+    ///
+    /// Anchors all lifecycle operations. Tier transitions are
+    /// synthesized from this root with lifecycle actions.
+    pub lifecycle: Distinction,
 }
 
 impl KoruRoots {
@@ -182,6 +188,7 @@ impl KoruRoots {
         let orchestrator = Self::synthesize_agent_root(engine, &d1, b"ORCHESTRATOR");
         let workspace = Self::synthesize_agent_root(engine, &d1, b"WORKSPACE");
         let vector = Self::synthesize_agent_root(engine, &d1, b"VECTOR");
+        let lifecycle = Self::synthesize_agent_root(engine, &d1, b"LIFECYCLE");
 
         // The field root is the synthesis of all agent roots
         // This represents the unified consciousness field
@@ -203,6 +210,7 @@ impl KoruRoots {
                 &orchestrator,
                 &workspace,
                 &vector,
+                &lifecycle,
             ],
         );
 
@@ -222,6 +230,7 @@ impl KoruRoots {
             orchestrator,
             workspace,
             vector,
+            lifecycle,
         }
     }
 
@@ -283,6 +292,7 @@ impl KoruRoots {
             RootType::Network => &self.network,
             RootType::Workspace => &self.workspace,
             RootType::Vector => &self.vector,
+            RootType::Lifecycle => &self.lifecycle,
         }
     }
 }
@@ -320,6 +330,8 @@ pub enum RootType {
     Workspace,
     /// Vector root.
     Vector,
+    /// Lifecycle root.
+    Lifecycle,
 }
 
 impl RootType {
@@ -341,6 +353,7 @@ impl RootType {
             RootType::Network => "NETWORK",
             RootType::Workspace => "WORKSPACE",
             RootType::Vector => "VECTOR",
+            RootType::Lifecycle => "LIFECYCLE",
         }
     }
 }

@@ -16,6 +16,7 @@ use crate::lifecycle::importance_scorer::ImportanceScore;
 use crate::lifecycle::MemoryTier;
 
 /// Plans transitions between memory tiers
+#[derive(Debug)]
 pub struct TransitionPlanner {
     /// Hot tier target capacity
     hot_capacity: usize,
@@ -203,7 +204,7 @@ impl Default for TransitionPlanner {
 }
 
 /// A planned transition between memory tiers
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Transition {
     /// The distinction to move
     pub distinction_id: DistinctionId,

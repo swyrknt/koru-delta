@@ -14,6 +14,7 @@ use crate::causal_graph::DistinctionId;
 use crate::types::FullKey;
 
 /// Tracks access patterns for all distinctions
+#[derive(Debug)]
 pub struct AccessTracker {
     /// Access patterns by distinction ID
     patterns: DashMap<DistinctionId, AccessPattern>,
