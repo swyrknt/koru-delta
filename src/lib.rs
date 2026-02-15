@@ -102,6 +102,12 @@ mod error;
 mod mapper;
 mod types;
 
+// LCA Architecture (v3.0)
+// Foundation: canonical roots, actions, and shared engine
+pub mod actions;
+pub mod engine;
+pub mod roots;
+
 // v2.0: Distinction-driven modules
 pub mod causal_graph;
 #[cfg(not(target_arch = "wasm32"))]
@@ -194,6 +200,20 @@ pub use serde_json::{json, Value as JsonValue};
 
 // Re-export the underlying engine for advanced use cases
 pub use koru_lambda_core::DistinctionEngine;
+
+// LCA Architecture exports (v3.0)
+// Actions for all agents
+pub use actions::{
+    ArchiveAction, ChronicleAction, EssenceAction, EvolutionAction, IdentityAction,
+    KoruAction, LineageAction, NetworkAction, PerspectiveAction, SleepAction, SleepPhase,
+    StorageAction, TemperatureAction, TemperatureLevel,
+};
+
+// Shared engine and field infrastructure
+pub use engine::{FieldHandle, FieldStats, SharedEngine};
+
+// Canonical roots for all agents
+pub use roots::{KoruRoots, RootType};
 
 /// Prelude module for convenient imports.
 ///

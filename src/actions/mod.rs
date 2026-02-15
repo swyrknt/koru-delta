@@ -1,0 +1,1385 @@
+//! Action Types for the Koru LCA Architecture.
+//!
+//! This module defines all possible actions that agents can perform within the
+//! unified consciousness field. Every action is canonicalizable, enabling
+//! deterministic synthesis across all agents.
+//!
+//! # Action Philosophy
+//!
+//! In the LCA architecture, **everything is an action**. There are no operations,
+//! no method calls, no direct mutations - only actions that are synthesized
+//! with local roots to produce new distinctions.
+//!
+//! The formula is universal: **ΔNew = ΔLocal_Root ⊕ ΔAction_Data**
+//!
+//! # Action Hierarchy
+//!
+//! ```text
+//! KoruAction
+//! ├── StorageAction (memory operations)
+//! ├── TemperatureAction (activity tracking)
+//! ├── ChronicleAction (recent history)
+//! ├── ArchiveAction (long-term storage)
+//! ├── EssenceAction (causal topology)
+//! ├── SleepAction (rhythmic reorganization)
+//! ├── EvolutionAction (natural selection)
+//! ├── LineageAction (causal ancestry)
+//! ├── PerspectiveAction (derived views)
+//! ├── IdentityAction (selfhood)
+//! └── NetworkAction (distributed awareness)
+//! ```
+
+use chrono::{DateTime, Utc};
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
+
+/// The universal action type for all Koru agents.
+///
+/// This enum encompasses every possible action within the unified field.
+/// Each variant wraps a specific agent's action type, enabling uniform
+/// handling while preserving type safety.
+///
+/// # Example
+///
+/// ```ignore
+/// let action = KoruAction::Storage(StorageAction::Store {
+///     namespace: "users".to_string(),
+///     key: "alice".to_string(),
+///     value_json: json!({"name": "Alice"}),
+/// });
+///
+/// let new_root = agent.synthesize_action(action, &engine);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub enum KoruAction {
+    /// Storage operations - memory and retrieval.
+    Storage(StorageAction),
+    /// Temperature operations - activity tracking and LRU management.
+    Temperature(TemperatureAction),
+    /// Chronicle operations - recent history recording.
+    Chronicle(ChronicleAction),
+    /// Archive operations - long-term epoch-based storage.
+    Archive(ArchiveAction),
+    /// Essence operations - causal topology and genome.
+    Essence(EssenceAction),
+    /// Sleep operations - rhythmic consolidation.
+    Sleep(SleepAction),
+    /// Evolution operations - fitness-based selection.
+    Evolution(EvolutionAction),
+    /// Lineage operations - causal ancestry tracking.
+    Lineage(LineageAction),
+    /// Perspective operations - derived views and materialization.
+    Perspective(PerspectiveAction),
+    /// Identity operations - authentication and capabilities.
+    Identity(IdentityAction),
+    /// Network operations - distributed coordination.
+    Network(NetworkAction),
+}
+
+impl KoruAction {
+    /// Get the action category as a string.
+    pub fn category(&self) -> &'static str {
+        match self {
+            KoruAction::Storage(_) => "STORAGE",
+            KoruAction::Temperature(_) => "TEMPERATURE",
+            KoruAction::Chronicle(_) => "CHRONICLE",
+            KoruAction::Archive(_) => "ARCHIVE",
+            KoruAction::Essence(_) => "ESSENCE",
+            KoruAction::Sleep(_) => "SLEEP",
+            KoruAction::Evolution(_) => "EVOLUTION",
+            KoruAction::Lineage(_) => "LINEAGE",
+            KoruAction::Perspective(_) => "PERSPECTIVE",
+            KoruAction::Identity(_) => "IDENTITY",
+            KoruAction::Network(_) => "NETWORK",
+        }
+    }
+
+    /// Validate the action for correctness.
+    ///
+    /// Returns `Ok(())` if the action is valid, `Err(description)` otherwise.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            KoruAction::Storage(action) => action.validate(),
+            KoruAction::Temperature(action) => action.validate(),
+            KoruAction::Chronicle(action) => action.validate(),
+            KoruAction::Archive(action) => action.validate(),
+            KoruAction::Essence(action) => action.validate(),
+            KoruAction::Sleep(action) => action.validate(),
+            KoruAction::Evolution(action) => action.validate(),
+            KoruAction::Lineage(action) => action.validate(),
+            KoruAction::Perspective(action) => action.validate(),
+            KoruAction::Identity(action) => action.validate(),
+            KoruAction::Network(action) => action.validate(),
+        }
+    }
+}
+
+impl Canonicalizable for KoruAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        // Convert action to canonical byte representation via bincode
+        // This provides deterministic, compact serialization
+        match self.to_bytes() {
+            Ok(bytes) => Self::bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(), // Fallback to void on error
+        }
+    }
+}
+
+impl KoruAction {
+    /// Serialize action to bytes for canonicalization.
+    fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+        // We use a simplified representation for serialization
+        // Distinction IDs are stored as strings
+        bincode::serialize(&ActionSerializable::from(self))
+    }
+
+    /// Convert bytes to distinction via synthesis.
+    fn bytes_to_distinction(bytes: &[u8], engine: &DistinctionEngine) -> Distinction {
+        bytes
+            .iter()
+            .map(|&byte| byte.to_canonical_structure(engine))
+            .fold(engine.d0().clone(), |acc, d| engine.synthesize(&acc, &d))
+    }
+}
+
+/// Serializable representation of actions for canonicalization.
+/// This is an internal type used for serialization - it mirrors KoruAction
+/// but uses types that implement Serialize/Deserialize.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum ActionSerializable {
+    Storage(StorageActionSerializable),
+    Temperature(TemperatureActionSerializable),
+    Chronicle(ChronicleActionSerializable),
+    Archive(ArchiveActionSerializable),
+    Essence(EssenceActionSerializable),
+    Sleep(SleepActionSerializable),
+    Evolution(EvolutionActionSerializable),
+    Lineage(LineageActionSerializable),
+    Perspective(PerspectiveActionSerializable),
+    Identity(IdentityActionSerializable),
+    Network(NetworkActionSerializable),
+}
+
+impl From<&KoruAction> for ActionSerializable {
+    fn from(action: &KoruAction) -> Self {
+        match action {
+            KoruAction::Storage(a) => ActionSerializable::Storage(a.into()),
+            KoruAction::Temperature(a) => ActionSerializable::Temperature(a.into()),
+            KoruAction::Chronicle(a) => ActionSerializable::Chronicle(a.into()),
+            KoruAction::Archive(a) => ActionSerializable::Archive(a.into()),
+            KoruAction::Essence(a) => ActionSerializable::Essence(a.into()),
+            KoruAction::Sleep(a) => ActionSerializable::Sleep(a.into()),
+            KoruAction::Evolution(a) => ActionSerializable::Evolution(a.into()),
+            KoruAction::Lineage(a) => ActionSerializable::Lineage(a.into()),
+            KoruAction::Perspective(a) => ActionSerializable::Perspective(a.into()),
+            KoruAction::Identity(a) => ActionSerializable::Identity(a.into()),
+            KoruAction::Network(a) => ActionSerializable::Network(a.into()),
+        }
+    }
+}
+
+/// Actions for the storage agent.
+///
+/// These actions represent all memory operations within the field.
+/// Every store, retrieve, or query is an action that gets synthesized
+/// with the storage agent's local root.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StorageAction {
+    /// Store a value in the field.
+    Store {
+        /// Namespace (the "where").
+        namespace: String,
+        /// Key (the "what").
+        key: String,
+        /// Value JSON content.
+        value_json: serde_json::Value,
+    },
+    /// Retrieve a value from the field.
+    Retrieve {
+        /// Namespace to search.
+        namespace: String,
+        /// Key to retrieve.
+        key: String,
+    },
+    /// Get history for a key.
+    History {
+        /// Namespace of the key.
+        namespace: String,
+        /// Key to get history for.
+        key: String,
+    },
+    /// Query with a pattern.
+    Query {
+        /// Query pattern as JSON.
+        pattern_json: serde_json::Value,
+    },
+    /// Delete a key (tombstone).
+    Delete {
+        /// Namespace of the key.
+        namespace: String,
+        /// Key to delete.
+        key: String,
+    },
+}
+
+/// Serializable version of StorageAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum StorageActionSerializable {
+    Store { namespace: String, key: String, value_json: serde_json::Value },
+    Retrieve { namespace: String, key: String },
+    History { namespace: String, key: String },
+    Query { pattern_json: serde_json::Value },
+    Delete { namespace: String, key: String },
+}
+
+impl From<&StorageAction> for StorageActionSerializable {
+    fn from(action: &StorageAction) -> Self {
+        match action {
+            StorageAction::Store { namespace, key, value_json } => {
+                StorageActionSerializable::Store {
+                    namespace: namespace.clone(),
+                    key: key.clone(),
+                    value_json: value_json.clone(),
+                }
+            }
+            StorageAction::Retrieve { namespace, key } => {
+                StorageActionSerializable::Retrieve {
+                    namespace: namespace.clone(),
+                    key: key.clone(),
+                }
+            }
+            StorageAction::History { namespace, key } => {
+                StorageActionSerializable::History {
+                    namespace: namespace.clone(),
+                    key: key.clone(),
+                }
+            }
+            StorageAction::Query { pattern_json } => {
+                StorageActionSerializable::Query {
+                    pattern_json: pattern_json.clone(),
+                }
+            }
+            StorageAction::Delete { namespace, key } => {
+                StorageActionSerializable::Delete {
+                    namespace: namespace.clone(),
+                    key: key.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl StorageAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            StorageAction::Store { namespace, key, .. } => {
+                if namespace.is_empty() {
+                    return Err("StorageAction::Store: namespace is empty".to_string());
+                }
+                if key.is_empty() {
+                    return Err("StorageAction::Store: key is empty".to_string());
+                }
+                Ok(())
+            }
+            StorageAction::Retrieve { namespace, key } => {
+                if namespace.is_empty() {
+                    return Err("StorageAction::Retrieve: namespace is empty".to_string());
+                }
+                if key.is_empty() {
+                    return Err("StorageAction::Retrieve: key is empty".to_string());
+                }
+                Ok(())
+            }
+            StorageAction::History { namespace, key } => {
+                if namespace.is_empty() {
+                    return Err("StorageAction::History: namespace is empty".to_string());
+                }
+                if key.is_empty() {
+                    return Err("StorageAction::History: key is empty".to_string());
+                }
+                Ok(())
+            }
+            StorageAction::Query { .. } => Ok(()),
+            StorageAction::Delete { namespace, key } => {
+                if namespace.is_empty() {
+                    return Err("StorageAction::Delete: namespace is empty".to_string());
+                }
+                if key.is_empty() {
+                    return Err("StorageAction::Delete: key is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the temperature agent.
+///
+/// Temperature represents "what's active" in the field. Hot distinctions
+/// are those currently in focus, like the prefrontal cortex.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TemperatureAction {
+    /// Heat up a distinction (promote to hot).
+    Heat {
+        /// Distinction ID to heat.
+        distinction_id: String,
+        /// Current temperature level.
+        level: TemperatureLevel,
+    },
+    /// Cool down a distinction (demote from hot).
+    Cool {
+        /// Distinction ID to cool.
+        distinction_id: String,
+    },
+    /// Evict from hot to chronicle.
+    Evict {
+        /// Distinction ID to evict.
+        distinction_id: String,
+    },
+    /// Record access (affects temperature).
+    Access {
+        /// Distinction ID that was accessed.
+        distinction_id: String,
+    },
+}
+
+/// Serializable version of TemperatureAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum TemperatureActionSerializable {
+    Heat { distinction_id: String, level: TemperatureLevel },
+    Cool { distinction_id: String },
+    Evict { distinction_id: String },
+    Access { distinction_id: String },
+}
+
+impl From<&TemperatureAction> for TemperatureActionSerializable {
+    fn from(action: &TemperatureAction) -> Self {
+        match action {
+            TemperatureAction::Heat { distinction_id, level } => {
+                TemperatureActionSerializable::Heat {
+                    distinction_id: distinction_id.clone(),
+                    level: *level,
+                }
+            }
+            TemperatureAction::Cool { distinction_id } => {
+                TemperatureActionSerializable::Cool {
+                    distinction_id: distinction_id.clone(),
+                }
+            }
+            TemperatureAction::Evict { distinction_id } => {
+                TemperatureActionSerializable::Evict {
+                    distinction_id: distinction_id.clone(),
+                }
+            }
+            TemperatureAction::Access { distinction_id } => {
+                TemperatureActionSerializable::Access {
+                    distinction_id: distinction_id.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl TemperatureAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            TemperatureAction::Heat { distinction_id, .. }
+            | TemperatureAction::Cool { distinction_id }
+            | TemperatureAction::Evict { distinction_id }
+            | TemperatureAction::Access { distinction_id } => {
+                if distinction_id.is_empty() {
+                    return Err(format!("{:?}: distinction_id is empty", self));
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Temperature levels for distinctions.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum TemperatureLevel {
+    /// Cold - rarely accessed, archived.
+    Cold,
+    /// Cool - occasionally accessed, in chronicle.
+    Cool,
+    /// Warm - recently accessed, cooling down.
+    Warm,
+    /// Hot - currently active, in working memory.
+    Hot,
+}
+
+/// Actions for the chronicle agent.
+///
+/// The chronicle maintains recent history, like the hippocampus.
+/// It records what happened recently for temporal context.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChronicleAction {
+    /// Record an event in the chronicle.
+    Record {
+        /// Event distinction ID to record.
+        event_id: String,
+        /// Timestamp of the event.
+        timestamp: DateTime<Utc>,
+    },
+    /// Recall from the chronicle.
+    Recall {
+        /// Query pattern.
+        query: String,
+    },
+    /// Promote from chronicle to hot.
+    Promote {
+        /// Distinction ID to promote.
+        distinction_id: String,
+    },
+    /// Demote from chronicle to archive.
+    Demote {
+        /// Distinction ID to demote.
+        distinction_id: String,
+    },
+}
+
+/// Serializable version of ChronicleAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum ChronicleActionSerializable {
+    Record { event_id: String, timestamp: DateTime<Utc> },
+    Recall { query: String },
+    Promote { distinction_id: String },
+    Demote { distinction_id: String },
+}
+
+impl From<&ChronicleAction> for ChronicleActionSerializable {
+    fn from(action: &ChronicleAction) -> Self {
+        match action {
+            ChronicleAction::Record { event_id, timestamp } => {
+                ChronicleActionSerializable::Record {
+                    event_id: event_id.clone(),
+                    timestamp: *timestamp,
+                }
+            }
+            ChronicleAction::Recall { query } => {
+                ChronicleActionSerializable::Recall { query: query.clone() }
+            }
+            ChronicleAction::Promote { distinction_id } => {
+                ChronicleActionSerializable::Promote {
+                    distinction_id: distinction_id.clone(),
+                }
+            }
+            ChronicleAction::Demote { distinction_id } => {
+                ChronicleActionSerializable::Demote {
+                    distinction_id: distinction_id.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl ChronicleAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            ChronicleAction::Record { event_id, .. } => {
+                if event_id.is_empty() {
+                    return Err("ChronicleAction::Record: event_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ChronicleAction::Recall { query } => {
+                if query.is_empty() {
+                    return Err("ChronicleAction::Recall: query is empty".to_string());
+                }
+                Ok(())
+            }
+            ChronicleAction::Promote { distinction_id } | ChronicleAction::Demote { distinction_id } => {
+                if distinction_id.is_empty() {
+                    return Err(format!("{:?}: distinction_id is empty", self));
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the archive agent.
+///
+/// The archive maintains long-term storage organized into epochs.
+/// Like the cerebral cortex, it stores vast amounts of compressed history.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArchiveAction {
+    /// Start a new epoch.
+    EpochStart {
+        /// Timestamp when the epoch starts.
+        timestamp: DateTime<Utc>,
+    },
+    /// Seal an epoch as a distinction.
+    EpochSeal {
+        /// Epoch number.
+        epoch_number: u64,
+        /// Content distinction ID.
+        content_id: String,
+    },
+    /// Compress an epoch.
+    Compress {
+        /// Epoch distinction ID to compress.
+        epoch_id: String,
+    },
+    /// Retrieve from archive.
+    Retrieve {
+        /// Pattern to search for.
+        pattern: String,
+    },
+    /// Archive distinctions to cold storage.
+    Archive {
+        /// Distinction IDs to archive.
+        distinction_ids: Vec<String>,
+    },
+}
+
+/// Serializable version of ArchiveAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum ArchiveActionSerializable {
+    EpochStart { timestamp: DateTime<Utc> },
+    EpochSeal { epoch_number: u64, content_id: String },
+    Compress { epoch_id: String },
+    Retrieve { pattern: String },
+    Archive { distinction_ids: Vec<String> },
+}
+
+impl From<&ArchiveAction> for ArchiveActionSerializable {
+    fn from(action: &ArchiveAction) -> Self {
+        match action {
+            ArchiveAction::EpochStart { timestamp } => {
+                ArchiveActionSerializable::EpochStart { timestamp: *timestamp }
+            }
+            ArchiveAction::EpochSeal { epoch_number, content_id } => {
+                ArchiveActionSerializable::EpochSeal {
+                    epoch_number: *epoch_number,
+                    content_id: content_id.clone(),
+                }
+            }
+            ArchiveAction::Compress { epoch_id } => {
+                ArchiveActionSerializable::Compress { epoch_id: epoch_id.clone() }
+            }
+            ArchiveAction::Retrieve { pattern } => {
+                ArchiveActionSerializable::Retrieve { pattern: pattern.clone() }
+            }
+            ArchiveAction::Archive { distinction_ids } => {
+                ArchiveActionSerializable::Archive {
+                    distinction_ids: distinction_ids.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl ArchiveAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            ArchiveAction::EpochStart { .. } => Ok(()),
+            ArchiveAction::EpochSeal { content_id, .. } => {
+                if content_id.is_empty() {
+                    return Err("ArchiveAction::EpochSeal: content_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ArchiveAction::Compress { epoch_id } => {
+                if epoch_id.is_empty() {
+                    return Err("ArchiveAction::Compress: epoch_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ArchiveAction::Retrieve { pattern } => {
+                if pattern.is_empty() {
+                    return Err("ArchiveAction::Retrieve: pattern is empty".to_string());
+                }
+                Ok(())
+            }
+            ArchiveAction::Archive { distinction_ids } => {
+                if distinction_ids.is_empty() {
+                    return Err("ArchiveAction::Archive: distinction_ids is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the essence agent.
+///
+/// The essence agent extracts and maintains the causal topology of the field.
+/// It creates the "DNA" or genome of the system.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EssenceAction {
+    /// Extract topology from a source.
+    ExtractTopology {
+        /// Source distinction ID to extract from.
+        source_id: String,
+    },
+    /// Synthesize DNA from topology.
+    SynthesizeDNA {
+        /// Topology JSON structure.
+        topology_json: serde_json::Value,
+    },
+    /// Regenerate from DNA.
+    Regenerate {
+        /// DNA distinction ID to regenerate from.
+        from_dna_id: String,
+    },
+    /// Store a genome.
+    StoreGenome {
+        /// Name of the genome.
+        name: String,
+        /// Genome distinction ID.
+        genome_id: String,
+    },
+}
+
+/// Serializable version of EssenceAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum EssenceActionSerializable {
+    ExtractTopology { source_id: String },
+    SynthesizeDNA { topology_json: serde_json::Value },
+    Regenerate { from_dna_id: String },
+    StoreGenome { name: String, genome_id: String },
+}
+
+impl From<&EssenceAction> for EssenceActionSerializable {
+    fn from(action: &EssenceAction) -> Self {
+        match action {
+            EssenceAction::ExtractTopology { source_id } => {
+                EssenceActionSerializable::ExtractTopology { source_id: source_id.clone() }
+            }
+            EssenceAction::SynthesizeDNA { topology_json } => {
+                EssenceActionSerializable::SynthesizeDNA {
+                    topology_json: topology_json.clone(),
+                }
+            }
+            EssenceAction::Regenerate { from_dna_id } => {
+                EssenceActionSerializable::Regenerate { from_dna_id: from_dna_id.clone() }
+            }
+            EssenceAction::StoreGenome { name, genome_id } => {
+                EssenceActionSerializable::StoreGenome {
+                    name: name.clone(),
+                    genome_id: genome_id.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl EssenceAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            EssenceAction::ExtractTopology { source_id } => {
+                if source_id.is_empty() {
+                    return Err("EssenceAction::ExtractTopology: source_id is empty".to_string());
+                }
+                Ok(())
+            }
+            EssenceAction::SynthesizeDNA { .. } => Ok(()),
+            EssenceAction::Regenerate { from_dna_id } => {
+                if from_dna_id.is_empty() {
+                    return Err("EssenceAction::Regenerate: from_dna_id is empty".to_string());
+                }
+                Ok(())
+            }
+            EssenceAction::StoreGenome { name, genome_id } => {
+                if name.is_empty() {
+                    return Err("EssenceAction::StoreGenome: name is empty".to_string());
+                }
+                if genome_id.is_empty() {
+                    return Err("EssenceAction::StoreGenome: genome_id is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the sleep agent.
+///
+/// The sleep agent performs rhythmic reorganization of the field,
+/// like sleep consolidating memories in biological systems.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SleepAction {
+    /// Enter a sleep phase.
+    EnterPhase {
+        /// Phase to enter.
+        phase: SleepPhase,
+    },
+    /// Consolidate from one tier to another.
+    Consolidate {
+        /// Source tier name.
+        from_tier: String,
+        /// Destination tier name.
+        to_tier: String,
+    },
+    /// Dream - random synthesis exploration.
+    Dream,
+    /// Wake from sleep.
+    Wake,
+}
+
+/// Serializable version of SleepAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum SleepActionSerializable {
+    EnterPhase { phase: SleepPhase },
+    Consolidate { from_tier: String, to_tier: String },
+    Dream,
+    Wake,
+}
+
+impl From<&SleepAction> for SleepActionSerializable {
+    fn from(action: &SleepAction) -> Self {
+        match action {
+            SleepAction::EnterPhase { phase } => {
+                SleepActionSerializable::EnterPhase { phase: *phase }
+            }
+            SleepAction::Consolidate { from_tier, to_tier } => {
+                SleepActionSerializable::Consolidate {
+                    from_tier: from_tier.clone(),
+                    to_tier: to_tier.clone(),
+                }
+            }
+            SleepAction::Dream => SleepActionSerializable::Dream,
+            SleepAction::Wake => SleepActionSerializable::Wake,
+        }
+    }
+}
+
+impl SleepAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            SleepAction::EnterPhase { .. } | SleepAction::Dream | SleepAction::Wake => Ok(()),
+            SleepAction::Consolidate { from_tier, to_tier } => {
+                if from_tier.is_empty() {
+                    return Err("SleepAction::Consolidate: from_tier is empty".to_string());
+                }
+                if to_tier.is_empty() {
+                    return Err("SleepAction::Consolidate: to_tier is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Sleep phases for rhythmic consolidation.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum SleepPhase {
+    /// Awake - normal operation.
+    Awake,
+    /// Light sleep - hot to warm consolidation.
+    LightSleep,
+    /// Deep sleep - warm to cold consolidation.
+    DeepSleep,
+    /// REM - pattern extraction and dreaming.
+    Rem,
+}
+
+/// Actions for the evolution agent.
+///
+/// The evolution agent performs natural selection on distinctions,
+/// preserving fit distinctions and archiving unfit ones.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EvolutionAction {
+    /// Evaluate fitness of a distinction.
+    EvaluateFitness {
+        /// Candidate ID to evaluate.
+        candidate_id: String,
+    },
+    /// Select fit distinctions from a population.
+    Select {
+        /// Population IDs to select from.
+        population_ids: Vec<String>,
+    },
+    /// Preserve fit distinctions.
+    Preserve {
+        /// Fit distinction IDs to preserve.
+        fit_ids: Vec<String>,
+    },
+    /// Archive unfit distinctions.
+    Archive {
+        /// Unfit distinction IDs to archive.
+        unfit_ids: Vec<String>,
+    },
+}
+
+/// Serializable version of EvolutionAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum EvolutionActionSerializable {
+    EvaluateFitness { candidate_id: String },
+    Select { population_ids: Vec<String> },
+    Preserve { fit_ids: Vec<String> },
+    Archive { unfit_ids: Vec<String> },
+}
+
+impl From<&EvolutionAction> for EvolutionActionSerializable {
+    fn from(action: &EvolutionAction) -> Self {
+        match action {
+            EvolutionAction::EvaluateFitness { candidate_id } => {
+                EvolutionActionSerializable::EvaluateFitness {
+                    candidate_id: candidate_id.clone(),
+                }
+            }
+            EvolutionAction::Select { population_ids } => {
+                EvolutionActionSerializable::Select {
+                    population_ids: population_ids.clone(),
+                }
+            }
+            EvolutionAction::Preserve { fit_ids } => {
+                EvolutionActionSerializable::Preserve { fit_ids: fit_ids.clone() }
+            }
+            EvolutionAction::Archive { unfit_ids } => {
+                EvolutionActionSerializable::Archive { unfit_ids: unfit_ids.clone() }
+            }
+        }
+    }
+}
+
+impl EvolutionAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            EvolutionAction::EvaluateFitness { candidate_id } => {
+                if candidate_id.is_empty() {
+                    return Err("EvolutionAction::EvaluateFitness: candidate_id is empty".to_string());
+                }
+                Ok(())
+            }
+            EvolutionAction::Select { population_ids } => {
+                if population_ids.is_empty() {
+                    return Err("EvolutionAction::Select: population_ids is empty".to_string());
+                }
+                Ok(())
+            }
+            EvolutionAction::Preserve { fit_ids } => {
+                if fit_ids.is_empty() {
+                    return Err("EvolutionAction::Preserve: fit_ids is empty".to_string());
+                }
+                Ok(())
+            }
+            EvolutionAction::Archive { unfit_ids } => {
+                if unfit_ids.is_empty() {
+                    return Err("EvolutionAction::Archive: unfit_ids is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the lineage agent.
+///
+/// The lineage agent tracks causal ancestry, maintaining the family
+/// tree of how distinctions emerged from one another.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LineageAction {
+    /// Record the birth of a distinction.
+    RecordBirth {
+        /// Child distinction ID born.
+        child_id: String,
+        /// Parent distinction IDs.
+        parent_ids: Vec<String>,
+    },
+    /// Trace ancestors of a distinction.
+    TraceAncestors {
+        /// Starting distinction ID.
+        from_id: String,
+    },
+    /// Trace descendants of a distinction.
+    TraceDescendants {
+        /// Starting distinction ID.
+        from_id: String,
+    },
+    /// Find common ancestor of two distinctions.
+    FindCommonAncestor {
+        /// First distinction ID.
+        a_id: String,
+        /// Second distinction ID.
+        b_id: String,
+    },
+}
+
+/// Serializable version of LineageAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum LineageActionSerializable {
+    RecordBirth { child_id: String, parent_ids: Vec<String> },
+    TraceAncestors { from_id: String },
+    TraceDescendants { from_id: String },
+    FindCommonAncestor { a_id: String, b_id: String },
+}
+
+impl From<&LineageAction> for LineageActionSerializable {
+    fn from(action: &LineageAction) -> Self {
+        match action {
+            LineageAction::RecordBirth { child_id, parent_ids } => {
+                LineageActionSerializable::RecordBirth {
+                    child_id: child_id.clone(),
+                    parent_ids: parent_ids.clone(),
+                }
+            }
+            LineageAction::TraceAncestors { from_id } => {
+                LineageActionSerializable::TraceAncestors { from_id: from_id.clone() }
+            }
+            LineageAction::TraceDescendants { from_id } => {
+                LineageActionSerializable::TraceDescendants { from_id: from_id.clone() }
+            }
+            LineageAction::FindCommonAncestor { a_id, b_id } => {
+                LineageActionSerializable::FindCommonAncestor {
+                    a_id: a_id.clone(),
+                    b_id: b_id.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl LineageAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            LineageAction::RecordBirth { child_id, parent_ids } => {
+                if child_id.is_empty() {
+                    return Err("LineageAction::RecordBirth: child_id is empty".to_string());
+                }
+                if parent_ids.is_empty() {
+                    return Err("LineageAction::RecordBirth: parent_ids is empty".to_string());
+                }
+                for (i, parent_id) in parent_ids.iter().enumerate() {
+                    if parent_id.is_empty() {
+                        return Err(format!(
+                            "LineageAction::RecordBirth: parent_ids[{}] is empty",
+                            i
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            LineageAction::TraceAncestors { from_id }
+            | LineageAction::TraceDescendants { from_id } => {
+                if from_id.is_empty() {
+                    return Err(format!("{:?}: from_id is empty", self));
+                }
+                Ok(())
+            }
+            LineageAction::FindCommonAncestor { a_id, b_id } => {
+                if a_id.is_empty() {
+                    return Err("LineageAction::FindCommonAncestor: a_id is empty".to_string());
+                }
+                if b_id.is_empty() {
+                    return Err("LineageAction::FindCommonAncestor: b_id is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the perspective agent.
+///
+/// The perspective agent maintains derived views on the field,
+/// like materialized views in a database but as synthesized distinctions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PerspectiveAction {
+    /// Form a new view from a query.
+    FormView {
+        /// Query JSON.
+        query_json: serde_json::Value,
+        /// Name for the view.
+        name: String,
+    },
+    /// Refresh a view.
+    Refresh {
+        /// View distinction ID to refresh.
+        view_id: String,
+    },
+    /// Compose two views into one.
+    Compose {
+        /// First view distinction ID.
+        view_a_id: String,
+        /// Second view distinction ID.
+        view_b_id: String,
+    },
+    /// Project from one view onto another.
+    Project {
+        /// Source view distinction ID.
+        from_view_id: String,
+        /// Target projection.
+        onto_query: String,
+    },
+}
+
+/// Serializable version of PerspectiveAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum PerspectiveActionSerializable {
+    FormView { query_json: serde_json::Value, name: String },
+    Refresh { view_id: String },
+    Compose { view_a_id: String, view_b_id: String },
+    Project { from_view_id: String, onto_query: String },
+}
+
+impl From<&PerspectiveAction> for PerspectiveActionSerializable {
+    fn from(action: &PerspectiveAction) -> Self {
+        match action {
+            PerspectiveAction::FormView { query_json, name } => {
+                PerspectiveActionSerializable::FormView {
+                    query_json: query_json.clone(),
+                    name: name.clone(),
+                }
+            }
+            PerspectiveAction::Refresh { view_id } => {
+                PerspectiveActionSerializable::Refresh { view_id: view_id.clone() }
+            }
+            PerspectiveAction::Compose { view_a_id, view_b_id } => {
+                PerspectiveActionSerializable::Compose {
+                    view_a_id: view_a_id.clone(),
+                    view_b_id: view_b_id.clone(),
+                }
+            }
+            PerspectiveAction::Project { from_view_id, onto_query } => {
+                PerspectiveActionSerializable::Project {
+                    from_view_id: from_view_id.clone(),
+                    onto_query: onto_query.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl PerspectiveAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            PerspectiveAction::FormView { name, .. } => {
+                if name.is_empty() {
+                    return Err("PerspectiveAction::FormView: name is empty".to_string());
+                }
+                Ok(())
+            }
+            PerspectiveAction::Refresh { view_id } => {
+                if view_id.is_empty() {
+                    return Err("PerspectiveAction::Refresh: view_id is empty".to_string());
+                }
+                Ok(())
+            }
+            PerspectiveAction::Compose { view_a_id, view_b_id } => {
+                if view_a_id.is_empty() {
+                    return Err("PerspectiveAction::Compose: view_a_id is empty".to_string());
+                }
+                if view_b_id.is_empty() {
+                    return Err("PerspectiveAction::Compose: view_b_id is empty".to_string());
+                }
+                Ok(())
+            }
+            PerspectiveAction::Project { from_view_id, onto_query } => {
+                if from_view_id.is_empty() {
+                    return Err("PerspectiveAction::Project: from_view_id is empty".to_string());
+                }
+                if onto_query.is_empty() {
+                    return Err("PerspectiveAction::Project: onto_query is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the identity agent.
+///
+/// The identity agent manages selfhood within the field - authentication,
+/// capabilities, and proof-of-work identity.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IdentityAction {
+    /// Mine a new identity.
+    MineIdentity {
+        /// Proof-of-work as JSON.
+        proof_of_work_json: serde_json::Value,
+    },
+    /// Authenticate an identity.
+    Authenticate {
+        /// Identity ID to authenticate.
+        identity_id: String,
+        /// Challenge to verify.
+        challenge: String,
+    },
+    /// Grant a capability.
+    GrantCapability {
+        /// Granter identity ID.
+        from_id: String,
+        /// Grantee identity ID.
+        to_id: String,
+        /// Permission being granted.
+        permission: String,
+    },
+    /// Verify access to a resource.
+    VerifyAccess {
+        /// Identity ID requesting access.
+        identity_id: String,
+        /// Resource being accessed.
+        resource: String,
+    },
+}
+
+/// Serializable version of IdentityAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum IdentityActionSerializable {
+    MineIdentity { proof_of_work_json: serde_json::Value },
+    Authenticate { identity_id: String, challenge: String },
+    GrantCapability { from_id: String, to_id: String, permission: String },
+    VerifyAccess { identity_id: String, resource: String },
+}
+
+impl From<&IdentityAction> for IdentityActionSerializable {
+    fn from(action: &IdentityAction) -> Self {
+        match action {
+            IdentityAction::MineIdentity { proof_of_work_json } => {
+                IdentityActionSerializable::MineIdentity {
+                    proof_of_work_json: proof_of_work_json.clone(),
+                }
+            }
+            IdentityAction::Authenticate { identity_id, challenge } => {
+                IdentityActionSerializable::Authenticate {
+                    identity_id: identity_id.clone(),
+                    challenge: challenge.clone(),
+                }
+            }
+            IdentityAction::GrantCapability { from_id, to_id, permission } => {
+                IdentityActionSerializable::GrantCapability {
+                    from_id: from_id.clone(),
+                    to_id: to_id.clone(),
+                    permission: permission.clone(),
+                }
+            }
+            IdentityAction::VerifyAccess { identity_id, resource } => {
+                IdentityActionSerializable::VerifyAccess {
+                    identity_id: identity_id.clone(),
+                    resource: resource.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl IdentityAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            IdentityAction::MineIdentity { .. } => Ok(()),
+            IdentityAction::Authenticate { identity_id, challenge } => {
+                if identity_id.is_empty() {
+                    return Err("IdentityAction::Authenticate: identity_id is empty".to_string());
+                }
+                if challenge.is_empty() {
+                    return Err("IdentityAction::Authenticate: challenge is empty".to_string());
+                }
+                Ok(())
+            }
+            IdentityAction::GrantCapability { from_id, to_id, permission } => {
+                if from_id.is_empty() {
+                    return Err("IdentityAction::GrantCapability: from_id is empty".to_string());
+                }
+                if to_id.is_empty() {
+                    return Err("IdentityAction::GrantCapability: to_id is empty".to_string());
+                }
+                if permission.is_empty() {
+                    return Err("IdentityAction::GrantCapability: permission is empty".to_string());
+                }
+                Ok(())
+            }
+            IdentityAction::VerifyAccess { identity_id, resource } => {
+                if identity_id.is_empty() {
+                    return Err("IdentityAction::VerifyAccess: identity_id is empty".to_string());
+                }
+                if resource.is_empty() {
+                    return Err("IdentityAction::VerifyAccess: resource is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Actions for the network agent.
+///
+/// The network agent manages distributed awareness across multiple
+/// nodes in the Koru field.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NetworkAction {
+    /// Join the network with a peer.
+    Join {
+        /// Peer address to join.
+        peer_address: String,
+    },
+    /// Synchronize with a peer.
+    Synchronize {
+        /// Peer ID to synchronize with.
+        peer_id: String,
+    },
+    /// Reconcile differences with peers.
+    Reconcile {
+        /// Difference IDs to reconcile.
+        difference_ids: Vec<String>,
+    },
+    /// Broadcast a message to all peers.
+    Broadcast {
+        /// Message JSON to broadcast.
+        message_json: serde_json::Value,
+    },
+    /// Gossip state to peers.
+    Gossip {
+        /// State JSON to gossip.
+        state_json: serde_json::Value,
+    },
+}
+
+/// Serializable version of NetworkAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum NetworkActionSerializable {
+    Join { peer_address: String },
+    Synchronize { peer_id: String },
+    Reconcile { difference_ids: Vec<String> },
+    Broadcast { message_json: serde_json::Value },
+    Gossip { state_json: serde_json::Value },
+}
+
+impl From<&NetworkAction> for NetworkActionSerializable {
+    fn from(action: &NetworkAction) -> Self {
+        match action {
+            NetworkAction::Join { peer_address } => {
+                NetworkActionSerializable::Join { peer_address: peer_address.clone() }
+            }
+            NetworkAction::Synchronize { peer_id } => {
+                NetworkActionSerializable::Synchronize { peer_id: peer_id.clone() }
+            }
+            NetworkAction::Reconcile { difference_ids } => {
+                NetworkActionSerializable::Reconcile {
+                    difference_ids: difference_ids.clone(),
+                }
+            }
+            NetworkAction::Broadcast { message_json } => {
+                NetworkActionSerializable::Broadcast {
+                    message_json: message_json.clone(),
+                }
+            }
+            NetworkAction::Gossip { state_json } => {
+                NetworkActionSerializable::Gossip { state_json: state_json.clone() }
+            }
+        }
+    }
+}
+
+impl NetworkAction {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            NetworkAction::Join { peer_address } => {
+                if peer_address.is_empty() {
+                    return Err("NetworkAction::Join: peer_address is empty".to_string());
+                }
+                Ok(())
+            }
+            NetworkAction::Synchronize { peer_id } => {
+                if peer_id.is_empty() {
+                    return Err("NetworkAction::Synchronize: peer_id is empty".to_string());
+                }
+                Ok(())
+            }
+            NetworkAction::Reconcile { difference_ids } => {
+                if difference_ids.is_empty() {
+                    return Err("NetworkAction::Reconcile: difference_ids is empty".to_string());
+                }
+                Ok(())
+            }
+            NetworkAction::Broadcast { .. } | NetworkAction::Gossip { .. } => Ok(()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_koru_action_category() {
+        let action = KoruAction::Storage(StorageAction::Store {
+            namespace: "users".to_string(),
+            key: "alice".to_string(),
+            value_json: serde_json::json!({"name": "Alice"}),
+        });
+        assert_eq!(action.category(), "STORAGE");
+    }
+
+    #[test]
+    fn test_canonicalizable() {
+        let engine = Arc::new(DistinctionEngine::new());
+
+        let action = KoruAction::Storage(StorageAction::Store {
+            namespace: "users".to_string(),
+            key: "alice".to_string(),
+            value_json: serde_json::json!({"name": "Alice"}),
+        });
+
+        let distinction = action.to_canonical_structure(&engine);
+        assert!(!distinction.id().is_empty());
+    }
+
+    #[test]
+    fn test_storage_action_validation() {
+        let valid = KoruAction::Storage(StorageAction::Store {
+            namespace: "users".to_string(),
+            key: "alice".to_string(),
+            value_json: serde_json::json!({}),
+        });
+        assert!(valid.validate().is_ok());
+
+        let invalid = KoruAction::Storage(StorageAction::Store {
+            namespace: "".to_string(),
+            key: "alice".to_string(),
+            value_json: serde_json::json!({}),
+        });
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn test_temperature_levels() {
+        assert_ne!(TemperatureLevel::Hot, TemperatureLevel::Cold);
+        assert_ne!(TemperatureLevel::Warm, TemperatureLevel::Cool);
+    }
+
+    #[test]
+    fn test_sleep_phases() {
+        assert_ne!(SleepPhase::Awake, SleepPhase::DeepSleep);
+        assert_ne!(SleepPhase::LightSleep, SleepPhase::Rem);
+    }
+
+    #[test]
+    fn test_action_serialization() {
+        let original = KoruAction::Storage(StorageAction::Store {
+            namespace: "users".to_string(),
+            key: "alice".to_string(),
+            value_json: serde_json::json!({"name": "Alice"}),
+        });
+
+        // Convert to serializable
+        let serializable = ActionSerializable::from(&original);
+        
+        // Serialize to bytes - should succeed
+        let bytes = bincode::serialize(&serializable);
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+        
+        // Verify it's the right variant
+        match (&original, &serializable) {
+            (KoruAction::Storage(_), ActionSerializable::Storage(_)) => {}
+            _ => panic!("Serialization failed"),
+        }
+    }
+
+    #[test]
+    fn test_action_to_bytes() {
+        let action = KoruAction::Storage(StorageAction::Store {
+            namespace: "users".to_string(),
+            key: "alice".to_string(),
+            value_json: serde_json::json!({"name": "Alice"}),
+        });
+
+        let bytes = action.to_bytes();
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+    }
+}
