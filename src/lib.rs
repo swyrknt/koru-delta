@@ -128,6 +128,7 @@ pub mod auth;
 
 // Storage module (public for testing and cluster operations)
 pub mod storage;
+pub mod storage_agent;
 
 // Query module
 pub mod query;
