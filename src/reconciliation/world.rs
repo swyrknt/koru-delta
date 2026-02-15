@@ -399,7 +399,7 @@ impl World {
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
-            graph: CausalGraph::new(),
+            graph: CausalGraph::new(&crate::engine::SharedEngine::new()),
         }
     }
 

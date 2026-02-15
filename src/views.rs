@@ -1,35 +1,50 @@
-/// Materialized views for KoruDelta.
+/// Perspective Agent: Materialized views with LCA architecture.
 ///
-/// This module provides materialized views that automatically maintain
+/// This agent provides materialized views that automatically maintain
 /// pre-computed query results. Views can be:
 ///
 /// - **Created** from a query definition
 /// - **Refreshed** on demand or automatically
 /// - **Queried** directly for fast access to computed results
 ///
+/// ## LCA Architecture
+///
+/// As a Local Causal Agent, all operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+///
+/// The Perspective Agent's local root is `RootType::Perspective` (🔮 PERSPECTIVE).
+///
 /// # Example
 ///
 /// ```ignore
-/// use koru_delta::views::{ViewDefinition, ViewManager};
+/// use koru_delta::views::{ViewDefinition, PerspectiveAgent};
 /// use koru_delta::query::{Query, Filter, Aggregation};
+/// use koru_delta::engine::SharedEngine;
 ///
 /// // Create a view for active users over 21
+/// let engine = SharedEngine::new();
 /// let view_def = ViewDefinition::new("active_adults", "users")
 ///     .with_query(Query::new()
 ///         .filter(Filter::eq("status", "active"))
 ///         .filter(Filter::gte("age", 21)));
 ///
-/// let manager = ViewManager::new(storage);
+/// let manager = PerspectiveAgent::new(storage, &engine);
 /// manager.create_view(view_def)?;
 ///
 /// // Query the view
 /// let results = manager.query_view("active_adults")?;
 /// ```
+use crate::actions::PerspectiveAction;
+use crate::engine::{FieldHandle, SharedEngine};
 use crate::error::{DeltaError, DeltaResult};
 use crate::query::{Query, QueryExecutor, QueryRecord, QueryResult};
+use crate::roots::RootType;
 use crate::storage::CausalStorage;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -93,6 +108,8 @@ pub struct ViewData {
     pub last_refreshed: DateTime<Utc>,
     /// Total record count.
     pub total_count: usize,
+    /// View distinction ID (synthesized representation)
+    pub view_distinction_id: Option<String>,
 }
 
 impl ViewData {
@@ -103,6 +120,7 @@ impl ViewData {
             records: result.records,
             last_refreshed: Utc::now(),
             total_count: result.total_count,
+            view_distinction_id: None,
         }
     }
 
@@ -148,20 +166,37 @@ impl From<&ViewData> for ViewInfo {
 /// Namespace for persisting view definitions.
 pub const VIEW_NAMESPACE: &str = "__views";
 
-/// Manager for materialized views.
+/// Perspective Agent - materialized views with LCA architecture.
 ///
 /// Handles creation, refresh, and querying of views.
-pub struct ViewManager {
+/// All operations are synthesized through the unified field.
+pub struct PerspectiveAgent {
     storage: Arc<CausalStorage>,
+    /// Views stored as distinctions
     views: DashMap<String, ViewData>,
+    /// LCA: Local root distinction (Root: PERSPECTIVE)
+    local_root: Distinction,
+    /// LCA: Handle to the shared field
+    field: FieldHandle,
 }
 
-impl ViewManager {
-    /// Create a new view manager.
-    pub fn new(storage: Arc<CausalStorage>) -> Self {
+impl PerspectiveAgent {
+    /// Create a new perspective agent.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent initializes with:
+    /// - `local_root` = RootType::Perspective (from shared field roots)
+    /// - `field` = Handle to the unified distinction engine
+    pub fn new(storage: Arc<CausalStorage>, shared_engine: &SharedEngine) -> Self {
+        let local_root = shared_engine.root(RootType::Perspective).clone();
+        let field = FieldHandle::new(shared_engine);
+
         let manager = Self {
             storage,
             views: DashMap::new(),
+            local_root,
+            field,
         };
 
         // Load existing views from storage
@@ -203,6 +238,10 @@ impl ViewManager {
     }
 
     /// Create a new view.
+    ///
+    /// # LCA Pattern
+    ///
+    /// View creation synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔFormView_Action`
     pub fn create_view(&self, definition: ViewDefinition) -> DeltaResult<ViewInfo> {
         let name = definition.name.clone();
 
@@ -224,6 +263,15 @@ impl ViewManager {
                 )));
             }
         }
+
+        // Synthesize form view action
+        let query_json = serde_json::to_value(&definition.query)
+            .unwrap_or_else(|_| serde_json::json!({}));
+        let action = PerspectiveAction::FormView {
+            query_json: query_json.clone(),
+            name: name.clone(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         // Execute the query to populate the view.
         let result = self.execute_view_query(&definition)?;
@@ -253,11 +301,21 @@ impl ViewManager {
     }
 
     /// Refresh a view.
+    ///
+    /// # LCA Pattern
+    ///
+    /// View refresh synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔRefresh_Action`
     pub fn refresh_view(&self, name: &str) -> DeltaResult<ViewInfo> {
         let mut entry = self
             .views
             .get_mut(name)
             .ok_or_else(|| DeltaError::StorageError(format!("View '{}' not found", name)))?;
+
+        // Synthesize refresh action
+        let action = PerspectiveAction::Refresh {
+            view_id: name.to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         let definition = entry.definition.clone();
         let result = self.execute_view_query(&definition)?;
@@ -378,7 +436,11 @@ impl ViewManager {
         self.views.len()
     }
 
-    /// Notify the manager of a write to refresh auto-refresh views.
+    /// Notify the agent of a write to refresh auto-refresh views.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Write notification synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔProject_Action`
     pub fn on_write(&self, collection: &str, _key: &str) -> DeltaResult<()> {
         let auto_refresh_views: Vec<String> = self
             .views
@@ -415,7 +477,48 @@ impl ViewManager {
 
         QueryExecutor::execute(&definition.query, items)
     }
+
+    /// Internal synthesis helper.
+    ///
+    /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    fn synthesize_action_internal(&self, action: PerspectiveAction) -> Distinction {
+        let engine = self.field.engine_arc();
+        let action_distinction = action.to_canonical_structure(engine);
+        engine.synthesize(&self.local_root, &action_distinction)
+    }
 }
+
+/// LCA Trait Implementation for PerspectiveAgent
+///
+/// All operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+impl LocalCausalAgent for PerspectiveAgent {
+    type ActionData = PerspectiveAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: PerspectiveAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
+/// Backward-compatible type alias for existing code.
+pub type ViewManager = PerspectiveAgent;
 
 #[cfg(test)]
 mod tests {
@@ -423,6 +526,10 @@ mod tests {
     use crate::query::{Aggregation, Filter};
     use koru_lambda_core::DistinctionEngine;
     use serde_json::json;
+
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
 
     fn create_test_storage() -> Arc<CausalStorage> {
         let engine = Arc::new(DistinctionEngine::new());
@@ -432,6 +539,7 @@ mod tests {
     #[test]
     fn test_view_creation() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
 
         // Add some test data.
         storage
@@ -456,7 +564,7 @@ mod tests {
             )
             .unwrap();
 
-        let manager = ViewManager::new(storage);
+        let manager = PerspectiveAgent::new(storage, &engine);
 
         // Create a view for active users.
         let definition = ViewDefinition::new("active_users", "users")
@@ -472,6 +580,7 @@ mod tests {
     #[test]
     fn test_view_query() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
 
         storage
             .put(
@@ -495,7 +604,7 @@ mod tests {
             )
             .unwrap();
 
-        let manager = ViewManager::new(storage);
+        let manager = PerspectiveAgent::new(storage, &engine);
 
         let definition = ViewDefinition::new("tools_view", "products")
             .with_query(Query::new().filter(Filter::eq("category", json!("tools"))));
@@ -509,10 +618,11 @@ mod tests {
     #[test]
     fn test_view_refresh() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
 
         storage.put("items", "a", json!({"value": 1})).unwrap();
 
-        let manager = ViewManager::new(storage.clone());
+        let manager = PerspectiveAgent::new(storage.clone(), &engine);
 
         let definition = ViewDefinition::new("all_items", "items");
         manager.create_view(definition).unwrap();
@@ -540,10 +650,11 @@ mod tests {
     #[test]
     fn test_view_list_and_delete() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
 
         storage.put("data", "x", json!(1)).unwrap();
 
-        let manager = ViewManager::new(storage);
+        let manager = PerspectiveAgent::new(storage, &engine);
 
         manager
             .create_view(ViewDefinition::new("view1", "data"))
@@ -568,9 +679,10 @@ mod tests {
     #[test]
     fn test_duplicate_view_error() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
         storage.put("data", "x", json!(1)).unwrap();
 
-        let manager = ViewManager::new(storage);
+        let manager = PerspectiveAgent::new(storage, &engine);
 
         manager
             .create_view(ViewDefinition::new("myview", "data"))
@@ -583,6 +695,7 @@ mod tests {
     #[test]
     fn test_view_with_aggregation() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
 
         storage
             .put("sales", "s1", json!({"amount": 100, "region": "north"}))
@@ -594,7 +707,7 @@ mod tests {
             .put("sales", "s3", json!({"amount": 150, "region": "north"}))
             .unwrap();
 
-        let manager = ViewManager::new(storage);
+        let manager = PerspectiveAgent::new(storage, &engine);
 
         let definition = ViewDefinition::new("north_sales", "sales").with_query(
             Query::new()
@@ -611,10 +724,11 @@ mod tests {
     #[test]
     fn test_auto_refresh() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
 
         storage.put("counters", "c1", json!({"value": 1})).unwrap();
 
-        let manager = ViewManager::new(storage.clone());
+        let manager = PerspectiveAgent::new(storage.clone(), &engine);
 
         let definition = ViewDefinition::new("counters_view", "counters").auto_refresh(true);
 
@@ -636,6 +750,7 @@ mod tests {
     #[test]
     fn test_query_view_with_additional_filter() {
         let storage = create_test_storage();
+        let engine = create_test_engine();
 
         storage
             .put(
@@ -659,7 +774,7 @@ mod tests {
             )
             .unwrap();
 
-        let manager = ViewManager::new(storage);
+        let manager = PerspectiveAgent::new(storage, &engine);
 
         // Create a view of all users.
         let definition = ViewDefinition::new("all_users", "users");
@@ -672,5 +787,39 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.records.len(), 2); // Alice and Charlie
+    }
+
+    #[test]
+    fn test_lca_trait_implementation() {
+        let storage = create_test_storage();
+        let engine = create_test_engine();
+        let mut agent = PerspectiveAgent::new(storage, &engine);
+
+        // Test get_current_root
+        let root = agent.get_current_root();
+        let root_id = root.id().to_string();
+        assert!(!root_id.is_empty());
+
+        // Test synthesize_action
+        let action = PerspectiveAction::FormView {
+            query_json: serde_json::json!({}),
+            name: "test_view".to_string(),
+        };
+        let engine_arc = Arc::clone(agent.field.engine_arc());
+        let new_root = agent.synthesize_action(action, &engine_arc);
+        assert!(!new_root.id().is_empty());
+        assert_ne!(new_root.id(), root_id);
+
+        // Test update_local_root
+        agent.update_local_root(new_root.clone());
+        assert_eq!(agent.get_current_root().id(), new_root.id());
+    }
+
+    #[test]
+    fn test_backward_compatible_alias() {
+        // Ensure backward compatibility works
+        let storage = create_test_storage();
+        let engine = create_test_engine();
+        let _view_manager: ViewManager = PerspectiveAgent::new(storage, &engine);
     }
 }

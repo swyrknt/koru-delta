@@ -219,7 +219,7 @@ mod tests {
         let process = GenomeUpdateProcess::new();
         let engine = create_test_engine();
         let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -235,7 +235,7 @@ mod tests {
         let process = GenomeUpdateProcess::new();
         let engine = create_test_engine();
         let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -255,7 +255,7 @@ mod tests {
         let process = GenomeUpdateProcess::with_config(config);
         let engine = create_test_engine();
         let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -288,7 +288,7 @@ mod tests {
         let process = GenomeUpdateProcess::new();
         let engine = create_test_engine();
         let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 

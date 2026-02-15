@@ -485,7 +485,7 @@ mod tests {
     fn test_extract_genome() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         // Add some nodes
         causal_graph.add_node("root1".to_string());
@@ -508,7 +508,7 @@ mod tests {
     fn test_express_genome() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -538,7 +538,7 @@ mod tests {
     fn test_get_latest_genome() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -558,7 +558,7 @@ mod tests {
     fn test_serialize_deserialize() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -588,7 +588,7 @@ mod tests {
         let engine = create_test_engine();
         let essence = EssenceAgent::with_config(config, &engine);
 
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
         let genome = essence.extract_genome(&causal_graph, 0, 100);
 
         // Should still work with custom config
@@ -600,7 +600,7 @@ mod tests {
     fn test_stats() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 

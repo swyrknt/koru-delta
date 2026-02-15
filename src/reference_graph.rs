@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn test_find_garbage() {
         let ref_graph = ReferenceGraph::new();
-        let causal_graph = CausalGraph::new();
+        let causal_graph = CausalGraph::new(&crate::engine::SharedEngine::new());
 
         // Setup causal graph:
         // root -> orphan -> current

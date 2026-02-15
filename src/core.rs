@@ -353,8 +353,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             config.auth.clone(),
         ));
 
-        // Initialize views
-        let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
+        // Initialize views with LCA perspective agent
+        let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
@@ -443,8 +443,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             config.auth.clone(),
         ));
 
-        // Initialize views
-        let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
+        // Initialize views with LCA perspective agent
+        let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
@@ -750,8 +750,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             config.auth.clone(),
         ));
 
-        // Initialize views
-        let views = Arc::new(ViewManager::new(Arc::clone(&storage)));
+        // Initialize views with LCA perspective agent
+        let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]

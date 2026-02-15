@@ -28,11 +28,11 @@ impl ProcessRunner {
     ///
     /// # LCA Pattern
     ///
-    /// Requires a SharedEngine to initialize the Sleep Agent (ConsolidationProcess).
+    /// Requires a SharedEngine to initialize LCA agents.
     pub fn new(shared_engine: &SharedEngine) -> Self {
         Self {
             consolidation: ConsolidationProcess::new(shared_engine),
-            distillation: DistillationProcess::new(),
+            distillation: DistillationProcess::new(shared_engine),
             genome_update: GenomeUpdateProcess::new(),
         }
     }
@@ -41,7 +41,7 @@ impl ProcessRunner {
     ///
     /// # LCA Pattern
     ///
-    /// Requires a SharedEngine to initialize the Sleep Agent (ConsolidationProcess).
+    /// Requires a SharedEngine to initialize LCA agents.
     pub fn with_config(
         consolidation: ConsolidationConfig,
         distillation: DistillationConfig,
@@ -50,7 +50,7 @@ impl ProcessRunner {
     ) -> Self {
         Self {
             consolidation: ConsolidationProcess::with_config(consolidation, shared_engine),
-            distillation: DistillationProcess::with_config(distillation),
+            distillation: DistillationProcess::with_config(distillation, shared_engine),
             genome_update: GenomeUpdateProcess::with_config(genome),
         }
     }

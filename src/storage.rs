@@ -82,9 +82,13 @@ impl CausalStorage {
     /// The storage captures emergent behavior from koru-lambda-core operations
     /// through causal and reference graphs.
     pub fn new(engine: Arc<DistinctionEngine>) -> Self {
+        // Create a temporary SharedEngine for lineage agent initialization
+        // In production, this would come from the field context
+        let shared_engine = crate::engine::SharedEngine::with_engine(Arc::clone(&engine));
+        
         Self {
             engine,
-            causal_graph: CausalGraph::new(),
+            causal_graph: CausalGraph::new(&shared_engine),
             reference_graph: ReferenceGraph::new(),
             current_state: DashMap::new(),
             version_store: DashMap::new(),

@@ -1,8 +1,17 @@
-/// Causal Graph: The web of becoming.
+/// Lineage Agent: The web of becoming with LCA architecture.
 ///
-/// This module implements the causal graph data structure that tracks
+/// This agent implements the causal graph data structure that tracks
 /// how distinctions emerge from prior distinctions. Every synthesis
 /// creates a node in this graph, with edges representing causality.
+///
+/// ## LCA Architecture
+///
+/// As a Local Causal Agent, all operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+///
+/// The Lineage Agent's local root is `RootType::Lineage` (👁️ LINEAGE).
 ///
 /// # The Causal Graph
 ///
@@ -25,19 +34,26 @@
 /// distinction has parents (what caused it) and children (what it caused).
 /// The frontier is the "current generation" - the latest distinctions
 /// that haven't yet caused anything new.
+use crate::actions::LineageAction;
+use crate::engine::{FieldHandle, SharedEngine};
+use crate::roots::RootType;
 use dashmap::{DashMap, DashSet};
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 
 /// A unique identifier for a distinction in the causal graph.
 pub type DistinctionId = String;
 
-/// The causal graph tracking how distinctions emerge from one another.
+/// The Lineage Agent tracking how distinctions emerge from one another with LCA architecture.
 ///
 /// This is the foundation of the distinction-driven system. Every synthesis
 /// adds nodes and edges to this graph, creating a complete history of
 /// how the system has evolved.
-#[derive(Debug, Default)]
-pub struct CausalGraph {
+///
+/// All operations are synthesized through the unified field.
+#[derive(Debug)]
+pub struct LineageAgent {
     /// For each distinction, its causal parents (what caused it)
     /// A distinction can have multiple parents (merge points)
     parents: DashMap<DistinctionId, Vec<DistinctionId>>,
@@ -51,18 +67,54 @@ pub struct CausalGraph {
 
     /// Current epoch (for garbage collection)
     epoch: std::sync::atomic::AtomicU64,
+
+    /// LCA: Local root distinction (Root: LINEAGE)
+    local_root: Distinction,
+
+    /// LCA: Handle to the shared field
+    field: FieldHandle,
+
+    /// Family tree - synthesis of all lineage
+    /// Updated as new distinctions are added to the graph
+    #[allow(dead_code)]
+    family_tree: Distinction,
 }
 
-impl CausalGraph {
-    /// Create a new empty causal graph.
-    pub fn new() -> Self {
-        Self::default()
+impl LineageAgent {
+    /// Create a new empty lineage agent.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent initializes with:
+    /// - `local_root` = RootType::Lineage (from shared field roots)
+    /// - `field` = Handle to the unified distinction engine
+    /// - `family_tree` = The synthesis of all lineage
+    pub fn new(shared_engine: &SharedEngine) -> Self {
+        let local_root = shared_engine.root(RootType::Lineage).clone();
+        let field = FieldHandle::new(shared_engine);
+
+        // Initial family tree is just the local root
+        let family_tree = local_root.clone();
+
+        Self {
+            parents: DashMap::new(),
+            children: DashMap::new(),
+            nodes: DashSet::new(),
+            epoch: std::sync::atomic::AtomicU64::new(0),
+            local_root,
+            field,
+            family_tree,
+        }
     }
 
     /// Add a distinction to the graph.
     ///
     /// This creates a new node with no parents or children.
     /// Use `add_edge` to establish causal relationships.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Birth is synthesized: `ΔNew = ΔLocal_Root ⊕ ΔRecordBirth_Action`
     ///
     /// # Arguments
     ///
@@ -71,11 +123,20 @@ impl CausalGraph {
     /// # Example
     ///
     /// ```rust
-    /// use koru_delta::causal_graph::CausalGraph;
-    /// let graph = CausalGraph::new();
-    /// graph.add_node("dist_1".to_string());
+    /// use koru_delta::causal_graph::LineageAgent;
+    /// use koru_delta::engine::SharedEngine;
+    /// let engine = SharedEngine::new();
+    /// let lineage = LineageAgent::new(&engine);
+    /// lineage.add_node("dist_1".to_string());
     /// ```
     pub fn add_node(&self, id: DistinctionId) {
+        // Synthesize record birth action
+        let action = LineageAction::RecordBirth {
+            child_id: id.clone(),
+            parent_ids: vec![],
+        };
+        let _ = self.synthesize_action_internal(action);
+
         self.nodes.insert(id);
     }
 
@@ -101,7 +162,7 @@ impl CausalGraph {
             .push(child.clone());
 
         // Add to child's parents list
-        self.parents.entry(child).or_default().push(parent);
+        self.parents.entry(child.clone()).or_default().push(parent);
     }
 
     /// Add a node with its parents in one operation.
@@ -123,11 +184,21 @@ impl CausalGraph {
     }
 
     /// Get all ancestors of a distinction (causal history).
+    ///
+    /// # LCA Pattern
+    ///
+    /// Tracing synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔTraceAncestors_Action`
     pub fn ancestors(&self, id: impl AsRef<str>) -> Vec<DistinctionId> {
         let id = id.as_ref();
         if !self.nodes.contains(id) {
             return Vec::new();
         }
+
+        // Synthesize trace ancestors action
+        let action = LineageAction::TraceAncestors {
+            from_id: id.to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         let mut ancestors = Vec::new();
         let mut visited = HashSet::new();
@@ -159,11 +230,21 @@ impl CausalGraph {
     }
 
     /// Get all descendants of a distinction (causal future).
+    ///
+    /// # LCA Pattern
+    ///
+    /// Tracing synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔTraceDescendants_Action`
     pub fn descendants(&self, id: impl AsRef<str>) -> Vec<DistinctionId> {
         let id = id.as_ref();
         if !self.nodes.contains(id) {
             return Vec::new();
         }
+
+        // Synthesize trace descendants action
+        let action = LineageAction::TraceDescendants {
+            from_id: id.to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         let mut descendants = Vec::new();
         let mut visited = HashSet::new();
@@ -195,12 +276,23 @@ impl CausalGraph {
     }
 
     /// Find the least common ancestor (LCA) of two distinctions.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Finding LCA synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔFindCommonAncestor_Action`
     pub fn lca(&self, a: impl AsRef<str>, b: impl AsRef<str>) -> Option<DistinctionId> {
         let a = a.as_ref();
         let b = b.as_ref();
         if !self.nodes.contains(a) || !self.nodes.contains(b) {
             return None;
         }
+
+        // Synthesize find common ancestor action
+        let action = LineageAction::FindCommonAncestor {
+            a_id: a.to_string(),
+            b_id: b.to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         // Special case: if one is ancestor of other
         let ancestors_a: HashSet<_> = self.ancestors(a).into_iter().collect();
@@ -309,42 +401,99 @@ impl CausalGraph {
     pub fn current_epoch(&self) -> u64 {
         self.epoch.load(std::sync::atomic::Ordering::SeqCst)
     }
+
+    /// Internal synthesis helper.
+    ///
+    /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    fn synthesize_action_internal(&self, action: LineageAction) -> Distinction {
+        let engine = self.field.engine_arc();
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        new_root
+    }
 }
+
+impl Default for LineageAgent {
+    fn default() -> Self {
+        // Note: This requires a SharedEngine, so we panic if called directly
+        // In practice, always use LineageAgent::new(&shared_engine)
+        panic!("LineageAgent requires a SharedEngine - use LineageAgent::new()")
+    }
+}
+
+/// LCA Trait Implementation for LineageAgent
+///
+/// All operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+impl LocalCausalAgent for LineageAgent {
+    type ActionData = LineageAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: LineageAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
+/// Backward-compatible type alias for existing code.
+pub type CausalGraph = LineageAgent;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
+
     #[test]
     fn test_add_node() {
-        let graph = CausalGraph::new();
-        graph.add_node("a".to_string());
-        assert!(graph.contains("a"));
-        assert_eq!(graph.node_count(), 1);
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
+        lineage.add_node("a".to_string());
+        assert!(lineage.contains("a"));
+        assert_eq!(lineage.node_count(), 1);
     }
 
     #[test]
     fn test_add_edge() {
-        let graph = CausalGraph::new();
-        graph.add_node("parent".to_string());
-        graph.add_node("child".to_string());
-        graph.add_edge("parent".to_string(), "child".to_string());
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
+        lineage.add_node("parent".to_string());
+        lineage.add_node("child".to_string());
+        lineage.add_edge("parent".to_string(), "child".to_string());
 
-        let ancestors = graph.ancestors("child");
+        let ancestors = lineage.ancestors("child");
         assert_eq!(ancestors, vec!["parent".to_string()]);
     }
 
     #[test]
     fn test_ancestors_chain() {
-        let graph = CausalGraph::new();
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
         // a -> b -> c
-        graph.add_node("a".to_string());
-        graph.add_node("b".to_string());
-        graph.add_node("c".to_string());
-        graph.add_edge("a".to_string(), "b".to_string());
-        graph.add_edge("b".to_string(), "c".to_string());
+        lineage.add_node("a".to_string());
+        lineage.add_node("b".to_string());
+        lineage.add_node("c".to_string());
+        lineage.add_edge("a".to_string(), "b".to_string());
+        lineage.add_edge("b".to_string(), "c".to_string());
 
-        let ancestors_c = graph.ancestors("c");
+        let ancestors_c = lineage.ancestors("c");
         assert_eq!(ancestors_c.len(), 2);
         assert!(ancestors_c.contains(&"a".to_string()));
         assert!(ancestors_c.contains(&"b".to_string()));
@@ -352,15 +501,16 @@ mod tests {
 
     #[test]
     fn test_descendants() {
-        let graph = CausalGraph::new();
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
         // a -> b -> c
-        graph.add_node("a".to_string());
-        graph.add_node("b".to_string());
-        graph.add_node("c".to_string());
-        graph.add_edge("a".to_string(), "b".to_string());
-        graph.add_edge("b".to_string(), "c".to_string());
+        lineage.add_node("a".to_string());
+        lineage.add_node("b".to_string());
+        lineage.add_node("c".to_string());
+        lineage.add_edge("a".to_string(), "b".to_string());
+        lineage.add_edge("b".to_string(), "c".to_string());
 
-        let descendants_a = graph.descendants("a");
+        let descendants_a = lineage.descendants("a");
         assert_eq!(descendants_a.len(), 2);
         assert!(descendants_a.contains(&"b".to_string()));
         assert!(descendants_a.contains(&"c".to_string()));
@@ -368,58 +518,62 @@ mod tests {
 
     #[test]
     fn test_lca_direct_parent() {
-        let graph = CausalGraph::new();
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
         // a -> b
-        graph.add_node("a".to_string());
-        graph.add_node("b".to_string());
-        graph.add_edge("a".to_string(), "b".to_string());
+        lineage.add_node("a".to_string());
+        lineage.add_node("b".to_string());
+        lineage.add_edge("a".to_string(), "b".to_string());
 
         // LCA of a and b should be a (since a is ancestor of b)
-        let lca = graph.lca("a", "b");
+        let lca = lineage.lca("a", "b");
         assert_eq!(lca, Some("a".to_string()));
     }
 
     #[test]
     fn test_lca_common_ancestor() {
-        let graph = CausalGraph::new();
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
         //   a
         //  / \
         // b   c
-        graph.add_node("a".to_string());
-        graph.add_node("b".to_string());
-        graph.add_node("c".to_string());
-        graph.add_edge("a".to_string(), "b".to_string());
-        graph.add_edge("a".to_string(), "c".to_string());
+        lineage.add_node("a".to_string());
+        lineage.add_node("b".to_string());
+        lineage.add_node("c".to_string());
+        lineage.add_edge("a".to_string(), "b".to_string());
+        lineage.add_edge("a".to_string(), "c".to_string());
 
-        let lca = graph.lca("b", "c");
+        let lca = lineage.lca("b", "c");
         assert_eq!(lca, Some("a".to_string()));
     }
 
     #[test]
     fn test_frontier() {
-        let graph = CausalGraph::new();
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
         // a -> b -> c
-        graph.add_node("a".to_string());
-        graph.add_node("b".to_string());
-        graph.add_node("c".to_string());
-        graph.add_edge("a".to_string(), "b".to_string());
-        graph.add_edge("b".to_string(), "c".to_string());
+        lineage.add_node("a".to_string());
+        lineage.add_node("b".to_string());
+        lineage.add_node("c".to_string());
+        lineage.add_edge("a".to_string(), "b".to_string());
+        lineage.add_edge("b".to_string(), "c".to_string());
 
-        let frontier = graph.frontier();
+        let frontier = lineage.frontier();
         assert_eq!(frontier, vec!["c".to_string()]);
     }
 
     #[test]
     fn test_roots() {
-        let graph = CausalGraph::new();
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
         // a -> b
         // c (orphan)
-        graph.add_node("a".to_string());
-        graph.add_node("b".to_string());
-        graph.add_node("c".to_string());
-        graph.add_edge("a".to_string(), "b".to_string());
+        lineage.add_node("a".to_string());
+        lineage.add_node("b".to_string());
+        lineage.add_node("c".to_string());
+        lineage.add_edge("a".to_string(), "b".to_string());
 
-        let roots = graph.roots();
+        let roots = lineage.roots();
         assert_eq!(roots.len(), 2);
         assert!(roots.contains(&"a".to_string()));
         assert!(roots.contains(&"c".to_string()));
@@ -433,29 +587,62 @@ mod tests {
         // b   c
         //  \ /
         //   d (merge of b and c)
-        let graph = CausalGraph::new();
+        let engine = create_test_engine();
+        let lineage = LineageAgent::new(&engine);
 
-        graph.add_node("a".to_string());
-        graph.add_node("b".to_string());
-        graph.add_node("c".to_string());
-        graph.add_node("d".to_string());
+        lineage.add_node("a".to_string());
+        lineage.add_node("b".to_string());
+        lineage.add_node("c".to_string());
+        lineage.add_node("d".to_string());
 
-        graph.add_edge("a".to_string(), "b".to_string());
-        graph.add_edge("a".to_string(), "c".to_string());
+        lineage.add_edge("a".to_string(), "b".to_string());
+        lineage.add_edge("a".to_string(), "c".to_string());
 
         // d has two parents: b and c (merge)
-        graph.add_with_parents("d".to_string(), vec!["b".to_string(), "c".to_string()]);
+        lineage.add_with_parents("d".to_string(), vec!["b".to_string(), "c".to_string()]);
 
         // d's ancestors should include a, b, c
-        let ancestors_d = graph.ancestors("d");
+        let ancestors_d = lineage.ancestors("d");
         assert_eq!(ancestors_d.len(), 3);
 
         // LCA of b and c should be a
-        let lca = graph.lca("b", "c");
+        let lca = lineage.lca("b", "c");
         assert_eq!(lca, Some("a".to_string()));
 
         // Frontier should be d
-        let frontier = graph.frontier();
+        let frontier = lineage.frontier();
         assert_eq!(frontier, vec!["d".to_string()]);
+    }
+
+    #[test]
+    fn test_lca_trait_implementation() {
+        let engine = create_test_engine();
+        let mut agent = LineageAgent::new(&engine);
+
+        // Test get_current_root
+        let root = agent.get_current_root();
+        let root_id = root.id().to_string();
+        assert!(!root_id.is_empty());
+
+        // Test synthesize_action
+        let action = LineageAction::RecordBirth {
+            child_id: "test123".to_string(),
+            parent_ids: vec!["parent1".to_string()],
+        };
+        let engine_arc = Arc::clone(agent.field.engine_arc());
+        let new_root = agent.synthesize_action(action, &engine_arc);
+        assert!(!new_root.id().is_empty());
+        assert_ne!(new_root.id(), root_id);
+
+        // Test update_local_root
+        agent.update_local_root(new_root.clone());
+        assert_eq!(agent.get_current_root().id(), new_root.id());
+    }
+
+    #[test]
+    fn test_backward_compatible_alias() {
+        // Ensure backward compatibility works
+        let engine = create_test_engine();
+        let _causal_graph: CausalGraph = LineageAgent::new(&engine);
     }
 }
