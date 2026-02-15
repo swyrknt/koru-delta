@@ -128,7 +128,6 @@ pub trait VectorStorage {
 // Internal helper functions for serialization
 
 /// Serialize a vector to JSON for storage.
-#[allow(dead_code)]
 pub(crate) fn vector_to_json(
     vector: &Vector,
     metadata: Option<serde_json::Value>,
@@ -147,7 +146,6 @@ pub(crate) fn vector_to_json(
 }
 
 /// Deserialize a vector from JSON storage.
-#[allow(dead_code)]
 pub(crate) fn json_to_vector(value: &serde_json::Value) -> Option<Vector> {
     let vector_data = value.get("vector")?.as_array()?;
     let model = value.get("model")?.as_str()?;

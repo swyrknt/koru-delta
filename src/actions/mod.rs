@@ -167,16 +167,14 @@ impl Canonicalizable for KoruAction {
 
 impl KoruAction {
     /// Serialize action to bytes for canonicalization.
-    #[allow(dead_code)]
-    fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
         // We use a simplified representation for serialization
         // Distinction IDs are stored as strings
         bincode::serialize(&ActionSerializable::from(self))
     }
 
     /// Convert bytes to distinction via synthesis.
-    #[allow(dead_code)]
-    fn bytes_to_distinction(bytes: &[u8], engine: &DistinctionEngine) -> Distinction {
+    pub fn bytes_to_distinction(bytes: &[u8], engine: &DistinctionEngine) -> Distinction {
         bytes
             .iter()
             .map(|&byte| byte.to_canonical_structure(engine))
@@ -188,8 +186,7 @@ impl KoruAction {
 /// This is an internal type used for serialization - it mirrors KoruAction
 /// but uses types that implement Serialize/Deserialize.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[allow(dead_code)]
-enum ActionSerializable {
+pub(crate) enum ActionSerializable {
     Storage(StorageActionSerializable),
     Temperature(TemperatureActionSerializable),
     Chronicle(ChronicleActionSerializable),
@@ -292,7 +289,7 @@ fn bytes_to_distinction(bytes: &[u8], engine: &DistinctionEngine) -> Distinction
 
 /// Serializable version of StorageAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum StorageActionSerializable {
+pub(crate) enum StorageActionSerializable {
     Store { namespace: String, key: String, value_json: serde_json::Value },
     Retrieve { namespace: String, key: String },
     History { namespace: String, key: String },
@@ -414,7 +411,7 @@ pub enum TemperatureAction {
 
 /// Serializable version of TemperatureAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum TemperatureActionSerializable {
+pub(crate) enum TemperatureActionSerializable {
     Heat { distinction_id: String, level: TemperatureLevel },
     Cool { distinction_id: String },
     Evict { distinction_id: String },
@@ -510,7 +507,7 @@ pub enum ChronicleAction {
 
 /// Serializable version of ChronicleAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum ChronicleActionSerializable {
+pub(crate) enum ChronicleActionSerializable {
     Record { event_id: String, timestamp: DateTime<Utc> },
     Recall { query: String },
     Promote { distinction_id: String },
@@ -605,7 +602,7 @@ pub enum ArchiveAction {
 
 /// Serializable version of ArchiveAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum ArchiveActionSerializable {
+pub(crate) enum ArchiveActionSerializable {
     EpochStart { timestamp: DateTime<Utc> },
     EpochSeal { epoch_number: u64, content_id: String },
     Compress { epoch_id: String },
@@ -704,7 +701,7 @@ pub enum EssenceAction {
 
 /// Serializable version of EssenceAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum EssenceActionSerializable {
+pub(crate) enum EssenceActionSerializable {
     ExtractTopology { source_id: String },
     SynthesizeDNA { topology_json: serde_json::Value },
     Regenerate { from_dna_id: String },
@@ -790,7 +787,7 @@ pub enum SleepAction {
 
 /// Serializable version of SleepAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum SleepActionSerializable {
+pub(crate) enum SleepActionSerializable {
     EnterPhase { phase: SleepPhase },
     Consolidate { from_tier: String, to_tier: String },
     Dream,
@@ -875,7 +872,7 @@ pub enum EvolutionAction {
 
 /// Serializable version of EvolutionAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum EvolutionActionSerializable {
+pub(crate) enum EvolutionActionSerializable {
     EvaluateFitness { candidate_id: String },
     Select { population_ids: Vec<String> },
     Preserve { fit_ids: Vec<String> },
@@ -970,7 +967,7 @@ pub enum LineageAction {
 
 /// Serializable version of LineageAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum LineageActionSerializable {
+pub(crate) enum LineageActionSerializable {
     RecordBirth { child_id: String, parent_ids: Vec<String> },
     TraceAncestors { from_id: String },
     TraceDescendants { from_id: String },
@@ -1078,7 +1075,7 @@ pub enum PerspectiveAction {
 
 /// Serializable version of PerspectiveAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum PerspectiveActionSerializable {
+pub(crate) enum PerspectiveActionSerializable {
     FormView { query_json: serde_json::Value, name: String },
     Refresh { view_id: String },
     Compose { view_a_id: String, view_b_id: String },
@@ -1188,7 +1185,7 @@ pub enum IdentityAction {
 
 /// Serializable version of IdentityAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum IdentityActionSerializable {
+pub(crate) enum IdentityActionSerializable {
     MineIdentity { proof_of_work_json: serde_json::Value },
     Authenticate { identity_id: String, challenge: String },
     GrantCapability { from_id: String, to_id: String, permission: String },
@@ -1299,7 +1296,7 @@ pub enum NetworkAction {
 
 /// Serializable version of NetworkAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum NetworkActionSerializable {
+pub(crate) enum NetworkActionSerializable {
     Join { peer_address: String },
     Synchronize { peer_id: String },
     Reconcile { difference_ids: Vec<String> },
@@ -1386,7 +1383,7 @@ pub enum PulseAction {
 
 /// Serializable version of PulseAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum PulseActionSerializable {
+pub(crate) enum PulseActionSerializable {
     RegisterAgent { agent_id: String, agent_type: String },
     UnregisterAgent { agent_id: String },
     TriggerPulse { phase: String },
@@ -1496,7 +1493,7 @@ pub enum WorkspaceAction {
 
 /// Serializable version of WorkspaceAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum WorkspaceActionSerializable {
+pub(crate) enum WorkspaceActionSerializable {
     Remember { workspace_id: String, item_id: String, content_json: serde_json::Value },
     Recall { workspace_id: String, query: String },
     Consolidate { workspace_id: String },
@@ -1626,7 +1623,7 @@ pub enum VectorAction {
 
 /// Serializable version of VectorAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum VectorActionSerializable {
+pub(crate) enum VectorActionSerializable {
     Embed { data_json: serde_json::Value, model: String, dimensions: usize },
     Search { query_vector: Vec<f32>, top_k: usize, threshold: f32 },
     Index { vector: Vec<f32>, key: String, model: String },

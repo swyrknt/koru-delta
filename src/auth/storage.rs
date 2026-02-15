@@ -287,12 +287,12 @@ fn identity_key(public_key: &str) -> String {
 
 /// Create storage key for a capability.
 fn capability_key(capability_id: &str) -> String {
-    format!("capability:{}", capability_id)
+    crate::auth::capability::capability_storage_key_by_id(capability_id)
 }
 
 /// Create storage key for a revocation.
 fn revocation_key(capability_id: &str) -> String {
-    format!("revocation:{}", capability_id)
+    crate::auth::capability::revocation_storage_key(capability_id)
 }
 
 #[cfg(test)]

@@ -140,6 +140,31 @@ pub fn is_revoked(_capability: &Capability, revocations: &[Revocation]) -> bool 
         .any(|r| r.capability_id == _capability.id)
 }
 
+/// Build a capability reference for storage.
+/// 
+/// Used when persisting capabilities to the field via synthesis.
+pub fn build_capability_ref(capability: &Capability) -> CapabilityRef {
+    CapabilityRef {
+        capability_key: format!("_auth:capability:{}", capability.id),
+        resource_pattern: capability.resource_pattern.clone(),
+        permission: capability.permission,
+    }
+}
+
+/// Get the storage key for a capability by ID.
+///
+/// Used when you only have the capability ID, not the full capability.
+pub fn capability_storage_key_by_id(capability_id: &str) -> String {
+    format!("capability:{}", capability_id)
+}
+
+/// Get the storage key for a revocation.
+///
+/// Used to generate canonical storage keys for revocation records.
+pub fn revocation_storage_key(capability_id: &str) -> String {
+    format!("revocation:{}", capability_id)
+}
+
 /// Check authorization for a resource.
 ///
 /// # Arguments
@@ -184,11 +209,7 @@ pub fn authorize(
 
         // Check resource pattern
         if cap.resource_pattern.matches(namespace, key) {
-            return Ok(CapabilityRef {
-                capability_key: format!("_auth:capability:{}", cap.id),
-                resource_pattern: cap.resource_pattern.clone(),
-                permission: cap.permission,
-            });
+            return Ok(build_capability_ref(cap));
         }
     }
 
@@ -213,28 +234,6 @@ pub fn check_permission(
         revocations,
     )
     .is_ok()
-}
-
-/// Build a capability reference for storage.
-#[allow(dead_code)]
-pub fn build_capability_ref(capability: &Capability) -> CapabilityRef {
-    CapabilityRef {
-        capability_key: format!("_auth:capability:{}", capability.id),
-        resource_pattern: capability.resource_pattern.clone(),
-        permission: capability.permission,
-    }
-}
-
-/// Get the storage key for a capability.
-#[allow(dead_code)]
-pub fn capability_storage_key(capability: &Capability) -> String {
-    format!("capability:{}", capability.id)
-}
-
-/// Get the storage key for a revocation.
-#[allow(dead_code)]
-pub fn revocation_storage_key(capability_id: &str) -> String {
-    format!("revocation:{}", capability_id)
 }
 
 /// Capability manager for caching and querying.

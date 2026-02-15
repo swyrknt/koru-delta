@@ -103,14 +103,13 @@ pub struct ArchiveAgent {
 
 /// A single epoch of consolidated data.
 #[derive(Debug)]
-#[allow(dead_code)]
 struct Epoch {
-    /// Epoch number
-    number: usize,
+    /// Epoch number (kept for debugging)
+    _number: usize,
 
-    /// Time range
-    start_time: DateTime<Utc>,
-    end_time: DateTime<Utc>,
+    /// Time range (kept for debugging)
+    _start_time: DateTime<Utc>,
+    _end_time: DateTime<Utc>,
 
     /// Index: distinction_id → metadata
     index: HashMap<DistinctionId, EpochEntry>,
@@ -121,14 +120,13 @@ struct Epoch {
 
 /// Entry within an epoch.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct EpochEntry {
     /// Original key
     key: FullKey,
-    /// When created
-    timestamp: DateTime<Utc>,
-    /// Fitness score (references)
-    fitness: usize,
+    /// When created (kept for debugging)
+    _timestamp: DateTime<Utc>,
+    /// Fitness score (kept for future use)
+    _fitness: usize,
     /// Compressed data reference
     data_ref: String,
 }
@@ -341,9 +339,9 @@ impl ArchiveAgent {
     fn create_epoch(&self, number: usize) {
         let now = Utc::now();
         let epoch = Epoch {
-            number,
-            start_time: now,
-            end_time: now + self.config.epoch_duration,
+            _number: number,
+            _start_time: now,
+            _end_time: now + self.config.epoch_duration,
             index: HashMap::new(),
             distinction_count: 0,
         };
@@ -365,8 +363,8 @@ impl ArchiveAgent {
                 id.clone(),
                 EpochEntry {
                     key,
-                    timestamp,
-                    fitness,
+                    _timestamp: timestamp,
+                    _fitness: fitness,
                     data_ref: format!("epoch_{}/data_{}", epoch_num, id),
                 },
             );
@@ -477,7 +475,6 @@ pub struct Pattern {
 
 /// Archive agent statistics.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ArchiveStats {
     pub consolidations: u64,
     pub compressions: u64,

@@ -154,7 +154,6 @@ pub struct EpochSummary {
 
 /// An archived epoch (full data, compressed).
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ArchivedEpoch {
     pub id: String,
     pub archived_at: DateTime<Utc>,

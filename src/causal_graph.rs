@@ -412,7 +412,7 @@ impl LineageAgent {
     /// Also updates the family_tree with each new lineage record.
     fn synthesize_action_internal(&self, action: LineageAction) -> Distinction {
         let engine = self.field.engine_arc();
-        let action_distinction = action.to_canonical_structure(&engine);
+        let action_distinction = action.to_canonical_structure(engine);
         let new_root = engine.synthesize(&self.local_root, &action_distinction);
         
         // Update family_tree - synthesize this action into the lineage synthesis

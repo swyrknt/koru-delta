@@ -81,20 +81,6 @@ impl Vector {
         }
     }
 
-    /// Create a new vector with pre-computed magnitude.
-    ///
-    /// This is useful when deserializing vectors where we want to
-    /// avoid recomputing the magnitude.
-    #[allow(dead_code)]
-    pub(crate) fn with_magnitude(data: Vec<f32>, model: impl Into<String>, magnitude: f32) -> Self {
-        assert!(!data.is_empty(), "Vector data cannot be empty");
-        Self {
-            data: Arc::from(data.into_boxed_slice()),
-            model: model.into(),
-            magnitude: Some(magnitude),
-        }
-    }
-
     /// Get the vector data as a slice.
     pub fn as_slice(&self) -> &[f32] {
         &self.data
@@ -108,12 +94,6 @@ impl Vector {
     /// Get the embedding model identifier.
     pub fn model(&self) -> &str {
         &self.model
-    }
-
-    /// Compute the Euclidean magnitude (L2 norm) of the vector.
-    #[allow(dead_code)]
-    fn compute_magnitude(&self) -> f32 {
-        self.data.iter().map(|&x| x * x).sum::<f32>().sqrt()
     }
 
     /// Compute the magnitude without caching (for immutable refs).

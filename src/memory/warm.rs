@@ -95,12 +95,11 @@ pub struct ChronicleAgent {
 
 /// Index entry for fast lookup.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct IndexEntry {
     /// The key this distinction belongs to
     key: FullKey,
-    /// When this distinction was created
-    timestamp: DateTime<Utc>,
+    /// When this distinction was created (kept for debugging)
+    _timestamp: DateTime<Utc>,
     /// When last accessed
     last_accessed: DateTime<Utc>,
 }
@@ -204,7 +203,7 @@ impl ChronicleAgent {
             id.clone(),
             IndexEntry {
                 key,
-                timestamp,
+                _timestamp: timestamp,
                 last_accessed: Utc::now(),
             },
         );

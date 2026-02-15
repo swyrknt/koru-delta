@@ -31,7 +31,7 @@ use crate::actions::IdentityAction;
 use crate::auth::capability::{create_capability, create_revocation, CapabilityManager};
 use crate::auth::identity::{mine_identity_sync, verify_identity_pow};
 use crate::auth::session::{create_session_token, SessionManager};
-use crate::auth::storage::{AuthStorageAdapter, AUTH_NAMESPACE};
+use crate::auth::storage::AuthStorageAdapter;
 use crate::auth::types::{
     AuthError, Capability, CapabilityRef, Identity, IdentityUserData, Permission, ResourcePattern,
     Revocation, Session,
@@ -296,11 +296,7 @@ impl IdentityAgent {
         let capabilities = self.storage.get_active_capabilities(public_key)?;
         let capability_refs: Vec<CapabilityRef> = capabilities
             .into_iter()
-            .map(|cap| CapabilityRef {
-                capability_key: format!("{}:capability:{}", AUTH_NAMESPACE, cap.id),
-                resource_pattern: cap.resource_pattern,
-                permission: cap.permission,
-            })
+            .map(|cap| crate::auth::capability::build_capability_ref(&cap))
             .collect();
 
         // Create session

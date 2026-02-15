@@ -119,7 +119,7 @@ pub enum AgentCapability {
 }
 
 /// Registry of all agents in the system.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AgentRegistry {
     /// Map of agent ID to agent info
     agents: HashMap<String, AgentInfo>,
@@ -149,7 +149,7 @@ pub struct PulseCoordinator {
 ///
 /// These phases provide hooks for external systems to coordinate
 /// their operations with KoruDelta's internal state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CoordinationPhase {
     /// Input phase - external systems provide input
     Input,
@@ -162,13 +162,8 @@ pub enum CoordinationPhase {
     /// Exploration phase - internal pattern discovery
     Exploration,
     /// Idle phase - waiting for next cycle
+    #[default]
     Idle,
-}
-
-impl Default for CoordinationPhase {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 impl KoruOrchestrator {
@@ -438,15 +433,6 @@ impl AgentRegistry {
                     .collect()
             })
             .unwrap_or_default()
-    }
-}
-
-impl Default for AgentRegistry {
-    fn default() -> Self {
-        Self {
-            agents: HashMap::new(),
-            capabilities: HashMap::new(),
-        }
     }
 }
 
