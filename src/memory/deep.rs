@@ -1,7 +1,16 @@
-/// Deep Memory: Genomic storage layer.
+/// Essence Agent: Genomic storage layer with LCA architecture.
 ///
-/// Deep memory acts like DNA - minimal information needed to recreate
+/// The Essence Agent acts like DNA - minimal information needed to recreate
 /// the entire system. It's the ultimate compression and portability layer.
+///
+/// ## LCA Architecture
+///
+/// As a Local Causal Agent, all operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+///
+/// The Essence Agent's local root is `RootType::Essence` (💎 ESSENCE).
 ///
 /// ## Purpose
 ///
@@ -31,16 +40,20 @@
 /// Like stem cells: minimal information, maximum potential.
 /// A genome is ~1KB. A full database might be 1TB.
 /// But from the genome, you can regenerate the whole.
+use crate::actions::EssenceAction;
 use crate::causal_graph::{CausalGraph, DistinctionId};
-// Note: FullKey used in potential future expansion
+use crate::engine::{FieldHandle, SharedEngine};
+use crate::roots::RootType;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-/// Deep memory configuration.
+/// Essence agent configuration.
 #[derive(Debug, Clone)]
-pub struct DeepConfig {
+pub struct EssenceConfig {
     /// How often to update the genome
     pub genome_update_interval: std::time::Duration,
 
@@ -51,7 +64,7 @@ pub struct DeepConfig {
     pub max_patterns: usize,
 }
 
-impl Default for DeepConfig {
+impl Default for EssenceConfig {
     fn default() -> Self {
         Self {
             genome_update_interval: std::time::Duration::from_secs(86400), // Daily
@@ -61,12 +74,19 @@ impl Default for DeepConfig {
     }
 }
 
-/// Deep Memory layer - genomic storage.
+/// Essence Agent - genomic storage with LCA architecture.
 ///
 /// Like DNA: minimal, portable, regenerative.
-pub struct DeepMemory {
+/// All operations are synthesized through the unified field.
+pub struct EssenceAgent {
     /// Configuration
-    config: DeepConfig,
+    config: EssenceConfig,
+
+    /// LCA: Local root distinction (Root: ESSENCE)
+    local_root: Distinction,
+
+    /// LCA: Handle to the shared field
+    field: FieldHandle,
 
     /// The genome - minimal self-recreation info
     genome: DashMap<String, Genome>,
@@ -142,16 +162,32 @@ pub struct ArchivedEpoch {
     pub distinction_count: usize,
 }
 
-impl DeepMemory {
-    /// Create new deep memory.
-    pub fn new() -> Self {
-        Self::with_config(DeepConfig::default())
+impl EssenceAgent {
+    /// Create new essence agent.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent initializes with:
+    /// - `local_root` = RootType::Essence (from shared field roots)
+    /// - `field` = Handle to the unified distinction engine
+    pub fn new(shared_engine: &SharedEngine) -> Self {
+        Self::with_config(EssenceConfig::default(), shared_engine)
     }
 
     /// Create with custom config.
-    pub fn with_config(config: DeepConfig) -> Self {
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent anchors to the ESSENCE root, which is synthesized
+    /// from the primordial distinctions (d0, d1) in the shared field.
+    pub fn with_config(config: EssenceConfig, shared_engine: &SharedEngine) -> Self {
+        let local_root = shared_engine.root(RootType::Essence).clone();
+        let field = FieldHandle::new(shared_engine);
+
         Self {
             config,
+            local_root,
+            field,
             genome: DashMap::new(),
             archive: DashMap::new(),
             genomes_created: AtomicU64::new(0),
@@ -162,6 +198,10 @@ impl DeepMemory {
     /// Extract a genome from the current system state.
     ///
     /// This is the key operation - capture minimal recreation info.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Extraction synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔExtractTopology_Action`
     pub fn extract_genome(
         &self,
         causal_graph: &CausalGraph,
@@ -173,6 +213,12 @@ impl DeepMemory {
         let patterns = self.capture_patterns();
 
         let now = Utc::now();
+
+        // Synthesize extract topology action
+        let action = EssenceAction::ExtractTopology {
+            source_id: "causal_graph".to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         let genome = Genome {
             version: 1,
@@ -200,7 +246,17 @@ impl DeepMemory {
     /// Express a genome - recreate system state.
     ///
     /// This "grows" the system from the genome.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Expression synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔRegenerate_Action`
     pub fn express_genome(&self, genome: &Genome) -> ExpressionResult {
+        // Synthesize regenerate action
+        let action = EssenceAction::Regenerate {
+            from_dna_id: "genome".to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
+
         // TODO: Implement actual re-expression
         // 1. Start with roots
         // 2. Follow topology paths
@@ -234,7 +290,18 @@ impl DeepMemory {
     }
 
     /// Store a genome.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Store synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔStoreGenome_Action`
     pub fn store_genome(&self, id: &str, genome: Genome) {
+        // Synthesize store genome action
+        let action = EssenceAction::StoreGenome {
+            name: id.to_string(),
+            genome_id: id.to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
+
         self.genome.insert(id.to_string(), genome);
     }
 
@@ -275,13 +342,13 @@ impl DeepMemory {
     }
 
     /// Get configuration.
-    pub fn config(&self) -> &DeepConfig {
+    pub fn config(&self) -> &EssenceConfig {
         &self.config
     }
 
     /// Get statistics.
-    pub fn stats(&self) -> DeepStats {
-        DeepStats {
+    pub fn stats(&self) -> EssenceStats {
+        EssenceStats {
             genomes_created: self.genomes_created.load(Ordering::Relaxed),
             restorations: self.restorations.load(Ordering::Relaxed),
             genome_count: self.genome_count(),
@@ -321,11 +388,51 @@ impl DeepMemory {
         // TODO: Implement pattern extraction
         vec![]
     }
+
+    /// Internal synthesis helper.
+    ///
+    /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    fn synthesize_action_internal(&self, action: EssenceAction) -> Distinction {
+        let engine = self.field.engine_arc();
+        let action_distinction = action.to_canonical_structure(engine);
+        engine.synthesize(&self.local_root, &action_distinction)
+    }
 }
 
-impl Default for DeepMemory {
+impl Default for EssenceAgent {
     fn default() -> Self {
-        Self::new()
+        // Note: This requires a SharedEngine, so we panic if called directly
+        // In practice, always use EssenceAgent::new(&shared_engine)
+        panic!("EssenceAgent requires a SharedEngine - use EssenceAgent::new()")
+    }
+}
+
+/// LCA Trait Implementation for EssenceAgent
+///
+/// All operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+impl LocalCausalAgent for EssenceAgent {
+    type ActionData = EssenceAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: EssenceAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
     }
 }
 
@@ -337,9 +444,9 @@ pub struct ExpressionResult {
     pub patterns_restored: usize,
 }
 
-/// Deep memory statistics.
+/// Essence agent statistics.
 #[derive(Debug, Clone)]
-pub struct DeepStats {
+pub struct EssenceStats {
     pub genomes_created: u64,
     pub restorations: u64,
     pub genome_count: usize,
@@ -347,29 +454,44 @@ pub struct DeepStats {
     pub total_archive_size: usize,
 }
 
+/// Backward-compatible type alias for existing code.
+pub type DeepMemory = EssenceAgent;
+
+/// Backward-compatible type alias for existing code.
+pub type DeepConfig = EssenceConfig;
+
+/// Backward-compatible type alias for existing code.
+pub type DeepStats = EssenceStats;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::causal_graph::CausalGraph;
 
-    #[test]
-    fn test_new_deep_memory() {
-        let deep = DeepMemory::new();
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
 
-        assert_eq!(deep.genome_count(), 0);
-        assert_eq!(deep.archive_count(), 0);
+    #[test]
+    fn test_new_essence_agent() {
+        let engine = create_test_engine();
+        let essence = EssenceAgent::new(&engine);
+
+        assert_eq!(essence.genome_count(), 0);
+        assert_eq!(essence.archive_count(), 0);
     }
 
     #[test]
     fn test_extract_genome() {
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let essence = EssenceAgent::new(&engine);
         let causal_graph = CausalGraph::new();
 
         // Add some nodes
         causal_graph.add_node("root1".to_string());
         causal_graph.add_node("root2".to_string());
 
-        let genome = deep.extract_genome(&causal_graph, 5, 1000);
+        let genome = essence.extract_genome(&causal_graph, 5, 1000);
 
         assert_eq!(genome.version, 1);
         assert_eq!(genome.epoch_summary.epoch_number, 5);
@@ -377,52 +499,55 @@ mod tests {
         assert_eq!(genome.roots.len(), 2);
 
         // Check stored
-        assert_eq!(deep.genome_count(), 1);
-        let stats = deep.stats();
+        assert_eq!(essence.genome_count(), 1);
+        let stats = essence.stats();
         assert_eq!(stats.genomes_created, 1);
     }
 
     #[test]
     fn test_express_genome() {
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let essence = EssenceAgent::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());
 
-        let genome = deep.extract_genome(&causal_graph, 0, 100);
-        let result = deep.express_genome(&genome);
+        let genome = essence.extract_genome(&causal_graph, 0, 100);
+        let result = essence.express_genome(&genome);
 
         assert_eq!(result.distinctions_restored, 100);
         assert_eq!(result.roots_restored, 1);
 
-        let stats = deep.stats();
+        let stats = essence.stats();
         assert_eq!(stats.restorations, 1);
     }
 
     #[test]
     fn test_archive_epoch() {
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let essence = EssenceAgent::new(&engine);
 
-        deep.archive_epoch("epoch_0".to_string(), 50000, 1024 * 1024);
-        deep.archive_epoch("epoch_1".to_string(), 60000, 2 * 1024 * 1024);
+        essence.archive_epoch("epoch_0".to_string(), 50000, 1024 * 1024);
+        essence.archive_epoch("epoch_1".to_string(), 60000, 2 * 1024 * 1024);
 
-        assert_eq!(deep.archive_count(), 2);
-        assert_eq!(deep.total_archive_size(), 3 * 1024 * 1024);
+        assert_eq!(essence.archive_count(), 2);
+        assert_eq!(essence.total_archive_size(), 3 * 1024 * 1024);
     }
 
     #[test]
     fn test_get_latest_genome() {
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let essence = EssenceAgent::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());
 
         // Extract multiple genomes
-        let _g1 = deep.extract_genome(&causal_graph, 1, 100);
+        let _g1 = essence.extract_genome(&causal_graph, 1, 100);
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let _g2 = deep.extract_genome(&causal_graph, 2, 200);
+        let _g2 = essence.extract_genome(&causal_graph, 2, 200);
 
-        let latest = deep.latest_genome().unwrap();
+        let latest = essence.latest_genome().unwrap();
 
         // Latest should be g2 (extracted last)
         assert_eq!(latest.epoch_summary.epoch_number, 2);
@@ -431,18 +556,19 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize() {
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let essence = EssenceAgent::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());
 
-        let genome = deep.extract_genome(&causal_graph, 0, 100);
+        let genome = essence.extract_genome(&causal_graph, 0, 100);
 
         // Serialize
-        let bytes = DeepMemory::serialize_genome(&genome).unwrap();
+        let bytes = EssenceAgent::serialize_genome(&genome).unwrap();
 
         // Deserialize
-        let restored = DeepMemory::deserialize_genome(&bytes).unwrap();
+        let restored = EssenceAgent::deserialize_genome(&bytes).unwrap();
 
         assert_eq!(restored.version, genome.version);
         assert_eq!(
@@ -454,39 +580,76 @@ mod tests {
 
     #[test]
     fn test_custom_config() {
-        let config = DeepConfig {
+        let config = EssenceConfig {
             genome_update_interval: std::time::Duration::from_secs(3600),
             max_roots: 50,
             max_patterns: 500,
         };
-        let deep = DeepMemory::with_config(config);
+        let engine = create_test_engine();
+        let essence = EssenceAgent::with_config(config, &engine);
 
         let causal_graph = CausalGraph::new();
-        let genome = deep.extract_genome(&causal_graph, 0, 100);
+        let genome = essence.extract_genome(&causal_graph, 0, 100);
 
         // Should still work with custom config
         assert_eq!(genome.version, 1);
-        assert!(deep.genome_count() > 0);
+        assert!(essence.genome_count() > 0);
     }
 
     #[test]
     fn test_stats() {
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let essence = EssenceAgent::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());
 
         // Create genome
-        deep.extract_genome(&causal_graph, 0, 100);
+        essence.extract_genome(&causal_graph, 0, 100);
 
         // Archive epoch
-        deep.archive_epoch("epoch_0".to_string(), 50000, 1024 * 1024);
+        essence.archive_epoch("epoch_0".to_string(), 50000, 1024 * 1024);
 
-        let stats = deep.stats();
+        let stats = essence.stats();
 
         assert_eq!(stats.genomes_created, 1);
         assert_eq!(stats.genome_count, 1);
         assert_eq!(stats.archive_count, 1);
         assert_eq!(stats.total_archive_size, 1024 * 1024);
+    }
+
+    #[test]
+    fn test_lca_trait_implementation() {
+        let engine = create_test_engine();
+        let mut agent = EssenceAgent::new(&engine);
+
+        // Test get_current_root
+        let root = agent.get_current_root();
+        let root_id = root.id().to_string();
+        assert!(!root_id.is_empty());
+
+        // Test synthesize_action
+        let action = EssenceAction::ExtractTopology {
+            source_id: "test123".to_string(),
+        };
+        let engine_arc = Arc::clone(agent.field.engine_arc());
+        let new_root = agent.synthesize_action(action, &engine_arc);
+        assert!(!new_root.id().is_empty());
+        assert_ne!(new_root.id(), root_id);
+
+        // Test update_local_root
+        agent.update_local_root(new_root.clone());
+        assert_eq!(agent.get_current_root().id(), new_root.id());
+    }
+
+    #[test]
+    fn test_backward_compatible_aliases() {
+        // Ensure backward compatibility works
+        let engine = create_test_engine();
+        let _deep_memory: DeepMemory = EssenceAgent::new(&engine);
+        let _config: DeepConfig = EssenceConfig::default();
+        let engine2 = create_test_engine();
+        let agent = EssenceAgent::with_config(_config, &engine2);
+        let _stats: DeepStats = agent.stats();
     }
 }

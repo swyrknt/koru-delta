@@ -342,7 +342,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
         let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
-        let deep = Arc::new(RwLock::new(DeepMemory::new()));
+        let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
         // Initialize reconciliation
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
@@ -432,7 +432,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
         let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
-        let deep = Arc::new(RwLock::new(DeepMemory::new()));
+        let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
         // Initialize reconciliation
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
@@ -739,7 +739,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
         let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
-        let deep = Arc::new(RwLock::new(DeepMemory::new()));
+        let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
         // Initialize reconciliation
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));

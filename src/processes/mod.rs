@@ -8,6 +8,8 @@ pub mod consolidation;
 pub mod distillation;
 pub mod genome_update;
 
+use crate::engine::SharedEngine;
+
 pub use consolidation::{ConsolidationConfig, ConsolidationProcess, ConsolidationResult};
 pub use distillation::{DistillationConfig, DistillationProcess, DistillationResult, Fitness};
 pub use genome_update::{GenomeUpdateConfig, GenomeUpdateProcess};
@@ -23,22 +25,31 @@ pub struct ProcessRunner {
 
 impl ProcessRunner {
     /// Create new process runner with default configs.
-    pub fn new() -> Self {
+    ///
+    /// # LCA Pattern
+    ///
+    /// Requires a SharedEngine to initialize the Sleep Agent (ConsolidationProcess).
+    pub fn new(shared_engine: &SharedEngine) -> Self {
         Self {
-            consolidation: ConsolidationProcess::new(),
+            consolidation: ConsolidationProcess::new(shared_engine),
             distillation: DistillationProcess::new(),
             genome_update: GenomeUpdateProcess::new(),
         }
     }
 
     /// Create with custom configurations.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Requires a SharedEngine to initialize the Sleep Agent (ConsolidationProcess).
     pub fn with_config(
         consolidation: ConsolidationConfig,
         distillation: DistillationConfig,
         genome: GenomeUpdateConfig,
+        shared_engine: &SharedEngine,
     ) -> Self {
         Self {
-            consolidation: ConsolidationProcess::with_config(consolidation),
+            consolidation: ConsolidationProcess::with_config(consolidation, shared_engine),
             distillation: DistillationProcess::with_config(distillation),
             genome_update: GenomeUpdateProcess::with_config(genome),
         }
@@ -62,7 +73,9 @@ impl ProcessRunner {
 
 impl Default for ProcessRunner {
     fn default() -> Self {
-        Self::new()
+        // Note: This requires a SharedEngine, so we panic if called directly
+        // In practice, always use ProcessRunner::new(&shared_engine)
+        panic!("ProcessRunner requires a SharedEngine - use ProcessRunner::new()")
     }
 }
 
@@ -70,9 +83,14 @@ impl Default for ProcessRunner {
 mod tests {
     use super::*;
 
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
+
     #[test]
     fn test_process_runner_new() {
-        let runner = ProcessRunner::new();
+        let engine = create_test_engine();
+        let runner = ProcessRunner::new(&engine);
 
         // Should have all three processes
         assert_eq!(runner.consolidation().cycle_count(), 0);
@@ -82,6 +100,7 @@ mod tests {
 
     #[test]
     fn test_process_runner_with_config() {
+        let engine = create_test_engine();
         let config = ProcessRunner::with_config(
             ConsolidationConfig {
                 interval_secs: 3600,
@@ -99,6 +118,7 @@ mod tests {
                 max_genomes: 14,
                 auto_cleanup: true,
             },
+            &engine,
         );
 
         // Verify configs were applied

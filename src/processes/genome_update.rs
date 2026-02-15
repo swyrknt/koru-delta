@@ -207,12 +207,18 @@ pub struct GenomeUpdateStats {
 mod tests {
     use super::*;
     use crate::causal_graph::CausalGraph;
+    use crate::engine::SharedEngine;
     use crate::memory::DeepMemory;
+
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
 
     #[test]
     fn test_update() {
         let process = GenomeUpdateProcess::new();
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let deep = DeepMemory::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());
@@ -227,7 +233,8 @@ mod tests {
     #[test]
     fn test_restore_latest() {
         let process = GenomeUpdateProcess::new();
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let deep = DeepMemory::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());
@@ -246,7 +253,8 @@ mod tests {
             auto_cleanup: true,
         };
         let process = GenomeUpdateProcess::with_config(config);
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let deep = DeepMemory::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());
@@ -278,7 +286,8 @@ mod tests {
     #[test]
     fn test_stats() {
         let process = GenomeUpdateProcess::new();
-        let deep = DeepMemory::new();
+        let engine = create_test_engine();
+        let deep = DeepMemory::new(&engine);
         let causal_graph = CausalGraph::new();
 
         causal_graph.add_node("root".to_string());

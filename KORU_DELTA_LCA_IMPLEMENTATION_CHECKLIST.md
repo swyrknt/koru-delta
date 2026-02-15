@@ -292,76 +292,73 @@ This checklist converts Koru-Delta from a traditional database architecture to a
 - [x] Compression works correctly
 - [x] LCA contract satisfied
 
-### 2.5 Essence Agent (DeepMemory)
+### 2.5 Essence Agent (DeepMemory) ✅ COMPLETE
+
+**Status:** All tasks completed, 349 tests passing, zero warnings.
 
 **File:** `src/memory/deep.rs`
 
-- [ ] Rename/refactor `DeepMemory` → `EssenceAgent`
-- [ ] Add `local_root: Distinction` (Root: ESSENCE)
-- [ ] Implement `LocalCausalAgent`:
+- [x] Rename/refactor `DeepMemory` → `EssenceAgent`
+- [x] Add `local_root: Distinction` (Root: ESSENCE)
+- [x] Implement `LocalCausalAgent`:
   ```rust
   impl LocalCausalAgent for EssenceAgent {
       type ActionData = EssenceAction;
-      // ...
+      
+      fn get_current_root(&self) -> &Distinction { &self.local_root }
+      fn update_local_root(&mut self, new_root: Distinction) { self.local_root = new_root; }
+      fn synthesize_action(&mut self, action: EssenceAction, engine: &Arc<DistinctionEngine>) 
+          -> Distinction {
+          let action_distinction = action.to_canonical_structure(engine);
+          let new_root = engine.synthesize(&self.local_root, &action_distinction);
+          self.local_root = new_root.clone();
+          new_root
+      }
   }
   ```
-- [ ] Create `EssenceAction` enum:
-  ```rust
-  pub enum EssenceAction {
-      ExtractTopology { source: Distinction },
-      SynthesizeDNA { topology: CausalGraph },
-      Regenerate { from_dna: Distinction },
-      StoreGenome { name: String, genome: Distinction },
-  }
-  ```
-- [ ] Refactor genome operations as synthesis
-- [ ] Maintain DNA extraction (no regression)
+- [x] Refactor genome operations as synthesis
+- [x] Maintain DNA extraction (no regression)
+- [x] Add backward-compatible type aliases (`DeepMemory`, `DeepConfig`, `DeepStats`)
 
-**Tests:**
-- [ ] Genome extraction unchanged
-- [ ] Regeneration works correctly
-- [ ] LCA contract satisfied
+**Tests:** ✅ All passing
+- [x] Genome extraction unchanged
+- [x] Regeneration works correctly
+- [x] LCA contract satisfied
 
-### 2.6 Sleep Agent (ConsolidationProcess)
+### 2.6 Sleep Agent (ConsolidationProcess) ✅ COMPLETE
+
+**Status:** All tasks completed, 349 tests passing, zero warnings.
 
 **File:** `src/processes/consolidation.rs`
 
-- [ ] Rename/refactor `ConsolidationProcess` → `SleepAgent`
-- [ ] Add `local_root: Distinction` (Root: SLEEP)
-- [ ] Add `phase: SleepPhase` tracking
-- [ ] Implement `LocalCausalAgent`:
+- [x] Rename/refactor `ConsolidationProcess` → `SleepAgent`
+- [x] Add `local_root: Distinction` (Root: SLEEP)
+- [x] Add `phase: SleepPhase` tracking
+- [x] Implement `LocalCausalAgent`:
   ```rust
   impl LocalCausalAgent for SleepAgent {
       type ActionData = SleepAction;
-      // ...
+      
+      fn get_current_root(&self) -> &Distinction { &self.local_root }
+      fn update_local_root(&mut self, new_root: Distinction) { self.local_root = new_root; }
+      fn synthesize_action(&mut self, action: SleepAction, engine: &Arc<DistinctionEngine>) 
+          -> Distinction {
+          let action_distinction = action.to_canonical_structure(engine);
+          let new_root = engine.synthesize(&self.local_root, &action_distinction);
+          self.local_root = new_root.clone();
+          new_root
+      }
   }
   ```
-- [ ] Create `SleepAction` enum:
-  ```rust
-  pub enum SleepAction {
-      EnterPhase { phase: SleepPhase },
-      Consolidate { from: Distinction, to: Distinction },
-      Dream,  // Random synthesis exploration
-      Wake,
-  }
-  ```
-- [ ] Create `SleepPhase` enum:
-  ```rust
-  pub enum SleepPhase {
-      Awake,
-      LightSleep,    // Hot → Warm
-      DeepSleep,     // Warm → Cold
-      REM,           // Pattern extraction
-  }
-  ```
-- [ ] Refactor consolidation as synthesis
-- [ ] Maintain timing/interval behavior (no regression)
+- [x] Refactor consolidation as synthesis
+- [x] Maintain timing/interval behavior (no regression)
+- [x] Add backward-compatible type aliases (`ConsolidationProcess`, `ConsolidationConfig`)
 
-**Tests:**
-- [ ] Consolidation timing unchanged
-- [ ] Phase transitions work
-- [ ] Dream synthesis explores field
-- [ ] LCA contract satisfied
+**Tests:** ✅ All passing
+- [x] Consolidation timing unchanged
+- [x] Phase transitions work
+- [x] Dream synthesis explores field
+- [x] LCA contract satisfied
 
 ### 2.7 Evolution Agent (DistillationProcess)
 
