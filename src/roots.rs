@@ -17,6 +17,7 @@
 //!
 //! Each agent in the field anchors to a specific root distinction:
 //! - `FIELD`: The universal root - all agents share this foundation
+//! - `ORCHESTRATOR`: The orchestrator's perspective (agent coordination)
 //! - `STORAGE` (MEMORY): The storage agent's perspective
 //! - `TEMPERATURE`: The temperature agent's perspective (what's active)
 //! - `CHRONICLE`: The chronicle agent's perspective (recent history)
@@ -119,6 +120,12 @@ pub struct KoruRoots {
     /// Anchors all cluster/distributed operations. The network is
     /// synthesized from this root with peer actions.
     pub network: Distinction,
+
+    /// Orchestrator root - perspective of agent coordination (Root: ORCHESTRATOR).
+    ///
+    /// Anchors all agent registration and coordination. The orchestrator
+    /// synthesizes from this root with coordination actions.
+    pub orchestrator: Distinction,
 }
 
 impl KoruRoots {
@@ -160,6 +167,7 @@ impl KoruRoots {
         let perspective = Self::synthesize_agent_root(engine, &d1, b"PERSPECTIVE");
         let identity = Self::synthesize_agent_root(engine, &d1, b"IDENTITY");
         let network = Self::synthesize_agent_root(engine, &d1, b"NETWORK");
+        let orchestrator = Self::synthesize_agent_root(engine, &d1, b"ORCHESTRATOR");
 
         // The field root is the synthesis of all agent roots
         // This represents the unified consciousness field
@@ -178,6 +186,7 @@ impl KoruRoots {
                 &perspective,
                 &identity,
                 &network,
+                &orchestrator,
             ],
         );
 
@@ -194,6 +203,7 @@ impl KoruRoots {
             perspective,
             identity,
             network,
+            orchestrator,
         }
     }
 
@@ -241,6 +251,7 @@ impl KoruRoots {
     pub fn get_root(&self, root_type: RootType) -> &Distinction {
         match root_type {
             RootType::Field => &self.field,
+            RootType::Orchestrator => &self.orchestrator,
             RootType::Storage => &self.storage,
             RootType::Temperature => &self.temperature,
             RootType::Chronicle => &self.chronicle,
@@ -261,6 +272,8 @@ impl KoruRoots {
 pub enum RootType {
     /// The universal field root.
     Field,
+    /// Orchestrator root.
+    Orchestrator,
     /// Storage agent root.
     Storage,
     /// Temperature agent root.
@@ -290,6 +303,7 @@ impl RootType {
     pub fn as_str(&self) -> &'static str {
         match self {
             RootType::Field => "FIELD",
+            RootType::Orchestrator => "ORCHESTRATOR",
             RootType::Storage => "STORAGE",
             RootType::Temperature => "TEMPERATURE",
             RootType::Chronicle => "CHRONICLE",

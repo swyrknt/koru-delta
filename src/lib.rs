@@ -106,7 +106,9 @@ mod types;
 // Foundation: canonical roots, actions, and shared engine
 pub mod actions;
 pub mod engine;
+pub mod orchestrator;
 pub mod roots;
+pub mod sensory_interface;
 
 // v2.0: Distinction-driven modules
 pub mod causal_graph;

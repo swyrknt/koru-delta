@@ -73,6 +73,14 @@ pub enum KoruAction {
     Identity(IdentityAction),
     /// Network operations - distributed coordination.
     Network(NetworkAction),
+    /// Pulse operations - orchestrator coordination.
+    Pulse(PulseAction),
+}
+
+impl From<PulseAction> for KoruAction {
+    fn from(action: PulseAction) -> Self {
+        KoruAction::Pulse(action)
+    }
 }
 
 impl KoruAction {
@@ -90,6 +98,7 @@ impl KoruAction {
             KoruAction::Perspective(_) => "PERSPECTIVE",
             KoruAction::Identity(_) => "IDENTITY",
             KoruAction::Network(_) => "NETWORK",
+            KoruAction::Pulse(_) => "PULSE",
         }
     }
 
@@ -109,23 +118,34 @@ impl KoruAction {
             KoruAction::Perspective(action) => action.validate(),
             KoruAction::Identity(action) => action.validate(),
             KoruAction::Network(action) => action.validate(),
+            KoruAction::Pulse(action) => action.validate(),
         }
     }
 }
 
 impl Canonicalizable for KoruAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
-        // Convert action to canonical byte representation via bincode
-        // This provides deterministic, compact serialization
-        match self.to_bytes() {
-            Ok(bytes) => Self::bytes_to_distinction(&bytes, engine),
-            Err(_) => engine.d0().clone(), // Fallback to void on error
+        // Delegate to the inner action type
+        match self {
+            KoruAction::Storage(action) => action.to_canonical_structure(engine),
+            KoruAction::Temperature(action) => action.to_canonical_structure(engine),
+            KoruAction::Chronicle(action) => action.to_canonical_structure(engine),
+            KoruAction::Archive(action) => action.to_canonical_structure(engine),
+            KoruAction::Essence(action) => action.to_canonical_structure(engine),
+            KoruAction::Sleep(action) => action.to_canonical_structure(engine),
+            KoruAction::Evolution(action) => action.to_canonical_structure(engine),
+            KoruAction::Lineage(action) => action.to_canonical_structure(engine),
+            KoruAction::Perspective(action) => action.to_canonical_structure(engine),
+            KoruAction::Identity(action) => action.to_canonical_structure(engine),
+            KoruAction::Network(action) => action.to_canonical_structure(engine),
+            KoruAction::Pulse(action) => action.to_canonical_structure(engine),
         }
     }
 }
 
 impl KoruAction {
     /// Serialize action to bytes for canonicalization.
+    #[allow(dead_code)]
     fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
         // We use a simplified representation for serialization
         // Distinction IDs are stored as strings
@@ -133,6 +153,7 @@ impl KoruAction {
     }
 
     /// Convert bytes to distinction via synthesis.
+    #[allow(dead_code)]
     fn bytes_to_distinction(bytes: &[u8], engine: &DistinctionEngine) -> Distinction {
         bytes
             .iter()
@@ -145,6 +166,7 @@ impl KoruAction {
 /// This is an internal type used for serialization - it mirrors KoruAction
 /// but uses types that implement Serialize/Deserialize.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 enum ActionSerializable {
     Storage(StorageActionSerializable),
     Temperature(TemperatureActionSerializable),
@@ -157,6 +179,7 @@ enum ActionSerializable {
     Perspective(PerspectiveActionSerializable),
     Identity(IdentityActionSerializable),
     Network(NetworkActionSerializable),
+    Pulse(PulseActionSerializable),
 }
 
 impl From<&KoruAction> for ActionSerializable {
@@ -173,6 +196,7 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Perspective(a) => ActionSerializable::Perspective(a.into()),
             KoruAction::Identity(a) => ActionSerializable::Identity(a.into()),
             KoruAction::Network(a) => ActionSerializable::Network(a.into()),
+            KoruAction::Pulse(a) => ActionSerializable::Pulse(a.into()),
         }
     }
 }
@@ -1305,6 +1329,101 @@ impl NetworkAction {
                 Ok(())
             }
             NetworkAction::Broadcast { .. } | NetworkAction::Gossip { .. } => Ok(()),
+        }
+    }
+}
+
+/// Actions for the orchestrator.
+///
+/// These actions represent coordination operations for the agent orchestrator,
+/// enabling agent registration, pulse coordination, and system-wide synthesis.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PulseAction {
+    /// Register a new agent.
+    RegisterAgent {
+        /// Agent ID.
+        agent_id: String,
+        /// Agent type.
+        agent_type: String,
+    },
+    /// Unregister an agent.
+    UnregisterAgent {
+        /// Agent ID.
+        agent_id: String,
+    },
+    /// Trigger a coordination pulse.
+    TriggerPulse {
+        /// Phase name.
+        phase: String,
+    },
+}
+
+/// Serializable version of PulseAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum PulseActionSerializable {
+    RegisterAgent { agent_id: String, agent_type: String },
+    UnregisterAgent { agent_id: String },
+    TriggerPulse { phase: String },
+}
+
+impl From<&PulseAction> for PulseActionSerializable {
+    fn from(action: &PulseAction) -> Self {
+        match action {
+            PulseAction::RegisterAgent { agent_id, agent_type } => {
+                PulseActionSerializable::RegisterAgent {
+                    agent_id: agent_id.clone(),
+                    agent_type: agent_type.clone(),
+                }
+            }
+            PulseAction::UnregisterAgent { agent_id } => {
+                PulseActionSerializable::UnregisterAgent {
+                    agent_id: agent_id.clone(),
+                }
+            }
+            PulseAction::TriggerPulse { phase } => {
+                PulseActionSerializable::TriggerPulse {
+                    phase: phase.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl PulseAction {
+    /// Validate the pulse action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            PulseAction::RegisterAgent { agent_id, agent_type } => {
+                if agent_id.is_empty() {
+                    return Err("PulseAction::RegisterAgent: agent_id is empty".to_string());
+                }
+                if agent_type.is_empty() {
+                    return Err("PulseAction::RegisterAgent: agent_type is empty".to_string());
+                }
+                Ok(())
+            }
+            PulseAction::UnregisterAgent { agent_id } => {
+                if agent_id.is_empty() {
+                    return Err("PulseAction::UnregisterAgent: agent_id is empty".to_string());
+                }
+                Ok(())
+            }
+            PulseAction::TriggerPulse { phase } => {
+                if phase.is_empty() {
+                    return Err("PulseAction::TriggerPulse: phase is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Canonicalizable for PulseAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = PulseActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
         }
     }
 }

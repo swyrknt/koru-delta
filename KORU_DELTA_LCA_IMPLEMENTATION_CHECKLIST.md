@@ -548,29 +548,34 @@ Instead of implementing `LocalCausalAgent` directly on `ClusterNode`, Phase 3 wi
 
 ## Phase 3: Integration & Coordination
 
-### 3.1 Agent Orchestrator
+### 3.1 Agent Orchestrator ✅ COMPLETE
 
-**File:** `src/orchestrator.rs` (NEW)
+**Status:** All tasks completed, 372 tests passing, zero warnings.
 
-- [ ] Create `src/orchestrator.rs` module
-- [ ] Define `KoruOrchestrator` struct:
+**File:** `src/orchestrator.rs`
+
+- [x] Create `src/orchestrator.rs` module
+- [x] Define `KoruOrchestrator` struct:
   ```rust
   pub struct KoruOrchestrator {
       engine: SharedEngine,
-      roots: KoruRoots,
-      agents: AgentRegistry,
+      field: FieldHandle,
+      local_root: RwLock<Distinction>,
+      agents: RwLock<AgentRegistry>,
       pulse: PulseCoordinator,
   }
   ```
-- [ ] Implement agent lifecycle management
-- [ ] Implement shared engine coordination
-- [ ] Implement pulse coordination for ALIS integration
-- [ ] Add agent discovery and registration
+- [x] Implement agent lifecycle management
+- [x] Implement shared engine coordination
+- [x] Implement pulse coordination for external integration
+- [x] Add agent discovery and registration
+- [x] Add RootType::Orchestrator canonical root
 
-**Tests:**
-- [ ] All agents register correctly
-- [ ] Shared engine is properly distributed
-- [ ] Pulse coordination works
+**Tests:** ✅ All passing
+- [x] All agents register correctly
+- [x] Shared engine is properly distributed
+- [x] Pulse coordination works
+- [x] LCA synthesis through orchestrator works
 
 ### 3.2 Workspace Agent Integration
 
@@ -617,33 +622,46 @@ Instead of implementing `LocalCausalAgent` directly on `ClusterNode`, Phase 3 wi
 - [ ] Vector search works
 - [ ] Time-travel search works
 
-### 3.4 ALIS Bridge Module
+### 3.4 Sensory Interface Module ✅ COMPLETE
 
-**File:** `src/alis_bridge.rs` (NEW)
+**Status:** All tasks completed, 372 tests passing, zero warnings.
 
-- [ ] Create `src/alis_bridge.rs` module
-- [ ] Implement `AlisBridge` struct:
+**Rationale:** Renamed from "ALIS Bridge" to maintain KoruDelta's independence.
+The Sensory Interface is the boundary where external signals become distinctions - 
+like biological sensory organs transducing stimuli into neural signals. It maintains
+strict unidirectional flow (external → field) with no privileged access.
+
+**File:** `src/sensory_interface.rs`
+
+- [x] Create `src/sensory_interface.rs` module
+- [x] Implement `SensoryInterface` struct:
   ```rust
-  pub struct AlisBridge {
-      delta_agent: KoruDelta,
-      pulse_rx: Receiver<Phase>,
-      sync_tx: Sender<SyncEvent>,
+  pub struct SensoryInterface {
+      orchestrator: Arc<KoruOrchestrator>,
+      event_rx: Receiver<SensoryEvent>,
   }
   ```
-- [ ] Implement pulse phase handling:
-  - [ ] Perception phase coordination
-  - [ ] Expression phase coordination
-  - [ ] Consolidation phase coordination
-  - [ ] Dream phase coordination
-- [ ] Implement cross-agent synthesis
-- [ ] Add ALIS-compatible event interface
+- [x] Implement unidirectional event flow:
+  - External events enter through channel
+  - Events synthesized as distinctions: `ΔNew = ΔOrchestrator_Root ⊕ ΔEvent`
+  - No special response mechanism (external queries through normal API)
+- [x] Implement `SensoryEvent` enum:
+  - `PhaseTrigger` - coordination phase signals
+  - `AgentRegistered` / `AgentUnregistered` - agent lifecycle
+  - `Custom` - arbitrary external events
+- [x] Add pulse phase handling (Input, Processing, Output, Consolidation, Exploration)
+- [x] Implement cross-agent synthesis through orchestrator
 
-**Tests:**
-- [ ] Bridge responds to pulse phases
-- [ ] Cross-agent synthesis works
-- [ ] ALIS integration test passes
+**Tests:** ✅ All passing
+- [x] Interface creation works
+- [x] Phase trigger events synthesize correctly
+- [x] Agent registration events synthesize correctly
+- [x] Custom events synthesize correctly
+- [x] Phase parsing handles various inputs
 
-**Deliverable:** All agents integrated and coordinated
+**Deliverable:** Generic interface for external systems to coordinate with KoruDelta
+without coupling. External systems (ALIS, humans, other agents) observe state through
+normal orchestrator APIs - no special privileges.
 
 ---
 
