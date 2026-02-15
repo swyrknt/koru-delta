@@ -238,7 +238,7 @@ pub struct KoruDeltaGeneric<R: Runtime> {
     /// Reconciliation manager for distributed sync (Phase 7/8)
     #[allow(dead_code)]
     reconciliation: Arc<RwLock<ReconciliationManager>>,
-    /// Auth manager
+    /// Auth manager (LCA Identity Agent)
     auth: Arc<AuthManager>,
     /// Lifecycle manager for memory consolidation (non-WASM only)
     #[cfg(not(target_arch = "wasm32"))]
@@ -347,10 +347,11 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Initialize reconciliation
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
 
-        // Initialize auth
+        // Initialize auth with LCA identity agent
         let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
+            &shared_engine,
         ));
 
         // Initialize views with LCA perspective agent
@@ -437,10 +438,11 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Initialize reconciliation
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
 
-        // Initialize auth
+        // Initialize auth with LCA identity agent
         let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
+            &shared_engine,
         ));
 
         // Initialize views with LCA perspective agent
@@ -744,10 +746,11 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Initialize reconciliation
         let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
 
-        // Initialize auth
+        // Initialize auth with LCA identity agent
         let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
+            &shared_engine,
         ));
 
         // Initialize views with LCA perspective agent
@@ -1468,8 +1471,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     }
 
     /// Get auth manager.
-    pub fn auth(&self) -> &AuthManager {
-        &self.auth
+    pub fn auth(&self) -> Arc<AuthManager> {
+        Arc::clone(&self.auth)
     }
 
     /// Get lifecycle manager for memory consolidation (non-WASM only).

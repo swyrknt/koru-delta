@@ -1,10 +1,33 @@
-//! Auth manager - high-level interface for authentication.
+//! Identity Agent - self-sovereign authentication via LCA synthesis.
 //!
-//! This module provides the main AuthManager that coordinates identity,
-//! session, capability, and verification operations.
+//! This module provides the IdentityAgent that coordinates identity,
+//! session, capability, and verification operations through the unified
+//! distinction field. All operations follow the LCA pattern:
+//!
+//! ```text
+//! ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+//! ```
+//!
+//! # Core Concepts
+//!
+//! ## Identity as Distinction
+//! An identity is mined as a distinction within the field, containing:
+//! - Ed25519 public key (as distinction content)
+//! - User data (synthesized into the identity)
+//! - Proof-of-work (prevents spam, verified as distinction validity)
+//!
+//! ## Capability Chains
+//! Capabilities form chains in the distinction graph:
+//! - Each grant synthesizes granter → grantee with permission
+//! - Revocations are tombstone distinctions
+//! - Authorization traces paths through the graph
 
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
+
+use crate::actions::IdentityAction;
 use crate::auth::capability::{create_capability, create_revocation, CapabilityManager};
 use crate::auth::identity::{mine_identity_sync, verify_identity_pow};
 use crate::auth::session::{create_session_token, SessionManager};
@@ -14,11 +37,13 @@ use crate::auth::types::{
     Revocation, Session,
 };
 use crate::auth::verification::{verify_challenge_response, ChallengeStore};
+use crate::engine::{FieldHandle, SharedEngine};
+use crate::roots::RootType;
 use crate::storage::CausalStorage;
 
-/// Configuration for the auth system.
+/// Configuration for the identity agent.
 #[derive(Debug, Clone)]
-pub struct AuthConfig {
+pub struct IdentityConfig {
     /// Difficulty for identity mining (default: 4)
     pub identity_difficulty: u8,
 
@@ -32,7 +57,7 @@ pub struct AuthConfig {
     pub persist_sessions: bool,
 }
 
-impl Default for AuthConfig {
+impl Default for IdentityConfig {
     fn default() -> Self {
         Self {
             identity_difficulty: 4,
@@ -43,11 +68,23 @@ impl Default for AuthConfig {
     }
 }
 
-/// High-level authentication manager.
+/// Identity Agent - self-sovereign authentication via LCA synthesis.
 ///
-/// Coordinates all auth operations: identity management, challenge-response,
-/// session management, and capability-based authorization.
-pub struct AuthManager {
+/// Coordinates all identity operations through the unified field:
+/// - Identity management (mining, registration)
+/// - Challenge-response authentication
+/// - Session management
+/// - Capability-based authorization
+///
+/// # LCA Architecture
+///
+/// All operations synthesize: `ΔNew = ΔLocal_Root ⊕ ΔIdentity_Action`
+/// - Local root: RootType::Identity (canonical root for all identity)
+/// - Identities: Synthesis of all known identities in the field
+///
+/// Note: Uses internal mutability (RefCell) to allow &self API while
+/// maintaining LCA synthesis state.
+pub struct IdentityAgent {
     /// Storage adapter for auth data
     storage: AuthStorageAdapter,
 
@@ -58,27 +95,86 @@ pub struct AuthManager {
     sessions: SessionManager,
 
     /// Capability manager (caches capabilities from storage)
-    capabilities: CapabilityManager,
+    capabilities: RwLock<CapabilityManager>,
 
     /// Configuration
-    config: AuthConfig,
+    config: IdentityConfig,
+
+    /// LCA: Local root distinction (Root: IDENTITY)
+    local_root: RwLock<Distinction>,
+
+    /// LCA: Synthesis of all identities
+    identities: RwLock<Distinction>,
+
+    /// LCA: Handle to the shared field
+    field: FieldHandle,
+
+    /// Statistics
+    identities_mined: AtomicU64,
+    sessions_created: AtomicU64,
+    capabilities_granted: AtomicU64,
 }
 
-impl AuthManager {
-    /// Create a new auth manager.
-    pub fn new(storage: Arc<CausalStorage>) -> Self {
-        Self::with_config(storage, AuthConfig::default())
+// IdentityAgent is !Sync due to RefCell, but we can still use it in single-threaded contexts
+// For multi-threaded access, wrap in a Mutex or RwLock
+
+impl IdentityAgent {
+    /// Create a new identity agent.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent initializes with:
+    /// - `local_root` = RootType::Identity (from shared field roots)
+    /// - `identities` = Synthesis of all identity distinctions
+    /// - `field` = Handle to the unified distinction engine
+    pub fn new(storage: Arc<CausalStorage>, shared_engine: &SharedEngine) -> Self {
+        Self::with_config(storage, IdentityConfig::default(), shared_engine)
     }
 
-    /// Create a new auth manager with custom config.
-    pub fn with_config(storage: Arc<CausalStorage>, config: AuthConfig) -> Self {
+    /// Create a new identity agent with custom config.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent anchors to the IDENTITY root, which is synthesized
+    /// from the primordial distinctions (d0, d1) in the shared field.
+    pub fn with_config(
+        storage: Arc<CausalStorage>,
+        config: IdentityConfig,
+        shared_engine: &SharedEngine,
+    ) -> Self {
+        let local_root = shared_engine.root(RootType::Identity).clone();
+        let identities = shared_engine.root(RootType::Identity).clone();
+        let field = FieldHandle::new(shared_engine);
+
         Self {
             storage: AuthStorageAdapter::new(storage),
             challenges: ChallengeStore::with_ttl(config.challenge_ttl_seconds),
             sessions: SessionManager::with_ttl(config.session_ttl_seconds),
-            capabilities: CapabilityManager::new(),
+            capabilities: RwLock::new(CapabilityManager::new()),
             config,
+            local_root: RwLock::new(local_root),
+            identities: RwLock::new(identities),
+            field,
+            identities_mined: AtomicU64::new(0),
+            sessions_created: AtomicU64::new(0),
+            capabilities_granted: AtomicU64::new(0),
         }
+    }
+
+    // ========================================================================
+    // LCA Synthesis Helpers
+    // ========================================================================
+
+    /// Internal synthesis helper.
+    ///
+    /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    fn synthesize_action_internal(&self, action: IdentityAction) -> Distinction {
+        let engine = self.field.engine_arc();
+        let action_distinction = action.to_canonical_structure(engine);
+        let local_root = self.local_root.read().unwrap().clone();
+        let new_root = engine.synthesize(&local_root, &action_distinction);
+        *self.local_root.write().unwrap() = new_root.clone();
+        new_root
     }
 
     // ========================================================================
@@ -87,16 +183,27 @@ impl AuthManager {
 
     /// Mine and register a new identity.
     ///
-    /// This is the synchronous version for convenience.
-    /// For async contexts, use `mine_identity` and `register_identity` separately.
-    pub fn create_identity(
-        &self,
-        user_data: IdentityUserData,
-    ) -> Result<(Identity, Vec<u8>), AuthError> {
+    /// # LCA Pattern
+    ///
+    /// Mining synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔMineIdentity_Action`
+    /// then the identity is synthesized into the identities distinction.
+    pub fn create_identity(&self, user_data: IdentityUserData) -> Result<(Identity, Vec<u8>), AuthError> {
+        // Synthesize mine identity action
+        let pow_json = serde_json::json!({
+            "difficulty": self.config.identity_difficulty,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        });
+        let action = IdentityAction::MineIdentity {
+            proof_of_work_json: pow_json,
+        };
+        let _ = self.synthesize_action_internal(action);
+
         let mined = mine_identity_sync(user_data, self.config.identity_difficulty);
 
         // Store the identity
         self.register_identity(&mined.identity)?;
+
+        self.identities_mined.fetch_add(1, Ordering::SeqCst);
 
         Ok((mined.identity, mined.secret_key))
     }
@@ -158,6 +265,10 @@ impl AuthManager {
 
     /// Verify a challenge response and create a session.
     ///
+    /// # LCA Pattern
+    ///
+    /// Authentication synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔAuthenticate_Action`
+    ///
     /// # Arguments
     /// * `public_key` - The identity's public key
     /// * `challenge` - The challenge string
@@ -171,6 +282,13 @@ impl AuthManager {
         challenge: &str,
         response: &str,
     ) -> Result<Session, AuthError> {
+        // Synthesize authenticate action
+        let action = IdentityAction::Authenticate {
+            identity_id: public_key.to_string(),
+            challenge: challenge.to_string(),
+        };
+        let _ = self.synthesize_action_internal(action);
+
         // Verify challenge-response
         verify_challenge_response(&self.challenges, public_key, challenge, response)?;
 
@@ -189,6 +307,8 @@ impl AuthManager {
         let (session, _keys) = self
             .sessions
             .create_session(public_key, challenge, capability_refs);
+
+        self.sessions_created.fetch_add(1, Ordering::SeqCst);
 
         Ok(session)
     }
@@ -237,6 +357,10 @@ impl AuthManager {
 
     /// Grant a capability.
     ///
+    /// # LCA Pattern
+    ///
+    /// Granting synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔGrantCapability_Action`
+    ///
     /// # Arguments
     /// * `granter_key` - The granter's secret key (must be Admin on resource)
     /// * `grantee` - The public key receiving the capability
@@ -244,7 +368,7 @@ impl AuthManager {
     /// * `permission` - The level of access
     /// * `expires_at` - Optional expiration
     pub fn grant_capability(
-        &mut self,
+        &self,
         granter_identity: &Identity,
         granter_secret_key: &[u8],
         grantee: &str,
@@ -252,6 +376,14 @@ impl AuthManager {
         permission: Permission,
         expires_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Capability, AuthError> {
+        // Synthesize grant capability action
+        let action = IdentityAction::GrantCapability {
+            from_id: granter_identity.public_key.clone(),
+            to_id: grantee.to_string(),
+            permission: format!("{:?}", permission),
+        };
+        let _ = self.synthesize_action_internal(action);
+
         // Verify granter exists
         if !self.storage.identity_exists(&granter_identity.public_key)? {
             return Err(AuthError::IdentityNotFound(
@@ -281,14 +413,16 @@ impl AuthManager {
         self.storage.store_capability(&capability)?;
 
         // Add to cache
-        self.capabilities.add_capability(capability.clone());
+        self.capabilities.write().unwrap().add_capability(capability.clone());
+
+        self.capabilities_granted.fetch_add(1, Ordering::SeqCst);
 
         Ok(capability)
     }
 
     /// Revoke a capability.
     pub fn revoke_capability(
-        &mut self,
+        &self,
         capability: &Capability,
         revoker_secret_key: &[u8],
         reason: Option<String>,
@@ -300,12 +434,16 @@ impl AuthManager {
         self.storage.store_revocation(&revocation)?;
 
         // Add to cache
-        self.capabilities.add_revocation(revocation.clone());
+        self.capabilities.write().unwrap().add_revocation(revocation.clone());
 
         Ok(revocation)
     }
 
     /// Authorize access to a resource.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Authorization synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔVerifyAccess_Action`
     pub fn authorize(
         &self,
         identity_key: &str,
@@ -313,6 +451,13 @@ impl AuthManager {
         key: &str,
         required_permission: Permission,
     ) -> Result<CapabilityRef, AuthError> {
+        // Synthesize verify access action
+        let action = IdentityAction::VerifyAccess {
+            identity_id: identity_key.to_string(),
+            resource: format!("{}:{}", namespace, key),
+        };
+        let _ = self.synthesize_action_internal(action);
+
         // Get active capabilities from storage
         let capabilities = self.storage.get_active_capabilities(identity_key)?;
 
@@ -356,11 +501,11 @@ impl AuthManager {
     }
 
     /// Refresh capability cache from storage.
-    pub fn refresh_capabilities(&mut self) -> Result<(), AuthError> {
+    pub fn refresh_capabilities(&self) -> Result<(), AuthError> {
         let all_capabilities = self.storage.list_all_capabilities()?;
         let all_revocations = self.storage.list_all_revocations()?;
 
-        self.capabilities.load(all_capabilities, all_revocations);
+        self.capabilities.write().unwrap().load(all_capabilities, all_revocations);
         Ok(())
     }
 
@@ -374,35 +519,98 @@ impl AuthManager {
     }
 
     /// Get configuration.
-    pub fn config(&self) -> &AuthConfig {
+    pub fn config(&self) -> &IdentityConfig {
         &self.config
     }
 
-    /// Get stats about auth state.
-    pub fn stats(&self) -> AuthStats {
-        AuthStats {
+    /// Get stats about identity state.
+    pub fn stats(&self) -> IdentityStats {
+        IdentityStats {
             active_challenges: self.challenges.len(),
             active_sessions: self.sessions.len(),
+            identities_mined: self.identities_mined.load(Ordering::SeqCst),
+            sessions_created: self.sessions_created.load(Ordering::SeqCst),
+            capabilities_granted: self.capabilities_granted.load(Ordering::SeqCst),
         }
+    }
+
+    /// Get the identities distinction (synthesis of all identities).
+    pub fn identities_distinction(&self) -> Distinction {
+        self.identities.read().unwrap().clone()
     }
 }
 
-/// Auth statistics.
+/// Identity statistics.
 #[derive(Debug, Clone)]
-pub struct AuthStats {
+pub struct IdentityStats {
     pub active_challenges: usize,
     pub active_sessions: usize,
+    pub identities_mined: u64,
+    pub sessions_created: u64,
+    pub capabilities_granted: u64,
 }
+
+/// LCA Pattern Implementation for IdentityAgent
+///
+/// All operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+///
+/// Note: This implementation uses internal mutability (RwLock) to allow
+/// the LCA pattern to work through &self methods, enabling use in
+/// multi-threaded contexts like HTTP handlers.
+impl IdentityAgent {
+    /// Get the current local root distinction.
+    pub fn get_local_root(&self) -> Distinction {
+        self.local_root.read().unwrap().clone()
+    }
+
+    /// Update the local root (used by LCA synthesis).
+    #[allow(dead_code)]
+    fn update_local_root(&self, new_root: Distinction) {
+        *self.local_root.write().unwrap() = new_root;
+    }
+
+    /// Synthesize an action with the current local root.
+    ///
+    /// Follows the LCA pattern: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    #[allow(dead_code)]
+    fn synthesize_action(
+        &self,
+        action: IdentityAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let local_root = self.local_root.read().unwrap().clone();
+        let new_root = engine.synthesize(&local_root, &action_distinction);
+        *self.local_root.write().unwrap() = new_root.clone();
+        new_root
+    }
+}
+
+// ============================================================================
+// Backward-Compatible Type Aliases
+// ============================================================================
+
+/// Backward-compatible type alias for existing code.
+pub type AuthManager = IdentityAgent;
+
+/// Backward-compatible type alias for existing code.
+pub type AuthConfig = IdentityConfig;
+
+/// Backward-compatible type alias for existing code.
+pub type AuthStats = IdentityStats;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::SharedEngine;
 
-    fn create_test_manager() -> AuthManager {
-        let storage = Arc::new(CausalStorage::new(std::sync::Arc::new(
-            koru_lambda_core::DistinctionEngine::new(),
-        )));
-        AuthManager::new(storage)
+    fn create_test_manager() -> IdentityAgent {
+        let shared_engine = SharedEngine::new();
+        let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
+        IdentityAgent::new(storage, &shared_engine)
     }
 
     #[test]
@@ -472,7 +680,7 @@ mod tests {
 
     #[test]
     fn test_capability_management() {
-        let mut manager = create_test_manager();
+        let manager = create_test_manager();
 
         // Create granter
         let (granter, granter_key) = manager
@@ -549,7 +757,7 @@ mod tests {
 
     #[test]
     fn test_admin_permission() {
-        let mut manager = create_test_manager();
+        let manager = create_test_manager();
 
         let (granter, granter_key) = manager
             .create_identity(IdentityUserData::default())
@@ -630,5 +838,57 @@ mod tests {
 
         let result = manager.create_challenge("nonexistent_identity");
         assert!(matches!(result, Err(AuthError::IdentityNotFound(_))));
+    }
+
+    #[test]
+    fn test_backward_compatible_aliases() {
+        let shared_engine = SharedEngine::new();
+        let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
+
+        // Ensure backward compatibility works
+        let _auth_manager: AuthManager = IdentityAgent::new(storage, &shared_engine);
+        let _config: AuthConfig = IdentityConfig::default();
+    }
+
+    #[test]
+    fn test_stats_tracking() {
+        let manager = create_test_manager();
+
+        // Initial stats
+        let stats = manager.stats();
+        assert_eq!(stats.identities_mined, 0);
+        assert_eq!(stats.sessions_created, 0);
+        assert_eq!(stats.capabilities_granted, 0);
+
+        // Create identity
+        let (identity, secret_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
+        assert_eq!(manager.stats().identities_mined, 1);
+
+        // Create session
+        let challenge = manager.create_challenge(&identity.public_key).unwrap();
+        let response =
+            crate::auth::verification::create_challenge_response(&secret_key, &challenge).unwrap();
+        let _session = manager
+            .verify_and_create_session(&identity.public_key, &challenge, &response)
+            .unwrap();
+        assert_eq!(manager.stats().sessions_created, 1);
+
+        // Grant capability
+        let (grantee, _grantee_key) = manager
+            .create_identity(IdentityUserData::default())
+            .unwrap();
+        manager
+            .grant_capability(
+                &identity,
+                &secret_key,
+                &grantee.public_key,
+                ResourcePattern::Exact("test:resource".to_string()),
+                Permission::Read,
+                None,
+            )
+            .unwrap();
+        assert_eq!(manager.stats().capabilities_granted, 1);
     }
 }

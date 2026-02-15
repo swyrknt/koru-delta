@@ -118,7 +118,7 @@ pub use identity::{
     sign_message_base58, verify_identity_pow, verify_signature, DEFAULT_DIFFICULTY, MAX_DIFFICULTY,
     MIN_DIFFICULTY,
 };
-pub use manager::{AuthConfig, AuthManager, AuthStats};
+pub use manager::{AuthConfig, AuthManager, AuthStats, IdentityAgent, IdentityConfig, IdentityStats};
 pub use session::{
     create_session_token, derive_session_keys, validate_session_token, SessionManager,
     DEFAULT_SESSION_TTL_SECONDS, MAX_SESSION_TTL_SECONDS,
@@ -142,6 +142,7 @@ pub use http::{
     SessionInfo, SessionResponse, ValidateSessionRequest, ValidateSessionResponse, VerifyRequest,
 };
 
+use crate::engine::SharedEngine;
 use crate::storage::CausalStorage;
 use std::sync::Arc;
 
@@ -151,58 +152,65 @@ use std::sync::Arc;
 /// ```rust,ignore
 /// use koru_delta::auth;
 /// use koru_delta::storage::CausalStorage;
+/// use koru_delta::engine::SharedEngine;
 /// use std::sync::Arc;
 ///
 /// # fn example() {
+/// # let shared_engine = SharedEngine::new();
 /// # let storage = Arc::new(CausalStorage::new(
-/// #     std::sync::Arc::new(koru_lambda_core::DistinctionEngine::new())
+/// #     Arc::clone(shared_engine.inner())
 /// # ));
-/// let auth = auth::init(storage);
+/// let auth = auth::init(storage, &shared_engine);
 /// # }
 /// ```
-pub fn init(storage: Arc<CausalStorage>) -> AuthManager {
-    AuthManager::new(storage)
+pub fn init(storage: Arc<CausalStorage>, shared_engine: &SharedEngine) -> IdentityAgent {
+    IdentityAgent::new(storage, shared_engine)
 }
 
 /// Initialize the auth system with custom configuration.
 ///
 /// # Example
 /// ```rust,ignore
-/// use koru_delta::auth::{self, AuthConfig};
+/// use koru_delta::auth::{self, IdentityConfig};
 /// use koru_delta::storage::CausalStorage;
+/// use koru_delta::engine::SharedEngine;
 /// use std::sync::Arc;
 ///
 /// # fn example() {
+/// # let shared_engine = SharedEngine::new();
 /// # let storage = Arc::new(CausalStorage::new(
-/// #     std::sync::Arc::new(koru_lambda_core::DistinctionEngine::new())
+/// #     Arc::clone(shared_engine.inner())
 /// # ));
-/// let config = AuthConfig {
+/// let config = IdentityConfig {
 ///     identity_difficulty: 3,  // Easier mining
 ///     challenge_ttl_seconds: 600,  // 10 minutes
 ///     session_ttl_seconds: 3600,   // 1 hour
 ///     persist_sessions: true,
 /// };
-/// let auth = auth::init_with_config(storage, config);
+/// let auth = auth::init_with_config(storage, config, &shared_engine);
 /// # }
 /// ```
-pub fn init_with_config(storage: Arc<CausalStorage>, config: AuthConfig) -> AuthManager {
-    AuthManager::with_config(storage, config)
+pub fn init_with_config(
+    storage: Arc<CausalStorage>,
+    config: IdentityConfig,
+    shared_engine: &SharedEngine,
+) -> IdentityAgent {
+    IdentityAgent::with_config(storage, config, shared_engine)
 }
 
 #[cfg(test)]
 mod integration_tests {
     use super::*;
 
-    fn create_test_auth() -> AuthManager {
-        let storage = Arc::new(CausalStorage::new(std::sync::Arc::new(
-            koru_lambda_core::DistinctionEngine::new(),
-        )));
-        AuthManager::new(storage)
+    fn create_test_auth() -> IdentityAgent {
+        let shared_engine = SharedEngine::new();
+        let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
+        IdentityAgent::new(storage, &shared_engine)
     }
 
     #[test]
     fn test_full_auth_flow() {
-        let mut auth = create_test_auth();
+        let auth = create_test_auth();
 
         // 1. Create identity
         let user_data = IdentityUserData {
@@ -222,7 +230,7 @@ mod integration_tests {
         // 3. Sign challenge (client-side)
         let response = create_challenge_response(&secret_key, &challenge_str).unwrap();
 
-        // 4. Verify and create session
+        // 4. Verify and create session (use same agent since it now uses interior mutability)
         let session = auth
             .verify_and_create_session(&identity.public_key, &challenge_str, &response)
             .unwrap();
@@ -236,7 +244,7 @@ mod integration_tests {
         // 6. Create another identity for capability testing
         let (grantee, _grantee_key) = auth.create_identity(IdentityUserData::default()).unwrap();
 
-        // 7. Grant capability
+        // 7. Grant capability (use same agent)
         let cap = auth
             .grant_capability(
                 &identity,
@@ -248,15 +256,15 @@ mod integration_tests {
             )
             .unwrap();
 
-        // 8. Verify capability authorization
+        // 8. Verify capability authorization (use same agent)
         assert!(auth.check_permission(&grantee.public_key, "test", "data", Permission::Read));
         assert!(!auth.check_permission(&grantee.public_key, "test", "data", Permission::Write));
 
-        // 9. Revoke capability
+        // 9. Revoke capability (use same agent)
         auth.revoke_capability(&cap, &secret_key, Some("Test revocation".to_string()))
             .unwrap();
 
-        // 10. Verify revocation
+        // 10. Verify revocation (use same agent)
         assert!(!auth.check_permission(&grantee.public_key, "test", "data", Permission::Read));
 
         // 11. Cleanup
@@ -267,17 +275,17 @@ mod integration_tests {
 
     #[test]
     fn test_init_functions() {
-        let storage = Arc::new(CausalStorage::new(std::sync::Arc::new(
-            koru_lambda_core::DistinctionEngine::new(),
-        )));
+        let shared_engine = SharedEngine::new();
+        let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
 
-        let auth1 = init(storage.clone());
+        let auth1 = init(storage.clone(), &shared_engine);
         let auth2 = init_with_config(
             storage,
             AuthConfig {
                 identity_difficulty: 3,
                 ..Default::default()
             },
+            &shared_engine,
         );
 
         assert_eq!(auth1.config().identity_difficulty, 4); // default
