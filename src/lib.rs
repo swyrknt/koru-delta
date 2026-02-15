@@ -107,6 +107,7 @@ mod types;
 pub mod actions;
 pub mod engine;
 pub mod network_agent;
+pub mod network_process;
 pub mod orchestrator;
 pub mod roots;
 pub mod sensory_interface;
