@@ -1,8 +1,17 @@
-/// Cold Memory: Consolidated epochs layer.
+/// Archive Agent: Consolidated epochs layer with LCA architecture.
 ///
-/// Cold memory acts like the cerebral cortex - long-term storage,
+/// The Archive Agent acts like the cerebral cortex - long-term storage,
 /// compressed patterns, vast capacity. Data here is old but organized
 /// into epochs for efficient access.
+///
+/// ## LCA Architecture
+///
+/// As a Local Causal Agent, all operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+///
+/// The Archive Agent's local root is `RootType::Archive` (🗄️ ARCHIVE).
 ///
 /// ## Purpose
 ///
@@ -13,7 +22,7 @@
 ///
 /// ## Consolidation
 ///
-/// Warm data is "distilled" into Cold through natural selection:
+/// Chronicle data is "distilled" into Archive through natural selection:
 /// - High-fitness distinctions kept (referenced, important)
 /// - Low-fitness distinctions archived or discarded
 /// - Patterns extracted and compressed
@@ -24,18 +33,23 @@
 /// - Epoch 0: Oldest, most compressed
 /// - Epoch N: Newest, less compressed
 /// - Each epoch has an index for fast lookup
+use crate::actions::ArchiveAction;
 use crate::causal_graph::DistinctionId;
+use crate::engine::{FieldHandle, SharedEngine};
+use crate::roots::RootType;
+use crate::types::{FullKey, VersionedValue};
 #[cfg(test)]
 use crate::types::VectorClock;
-use crate::types::{FullKey, VersionedValue};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-/// Cold memory configuration.
+/// Archive agent configuration.
 #[derive(Debug, Clone)]
-pub struct ColdConfig {
+pub struct ArchiveConfig {
     /// Number of epochs to maintain
     pub epoch_count: usize,
 
@@ -49,7 +63,7 @@ pub struct ColdConfig {
     pub fitness_threshold: usize,
 }
 
-impl Default for ColdConfig {
+impl Default for ArchiveConfig {
     fn default() -> Self {
         Self {
             epoch_count: 7,                      // 7 epochs (like days/weeks)
@@ -60,12 +74,19 @@ impl Default for ColdConfig {
     }
 }
 
-/// Cold Memory layer - consolidated long-term storage.
+/// Archive Agent - consolidated long-term storage with LCA architecture.
 ///
 /// Like the cerebral cortex: vast, compressed, pattern-organized.
-pub struct ColdMemory {
+/// All operations are synthesized through the unified field.
+pub struct ArchiveAgent {
     /// Configuration
-    config: ColdConfig,
+    config: ArchiveConfig,
+
+    /// LCA: Local root distinction (Root: ARCHIVE)
+    local_root: Distinction,
+
+    /// LCA: Handle to the shared field
+    field: FieldHandle,
 
     /// Epochs (0 = oldest, N = newest)
     /// Each epoch has its own index and data
@@ -112,16 +133,32 @@ struct EpochEntry {
     data_ref: String,
 }
 
-impl ColdMemory {
-    /// Create new cold memory with default configuration.
-    pub fn new() -> Self {
-        Self::with_config(ColdConfig::default())
+impl ArchiveAgent {
+    /// Create new archive agent with default configuration.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent initializes with:
+    /// - `local_root` = RootType::Archive (from shared field roots)
+    /// - `field` = Handle to the unified distinction engine
+    pub fn new(shared_engine: &SharedEngine) -> Self {
+        Self::with_config(ArchiveConfig::default(), shared_engine)
     }
 
-    /// Create new cold memory with custom configuration.
-    pub fn with_config(config: ColdConfig) -> Self {
-        let memory = Self {
+    /// Create new archive agent with custom configuration.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent anchors to the ARCHIVE root, which is synthesized
+    /// from the primordial distinctions (d0, d1) in the shared field.
+    pub fn with_config(config: ArchiveConfig, shared_engine: &SharedEngine) -> Self {
+        let local_root = shared_engine.root(RootType::Archive).clone();
+        let field = FieldHandle::new(shared_engine);
+
+        let agent = Self {
             config,
+            local_root,
+            field,
             epochs: DashMap::new(),
             current_epoch: AtomicU64::new(0),
             consolidations: AtomicU64::new(0),
@@ -130,17 +167,21 @@ impl ColdMemory {
         };
 
         // Initialize first epoch
-        memory.create_epoch(0);
+        agent.create_epoch(0);
 
-        memory
+        agent
     }
 
-    /// Consolidate data from Warm into Cold.
+    /// Consolidate data from Chronicle into Archive.
     ///
-    /// Takes distinctions from Warm that are old enough and:
+    /// Takes distinctions from Chronicle that are old enough and:
     /// 1. Scores their fitness
     /// 2. Keeps high-fitness, archives low-fitness
     /// 3. Adds to current epoch
+    ///
+    /// # LCA Pattern
+    ///
+    /// Consolidation synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔArchive_Action`
     pub fn consolidate(
         &self,
         distinctions: Vec<(DistinctionId, FullKey, VersionedValue, usize)>, // (id, key, value, reference_count)
@@ -153,8 +194,14 @@ impl ColdMemory {
         for (id, key, versioned, ref_count) in distinctions {
             let fitness = ref_count;
 
+            // Synthesize archive action
+            let action = ArchiveAction::Archive {
+                distinction_ids: vec![id.clone()],
+            };
+            let _ = self.synthesize_action_internal(action);
+
             if fitness >= self.config.fitness_threshold {
-                // Keep in cold memory
+                // Keep in archive
                 self.add_to_epoch(epoch_num, id, key, versioned.timestamp, fitness);
                 kept += 1;
             } else {
@@ -172,11 +219,21 @@ impl ColdMemory {
         ConsolidationResult { kept, archived }
     }
 
-    /// Get a value from cold memory.
+    /// Get a value from archive.
     ///
     /// Searches through epochs from newest to oldest.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Retrieval synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔRetrieve_Action`
     pub fn get(&self, id: &DistinctionId) -> Option<(FullKey, String)> {
         let current = self.current_epoch.load(Ordering::Relaxed) as usize;
+
+        // Synthesize retrieve action
+        let action = ArchiveAction::Retrieve {
+            pattern: id.clone(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         // Search from newest to oldest
         for epoch_num in (0..=current).rev() {
@@ -211,15 +268,25 @@ impl ColdMemory {
         None
     }
 
-    /// Check if a distinction is in cold memory.
+    /// Check if a distinction is in archive.
     pub fn contains(&self, id: &DistinctionId) -> bool {
         self.get(id).is_some()
     }
 
     /// Rotate to a new epoch (called periodically).
+    ///
+    /// # LCA Pattern
+    ///
+    /// Epoch start synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔEpochStart_Action`
     pub fn rotate_epoch(&self) {
         let current = self.current_epoch.load(Ordering::Relaxed);
         let new_epoch = current + 1;
+
+        // Synthesize epoch start action
+        let action = ArchiveAction::EpochStart {
+            timestamp: Utc::now(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
         // Remove oldest epoch if we have too many
         let to_remove = new_epoch as i64 - self.config.epoch_count as i64;
@@ -248,8 +315,8 @@ impl ColdMemory {
     }
 
     /// Get statistics.
-    pub fn stats(&self) -> ColdStats {
-        ColdStats {
+    pub fn stats(&self) -> ArchiveStats {
+        ArchiveStats {
             consolidations: self.consolidations.load(Ordering::Relaxed),
             compressions: self.compressions.load(Ordering::Relaxed),
             archives: self.archives.load(Ordering::Relaxed),
@@ -316,12 +383,18 @@ impl ColdMemory {
             .unwrap_or(false);
 
         if should_compress {
+            // Synthesize compress action
+            let action = ArchiveAction::Compress {
+                epoch_id: format!("epoch_{}", epoch_num),
+            };
+            let _ = self.synthesize_action_internal(action);
+
             // TODO: Implement compression
             self.compressions.fetch_add(1, Ordering::Relaxed);
         }
     }
 
-    /// Consolidate a distinction into cold memory.
+    /// Consolidate a distinction into archive.
     ///
     /// Adds the distinction to the current epoch.
     pub fn consolidate_distinction(&self, _id: &DistinctionId) {
@@ -339,11 +412,51 @@ impl ColdMemory {
             self.maybe_compress_epoch(epoch_num);
         }
     }
+
+    /// Internal synthesis helper.
+    ///
+    /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    fn synthesize_action_internal(&self, action: ArchiveAction) -> Distinction {
+        let engine = self.field.engine_arc();
+        let action_distinction = action.to_canonical_structure(engine);
+        engine.synthesize(&self.local_root, &action_distinction)
+    }
 }
 
-impl Default for ColdMemory {
+impl Default for ArchiveAgent {
     fn default() -> Self {
-        Self::new()
+        // Note: This requires a SharedEngine, so we panic if called directly
+        // In practice, always use ArchiveAgent::new(&shared_engine)
+        panic!("ArchiveAgent requires a SharedEngine - use ArchiveAgent::new()")
+    }
+}
+
+/// LCA Trait Implementation for ArchiveAgent
+///
+/// All operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+impl LocalCausalAgent for ArchiveAgent {
+    type ActionData = ArchiveAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: ArchiveAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
     }
 }
 
@@ -362,10 +475,10 @@ pub struct Pattern {
     pub template: String,
 }
 
-/// Cold memory statistics.
+/// Archive agent statistics.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct ColdStats {
+pub struct ArchiveStats {
     pub consolidations: u64,
     pub compressions: u64,
     pub archives: u64,
@@ -373,12 +486,25 @@ pub struct ColdStats {
     pub total_distinctions: usize,
 }
 
+/// Backward-compatible type alias for existing code.
+pub type ColdMemory = ArchiveAgent;
+
+/// Backward-compatible type alias for existing code.
+pub type ColdConfig = ArchiveConfig;
+
+/// Backward-compatible type alias for existing code.
+pub type ColdStats = ArchiveStats;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Utc;
     use serde_json::json;
     use std::sync::Arc;
+
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
 
     fn create_versioned(value: serde_json::Value, id: &str) -> VersionedValue {
         VersionedValue::new(
@@ -392,16 +518,18 @@ mod tests {
     }
 
     #[test]
-    fn test_new_cold_memory() {
-        let cold = ColdMemory::new();
+    fn test_new_archive_agent() {
+        let engine = create_test_engine();
+        let archive = ArchiveAgent::new(&engine);
 
-        assert_eq!(cold.current_epoch(), 0);
-        assert_eq!(cold.epoch_count(), 1);
+        assert_eq!(archive.current_epoch(), 0);
+        assert_eq!(archive.epoch_count(), 1);
     }
 
     #[test]
     fn test_consolidate() {
-        let cold = ColdMemory::new();
+        let engine = create_test_engine();
+        let archive = ArchiveAgent::new(&engine);
 
         // Create distinctions with varying fitness
         let distinctions = vec![
@@ -425,21 +553,22 @@ mod tests {
             ), // Medium fitness
         ];
 
-        let result = cold.consolidate(distinctions);
+        let result = archive.consolidate(distinctions);
 
         // Threshold is 2, so v2 (fitness 1) should be archived
         assert_eq!(result.kept, 2);
         assert_eq!(result.archived, 1);
 
         // Check stats
-        let stats = cold.stats();
+        let stats = archive.stats();
         assert_eq!(stats.consolidations, 1);
         assert_eq!(stats.archives, 1);
     }
 
     #[test]
     fn test_contains() {
-        let cold = ColdMemory::new();
+        let engine = create_test_engine();
+        let archive = ArchiveAgent::new(&engine);
 
         let distinctions = vec![(
             "v1".to_string(),
@@ -448,50 +577,53 @@ mod tests {
             5,
         )];
 
-        cold.consolidate(distinctions);
+        archive.consolidate(distinctions);
 
-        assert!(cold.contains(&"v1".to_string()));
-        assert!(!cold.contains(&"v2".to_string()));
+        assert!(archive.contains(&"v1".to_string()));
+        assert!(!archive.contains(&"v2".to_string()));
     }
 
     #[test]
     fn test_rotate_epoch() {
-        let cold = ColdMemory::new();
+        let engine = create_test_engine();
+        let archive = ArchiveAgent::new(&engine);
 
-        assert_eq!(cold.current_epoch(), 0);
+        assert_eq!(archive.current_epoch(), 0);
 
-        cold.rotate_epoch();
-        assert_eq!(cold.current_epoch(), 1);
-        assert_eq!(cold.epoch_count(), 2);
+        archive.rotate_epoch();
+        assert_eq!(archive.current_epoch(), 1);
+        assert_eq!(archive.epoch_count(), 2);
 
-        cold.rotate_epoch();
-        assert_eq!(cold.current_epoch(), 2);
-        assert_eq!(cold.epoch_count(), 3);
+        archive.rotate_epoch();
+        assert_eq!(archive.current_epoch(), 2);
+        assert_eq!(archive.epoch_count(), 3);
     }
 
     #[test]
     fn test_epoch_limit() {
-        let config = ColdConfig {
+        let config = ArchiveConfig {
             epoch_count: 3,
             epoch_duration: Duration::days(1),
             max_distinctions_per_epoch: 100_000,
             fitness_threshold: 2,
         };
-        let cold = ColdMemory::with_config(config);
+        let engine = create_test_engine();
+        let archive = ArchiveAgent::with_config(config, &engine);
 
         // Rotate past limit
         for _ in 0..5 {
-            cold.rotate_epoch();
+            archive.rotate_epoch();
         }
 
         // Should only have 3 epochs (current + 2 previous)
-        assert_eq!(cold.epoch_count(), 3);
-        assert_eq!(cold.current_epoch(), 5);
+        assert_eq!(archive.epoch_count(), 3);
+        assert_eq!(archive.current_epoch(), 5);
     }
 
     #[test]
     fn test_total_distinctions() {
-        let cold = ColdMemory::new();
+        let engine = create_test_engine();
+        let archive = ArchiveAgent::new(&engine);
 
         let distinctions = vec![
             (
@@ -508,20 +640,21 @@ mod tests {
             ),
         ];
 
-        cold.consolidate(distinctions);
+        archive.consolidate(distinctions);
 
-        assert_eq!(cold.total_distinctions(), 2);
+        assert_eq!(archive.total_distinctions(), 2);
     }
 
     #[test]
     fn test_custom_config() {
-        let config = ColdConfig {
+        let config = ArchiveConfig {
             epoch_count: 10,
             epoch_duration: Duration::hours(6),
             max_distinctions_per_epoch: 50_000,
             fitness_threshold: 5,
         };
-        let cold = ColdMemory::with_config(config);
+        let engine = create_test_engine();
+        let archive = ArchiveAgent::with_config(config, &engine);
 
         let distinctions = vec![
             (
@@ -538,10 +671,45 @@ mod tests {
             ), // At threshold
         ];
 
-        let result = cold.consolidate(distinctions);
+        let result = archive.consolidate(distinctions);
 
         // Threshold is 5, so v1 (fitness 3) should be archived
         assert_eq!(result.kept, 1);
         assert_eq!(result.archived, 1);
+    }
+
+    #[test]
+    fn test_lca_trait_implementation() {
+        let engine = create_test_engine();
+        let mut agent = ArchiveAgent::new(&engine);
+
+        // Test get_current_root
+        let root = agent.get_current_root();
+        let root_id = root.id().to_string();
+        assert!(!root_id.is_empty());
+
+        // Test synthesize_action
+        let action = ArchiveAction::EpochStart {
+            timestamp: Utc::now(),
+        };
+        let engine_arc = Arc::clone(agent.field.engine_arc());
+        let new_root = agent.synthesize_action(action, &engine_arc);
+        assert!(!new_root.id().is_empty());
+        assert_ne!(new_root.id(), root_id);
+
+        // Test update_local_root
+        agent.update_local_root(new_root.clone());
+        assert_eq!(agent.get_current_root().id(), new_root.id());
+    }
+
+    #[test]
+    fn test_backward_compatible_aliases() {
+        // Ensure backward compatibility works
+        let engine = create_test_engine();
+        let _cold_memory: ColdMemory = ArchiveAgent::new(&engine);
+        let _config: ColdConfig = ArchiveConfig::default();
+        let engine2 = create_test_engine();
+        let agent = ArchiveAgent::with_config(_config, &engine2);
+        let _stats: ColdStats = agent.stats();
     }
 }

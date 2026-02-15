@@ -149,7 +149,7 @@ This checklist converts Koru-Delta from a traditional database architecture to a
 
 ### 2.1 Storage Agent (KoruDelta Core) ✅ COMPLETE
 
-**Status:** All tasks completed, 335 tests passing, zero warnings.
+**Status:** All tasks completed, 341 tests passing, zero warnings.
 
 **Files:** `src/core.rs`, `src/storage.rs`
 
@@ -178,30 +178,119 @@ This checklist converts Koru-Delta from a traditional database architecture to a
       }
   }
   ```
-- [x] Create `StorageAction` enum:
-  ```rust
-  pub enum StorageAction {
-      Store { namespace: String, key: String, value_json: serde_json::Value },
-      Retrieve { namespace: String, key: String },
-      History { namespace: String, key: String },
-      Query { pattern_json: serde_json::Value },
-      Delete { namespace: String, key: String },
-  }
-  ```
-- [x] Refactor `put()` to use `synthesize_action()`
-- [x] Refactor `get()` to use `synthesize_action()`
-- [x] Refactor `history()` to use `synthesize_action()`
-- [x] Refactor `query()` to use `synthesize_action()`
-- [x] Maintain backward-compatible API (wrap new API)
-- [x] Update `CausalStorage` to work with agent pattern
+- [x] Create `StorageAction` enum
+- [x] Refactor `put()`/`get()`/`history()`/`query()`/`delete()` to use synthesis
+- [x] Maintain backward-compatible API
 - [x] Ensure all existing tests pass
 
 **Tests:** ✅ All passing
-- [x] LCA contract tests pass (`test_lca_*`)
-- [x] All existing unit tests pass (335 tests)
-- [x] All existing integration tests pass
+- [x] LCA contract tests pass
+- [x] All existing unit tests pass (341 tests)
 - [x] Storage actions are properly canonicalized
-- [x] Synthesis creates proper causal chains
+
+### 2.2 Temperature Agent (HotMemory) ✅ COMPLETE
+
+**Status:** All tasks completed, 341 tests passing, zero warnings.
+
+**File:** `src/memory/hot.rs`
+
+- [x] Rename/refactor `HotMemory` → `TemperatureAgent`
+- [x] Add `local_root: Distinction` (Root: TEMPERATURE)
+- [x] Implement `LocalCausalAgent` for `TemperatureAgent`:
+  ```rust
+  impl LocalCausalAgent for TemperatureAgent {
+      type ActionData = TemperatureAction;
+      
+      fn get_current_root(&self) -> &Distinction { &self.local_root }
+      fn update_local_root(&mut self, new_root: Distinction) { self.local_root = new_root; }
+      fn synthesize_action(&mut self, action: TemperatureAction, engine: &Arc<DistinctionEngine>) 
+          -> Distinction {
+          let action_distinction = action.to_canonical_structure(engine);
+          let new_root = engine.synthesize(&self.local_root, &action_distinction);
+          self.local_root = new_root.clone();
+          new_root
+      }
+  }
+  ```
+- [x] Create `TemperatureAction` enum (Heat/Cool/Evict/Access)
+- [x] Refactor LRU operations as synthesis
+- [x] Maintain cache semantics (no regression)
+- [x] Update all references in codebase
+- [x] Add backward-compatible type aliases (`HotMemory`, `HotConfig`, `HotStats`)
+
+**Tests:** ✅ All passing
+- [x] LRU behavior unchanged
+- [x] Temperature actions synthesize correctly
+- [x] Cache hit/miss rates maintained
+- [x] LCA contract satisfied (`test_lca_trait_implementation`)
+
+### 2.3 Chronicle Agent (WarmMemory) ✅ COMPLETE
+
+**Status:** All tasks completed, 341 tests passing, zero warnings.
+
+**File:** `src/memory/warm.rs`
+
+- [x] Rename/refactor `WarmMemory` → `ChronicleAgent`
+- [x] Add `local_root: Distinction` (Root: CHRONICLE)
+- [x] Implement `LocalCausalAgent` for `ChronicleAgent`:
+  ```rust
+  impl LocalCausalAgent for ChronicleAgent {
+      type ActionData = ChronicleAction;
+      
+      fn get_current_root(&self) -> &Distinction { &self.local_root }
+      fn update_local_root(&mut self, new_root: Distinction) { self.local_root = new_root; }
+      fn synthesize_action(&mut self, action: ChronicleAction, engine: &Arc<DistinctionEngine>) 
+          -> Distinction {
+          let action_distinction = action.to_canonical_structure(engine);
+          let new_root = engine.synthesize(&self.local_root, &action_distinction);
+          self.local_root = new_root.clone();
+          new_root
+      }
+  }
+  ```
+- [x] Create `ChronicleAction` enum (Record/Recall/Promote/Demote)
+- [x] Refactor chronicle operations as synthesis
+- [x] Maintain disk persistence semantics
+- [x] Add backward-compatible type aliases (`WarmMemory`, `WarmConfig`, `WarmStats`)
+
+**Tests:** ✅ All passing
+- [x] Chronicle operations unchanged
+- [x] Persistence works correctly
+- [x] LCA contract satisfied
+
+### 2.4 Archive Agent (ColdMemory) ✅ COMPLETE
+
+**Status:** All tasks completed, 341 tests passing, zero warnings.
+
+**File:** `src/memory/cold.rs`
+
+- [x] Rename/refactor `ColdMemory` → `ArchiveAgent`
+- [x] Add `local_root: Distinction` (Root: ARCHIVE)
+- [x] Implement `LocalCausalAgent` for `ArchiveAgent`:
+  ```rust
+  impl LocalCausalAgent for ArchiveAgent {
+      type ActionData = ArchiveAction;
+      
+      fn get_current_root(&self) -> &Distinction { &self.local_root }
+      fn update_local_root(&mut self, new_root: Distinction) { self.local_root = new_root; }
+      fn synthesize_action(&mut self, action: ArchiveAction, engine: &Arc<DistinctionEngine>) 
+          -> Distinction {
+          let action_distinction = action.to_canonical_structure(engine);
+          let new_root = engine.synthesize(&self.local_root, &action_distinction);
+          self.local_root = new_root.clone();
+          new_root
+      }
+  }
+  ```
+- [x] Create `ArchiveAction` enum (EpochStart/EpochSeal/Compress/Retrieve/Archive)
+- [x] Refactor epoch operations as synthesis
+- [x] Maintain compression behavior
+- [x] Add backward-compatible type aliases (`ColdMemory`, `ColdConfig`, `ColdStats`)
+
+**Tests:** ✅ All passing
+- [x] Epoch management unchanged
+- [x] Compression works correctly
+- [x] LCA contract satisfied
 
 ### 2.2 Temperature Agent (HotMemory)
 

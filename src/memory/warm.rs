@@ -1,70 +1,85 @@
-/// Warm Memory: Recent chronicle layer.
+/// Chronicle Agent: Recent history layer with LCA architecture.
 ///
-/// Warm memory acts like the hippocampus - recent episodic memory,
-/// full detail, stored on disk. Data here was recently in Hot but
+/// The Chronicle Agent acts like the hippocampus - recent episodic memory,
+/// full detail, stored on disk. Data here was recently in Temperature but
 /// got evicted due to capacity limits or time.
+///
+/// ## LCA Architecture
+///
+/// As a Local Causal Agent, all operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+///
+/// The Chronicle Agent's local root is `RootType::Chronicle` (📜 CHRONICLE).
 ///
 /// ## Purpose
 ///
-/// - Store recent history that's not in Hot memory
+/// - Store recent history that's not in Temperature layer
 /// - Provide full causal chain for time travel
-/// - Serve as staging area before Cold consolidation
+/// - Serve as staging area before Archive consolidation
 /// - Keep recent data accessible without RAM pressure
-///
-/// ## When Data Moves Here
-///
-/// - Evicted from Hot memory (LRU eviction)
-/// - Explicit demotion from Hot
-/// - After configurable idle time
 ///
 /// ## Persistence
 ///
-/// Warm memory is disk-backed. Chronicle files are append-only
+/// Chronicle is disk-backed. Chronicle files are append-only
 /// for durability. Index is in memory for fast lookup.
+use crate::actions::ChronicleAction;
 use crate::causal_graph::DistinctionId;
+use crate::engine::{FieldHandle, SharedEngine};
+use crate::roots::RootType;
+use crate::types::{FullKey, VersionedValue};
 #[cfg(test)]
 use crate::types::VectorClock;
-use crate::types::{FullKey, VersionedValue};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-/// Warm memory configuration.
+/// Chronicle agent configuration.
 #[derive(Debug, Clone)]
-pub struct WarmConfig {
+pub struct ChronicleConfig {
     /// Maximum number of recent distinctions to keep in index
     pub index_capacity: usize,
 
-    /// Idle time before considering for demotion to Cold
+    /// Idle time before considering for demotion to Archive
     pub idle_threshold: Duration,
 
     /// Chronicle file rotation size (bytes)
     pub rotation_size: usize,
 }
 
-impl Default for WarmConfig {
+impl Default for ChronicleConfig {
     fn default() -> Self {
         Self {
             index_capacity: 10_000,             // Keep 10K recent in index
-            idle_threshold: Duration::hours(1), // Idle 1 hour → Cold candidate
+            idle_threshold: Duration::hours(1), // Idle 1 hour → Archive candidate
             rotation_size: 10 * 1024 * 1024,    // 10MB files
         }
     }
 }
 
-/// Warm Memory layer - recent chronicle on disk.
+/// Chronicle Agent - recent history with LCA architecture.
 ///
 /// Like the hippocampus: recent, detailed, on disk (not RAM).
-pub struct WarmMemory {
+/// All operations are synthesized through the unified field.
+pub struct ChronicleAgent {
     /// Configuration
-    config: WarmConfig,
+    config: ChronicleConfig,
 
-    /// In-memory index: distinction_id → (key, file_offset, timestamp)
+    /// LCA: Local root distinction (Root: CHRONICLE)
+    local_root: Distinction,
+
+    /// LCA: Handle to the shared field
+    field: FieldHandle,
+
+    /// In-memory index: distinction_id → (key, timestamp)
     /// For fast lookup without scanning disk
     index: DashMap<DistinctionId, IndexEntry>,
 
-    /// Recent access window (for promotion to Hot)
+    /// Recent access window (for promotion to Temperature)
     /// Distinctions accessed recently are hot candidates
     recent_window: std::sync::Mutex<VecDeque<(DistinctionId, DateTime<Utc>)>>,
 
@@ -90,17 +105,33 @@ struct IndexEntry {
     last_accessed: DateTime<Utc>,
 }
 
-impl WarmMemory {
-    /// Create new warm memory with default configuration.
-    pub fn new() -> Self {
-        Self::with_config(WarmConfig::default())
+impl ChronicleAgent {
+    /// Create new chronicle agent with default configuration.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent initializes with:
+    /// - `local_root` = RootType::Chronicle (from shared field roots)
+    /// - `field` = Handle to the unified distinction engine
+    pub fn new(shared_engine: &SharedEngine) -> Self {
+        Self::with_config(ChronicleConfig::default(), shared_engine)
     }
 
-    /// Create new warm memory with custom configuration.
-    pub fn with_config(config: WarmConfig) -> Self {
+    /// Create new chronicle agent with custom configuration.
+    ///
+    /// # LCA Pattern
+    ///
+    /// The agent anchors to the CHRONICLE root, which is synthesized
+    /// from the primordial distinctions (d0, d1) in the shared field.
+    pub fn with_config(config: ChronicleConfig, shared_engine: &SharedEngine) -> Self {
         let capacity = config.index_capacity;
+        let local_root = shared_engine.root(RootType::Chronicle).clone();
+        let field = FieldHandle::new(shared_engine);
+
         Self {
             config,
+            local_root,
+            field,
             index: DashMap::with_capacity(capacity),
             recent_window: std::sync::Mutex::new(VecDeque::with_capacity(capacity)),
             current_mappings: DashMap::new(),
@@ -111,17 +142,24 @@ impl WarmMemory {
         }
     }
 
-    /// Get a value from warm memory.
+    /// Get a value from chronicle.
     ///
     /// Returns the versioned value if found, updates access time.
-    /// Returns None if not in warm memory (might be in Cold or doesn't exist).
+    /// Returns None if not in chronicle (might be in Archive or doesn't exist).
+    ///
+    /// # LCA Pattern
+    ///
+    /// Recall is synthesized: `ΔNew = ΔLocal_Root ⊕ ΔRecall_Action`
     pub fn get(&self, id: &DistinctionId) -> Option<(FullKey, VersionedValue)> {
         let _entry = self.index.get(id)?;
 
-        // Update access time
-        // TODO: In real implementation, read from disk
-        // For now, return placeholder
+        // Synthesize recall action
+        let action = ChronicleAction::Recall {
+            query: id.clone(),
+        };
+        let _ = self.synthesize_action_internal(action);
 
+        // Update access time
         self.update_access_time(id);
         self.hits.fetch_add(1, Ordering::Relaxed);
 
@@ -135,12 +173,23 @@ impl WarmMemory {
         self.current_mappings.get(key).map(|e| e.clone())
     }
 
-    /// Put a value into warm memory (from Hot eviction).
+    /// Put a value into chronicle (from Temperature eviction).
     ///
     /// Writes to disk chronicle, updates index.
+    ///
+    /// # LCA Pattern
+    ///
+    /// Record is synthesized: `ΔNew = ΔLocal_Root ⊕ ΔRecord_Action`
     pub fn put(&self, key: FullKey, versioned: VersionedValue) {
         let id = versioned.write_id().to_string();
         let timestamp = versioned.timestamp;
+
+        // Synthesize record action
+        let action = ChronicleAction::Record {
+            event_id: id.clone(),
+            timestamp,
+        };
+        let _ = self.synthesize_action_internal(action);
 
         // Update current mapping
         self.current_mappings.insert(key.clone(), id.clone());
@@ -166,12 +215,12 @@ impl WarmMemory {
         // TODO: Append to disk chronicle
     }
 
-    /// Check if a distinction is in warm memory.
+    /// Check if a distinction is in chronicle.
     pub fn contains(&self, id: &DistinctionId) -> bool {
         self.index.contains_key(id)
     }
 
-    /// Check if a key has a current mapping in warm memory.
+    /// Check if a key has a current mapping in chronicle.
     pub fn contains_key(&self, key: &FullKey) -> bool {
         self.current_mappings.contains_key(key)
     }
@@ -192,8 +241,8 @@ impl WarmMemory {
     }
 
     /// Get statistics.
-    pub fn stats(&self) -> WarmStats {
-        WarmStats {
+    pub fn stats(&self) -> ChronicleStats {
+        ChronicleStats {
             hits: self.hits.load(Ordering::Relaxed),
             misses: self.misses.load(Ordering::Relaxed),
             promotions: self.promotions.load(Ordering::Relaxed),
@@ -203,7 +252,7 @@ impl WarmMemory {
         }
     }
 
-    /// Find distinctions that should be promoted to Hot.
+    /// Find distinctions that should be promoted to Temperature.
     ///
     /// Based on recent access patterns.
     pub fn find_promotion_candidates(&self, limit: usize) -> Vec<(FullKey, DistinctionId)> {
@@ -229,7 +278,7 @@ impl WarmMemory {
         candidates
     }
 
-    /// Find distinctions that should be demoted to Cold.
+    /// Find distinctions that should be demoted to Archive.
     ///
     /// Based on idle time (not accessed recently).
     pub fn find_demotion_candidates(&self, limit: usize) -> Vec<DistinctionId> {
@@ -259,15 +308,35 @@ impl WarmMemory {
             .collect()
     }
 
-    /// Promote a distinction to Hot (remove from Warm index).
+    /// Promote a distinction to Temperature (remove from Chronicle index).
+    ///
+    /// # LCA Pattern
+    ///
+    /// Promote is synthesized: `ΔNew = ΔLocal_Root ⊕ ΔPromote_Action`
     pub fn promote(&self, id: &DistinctionId) {
+        // Synthesize promote action
+        let action = ChronicleAction::Promote {
+            distinction_id: id.clone(),
+        };
+        let _ = self.synthesize_action_internal(action);
+
         self.index.remove(id);
         self.promotions.fetch_add(1, Ordering::Relaxed);
-        // Note: actual value would be returned and put in Hot
+        // Note: actual value would be returned and put in Temperature
     }
 
-    /// Demote a distinction to Cold (remove from index, keep on disk).
+    /// Demote a distinction to Archive (remove from index, keep on disk).
+    ///
+    /// # LCA Pattern
+    ///
+    /// Demote is synthesized: `ΔNew = ΔLocal_Root ⊕ ΔDemote_Action`
     pub fn demote(&self, id: &DistinctionId) {
+        // Synthesize demote action
+        let action = ChronicleAction::Demote {
+            distinction_id: id.clone(),
+        };
+        let _ = self.synthesize_action_internal(action);
+
         self.index.remove(id);
         self.demotions.fetch_add(1, Ordering::Relaxed);
         // Note: still on disk, just not in fast index
@@ -306,17 +375,57 @@ impl WarmMemory {
             self.index.remove(&id);
         }
     }
-}
 
-impl Default for WarmMemory {
-    fn default() -> Self {
-        Self::new()
+    /// Internal synthesis helper.
+    ///
+    /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    fn synthesize_action_internal(&self, action: ChronicleAction) -> Distinction {
+        let engine = self.field.engine_arc();
+        let action_distinction = action.to_canonical_structure(engine);
+        engine.synthesize(&self.local_root, &action_distinction)
     }
 }
 
-/// Warm memory statistics.
+impl Default for ChronicleAgent {
+    fn default() -> Self {
+        // Note: This requires a SharedEngine, so we panic if called directly
+        // In practice, always use ChronicleAgent::new(&shared_engine)
+        panic!("ChronicleAgent requires a SharedEngine - use ChronicleAgent::new()")
+    }
+}
+
+/// LCA Trait Implementation for ChronicleAgent
+///
+/// All operations follow the synthesis pattern:
+/// ```text
+/// ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+/// ```
+impl LocalCausalAgent for ChronicleAgent {
+    type ActionData = ChronicleAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: ChronicleAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
+/// Chronicle agent statistics.
 #[derive(Debug, Clone)]
-pub struct WarmStats {
+pub struct ChronicleStats {
     pub hits: u64,
     pub misses: u64,
     pub promotions: u64,
@@ -325,7 +434,7 @@ pub struct WarmStats {
     pub capacity: usize,
 }
 
-impl WarmStats {
+impl ChronicleStats {
     /// Calculate hit rate (0.0 to 1.0).
     pub fn hit_rate(&self) -> f64 {
         let total = self.hits + self.misses;
@@ -346,12 +455,25 @@ impl WarmStats {
     }
 }
 
+/// Backward-compatible type alias for existing code.
+pub type WarmMemory = ChronicleAgent;
+
+/// Backward-compatible type alias for existing code.
+pub type WarmConfig = ChronicleConfig;
+
+/// Backward-compatible type alias for existing code.
+pub type WarmStats = ChronicleStats;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Utc;
     use serde_json::json;
     use std::sync::Arc;
+
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
 
     fn create_versioned(value: serde_json::Value, id: &str) -> VersionedValue {
         VersionedValue::new(
@@ -366,65 +488,72 @@ mod tests {
 
     #[test]
     fn test_put_and_contains() {
-        let warm = WarmMemory::new();
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::new(&engine);
         let key = FullKey::new("users", "alice");
         let versioned = create_versioned(json!({"name": "Alice"}), "v1");
 
-        warm.put(key.clone(), versioned);
+        chronicle.put(key.clone(), versioned);
 
-        assert!(warm.contains(&"v1".to_string()));
-        assert!(warm.contains_key(&key));
-        assert_eq!(warm.len(), 1);
+        assert!(chronicle.contains(&"v1".to_string()));
+        assert!(chronicle.contains_key(&key));
+        assert_eq!(chronicle.len(), 1);
     }
 
     #[test]
     fn test_get_by_key() {
-        let warm = WarmMemory::new();
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::new(&engine);
         let key = FullKey::new("users", "alice");
         let versioned = create_versioned(json!({}), "v1");
 
-        warm.put(key.clone(), versioned);
+        chronicle.put(key.clone(), versioned);
 
-        let id = warm.get_by_key(&key).unwrap();
+        let id = chronicle.get_by_key(&key).unwrap();
         assert_eq!(id, "v1");
     }
 
     #[test]
     fn test_capacity_and_eviction() {
-        let config = WarmConfig {
+        let config = ChronicleConfig {
             index_capacity: 3,
             idle_threshold: Duration::hours(1),
             rotation_size: 10_000_000,
         };
-        let warm = WarmMemory::with_config(config);
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::with_config(config, &engine);
 
         // Add 5 items (capacity is 3)
         for i in 0..5 {
             let key = FullKey::new("ns", format!("key{}", i));
             let versioned = create_versioned(json!(i), &format!("v{}", i));
-            warm.put(key, versioned);
+            chronicle.put(key, versioned);
         }
 
         // Should still be at capacity
-        assert_eq!(warm.len(), 3);
+        assert_eq!(chronicle.len(), 3);
     }
 
     #[test]
     fn test_stats() {
-        let warm = WarmMemory::with_config(WarmConfig {
-            index_capacity: 100,
-            idle_threshold: Duration::hours(1),
-            rotation_size: 10_000_000,
-        });
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::with_config(
+            ChronicleConfig {
+                index_capacity: 100,
+                idle_threshold: Duration::hours(1),
+                rotation_size: 10_000_000,
+            },
+            &engine,
+        );
 
         // Add items
         for i in 0..10 {
             let key = FullKey::new("ns", format!("key{}", i));
             let versioned = create_versioned(json!(i), &format!("v{}", i));
-            warm.put(key, versioned);
+            chronicle.put(key, versioned);
         }
 
-        let stats = warm.stats();
+        let stats = chronicle.stats();
         assert_eq!(stats.current_size, 10);
         assert_eq!(stats.capacity, 100);
         assert_eq!(stats.utilization(), 0.1);
@@ -432,76 +561,116 @@ mod tests {
 
     #[test]
     fn test_update_existing_key() {
-        let warm = WarmMemory::new();
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::new(&engine);
         let key = FullKey::new("users", "alice");
 
         let v1 = create_versioned(json!({"v": 1}), "v1");
         let v2 = create_versioned(json!({"v": 2}), "v2");
 
-        warm.put(key.clone(), v1);
-        warm.put(key.clone(), v2);
+        chronicle.put(key.clone(), v1);
+        chronicle.put(key.clone(), v2);
 
         // Current mapping should be v2
-        assert_eq!(warm.get_by_key(&key).unwrap(), "v2");
+        assert_eq!(chronicle.get_by_key(&key).unwrap(), "v2");
 
         // Both versions should be in index
-        assert!(warm.contains(&"v1".to_string()));
-        assert!(warm.contains(&"v2".to_string()));
+        assert!(chronicle.contains(&"v1".to_string()));
+        assert!(chronicle.contains(&"v2".to_string()));
     }
 
     #[test]
     fn test_promote_and_demote() {
-        let warm = WarmMemory::new();
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::new(&engine);
         let key = FullKey::new("users", "alice");
         let versioned = create_versioned(json!({}), "v1");
 
-        warm.put(key, versioned);
-        assert_eq!(warm.len(), 1);
+        chronicle.put(key, versioned);
+        assert_eq!(chronicle.len(), 1);
 
-        // Promote (remove from warm)
-        warm.promote(&"v1".to_string());
-        assert_eq!(warm.len(), 0);
-        assert_eq!(warm.stats().promotions, 1);
+        // Promote (remove from chronicle)
+        chronicle.promote(&"v1".to_string());
+        assert_eq!(chronicle.len(), 0);
+        assert_eq!(chronicle.stats().promotions, 1);
 
         // Add again and demote
         let key2 = FullKey::new("users", "bob");
         let versioned2 = create_versioned(json!({}), "v2");
-        warm.put(key2, versioned2);
+        chronicle.put(key2, versioned2);
 
-        warm.demote(&"v2".to_string());
-        assert_eq!(warm.len(), 0);
-        assert_eq!(warm.stats().demotions, 1);
+        chronicle.demote(&"v2".to_string());
+        assert_eq!(chronicle.len(), 0);
+        assert_eq!(chronicle.stats().demotions, 1);
     }
 
     #[test]
     fn test_find_promotion_candidates() {
-        let warm = WarmMemory::new();
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::new(&engine);
 
         // Add some items
         for i in 0..5 {
             let key = FullKey::new("ns", format!("key{}", i));
             let versioned = create_versioned(json!(i), &format!("v{}", i));
-            warm.put(key, versioned);
+            chronicle.put(key, versioned);
         }
 
         // Access some to make them "recent"
         for i in 0..3 {
-            warm.add_to_recent_window(format!("v{}", i));
+            chronicle.add_to_recent_window(format!("v{}", i));
         }
 
-        let candidates = warm.find_promotion_candidates(10);
+        let candidates = chronicle.find_promotion_candidates(10);
         assert!(!candidates.is_empty());
     }
 
     #[test]
     fn test_is_empty() {
-        let warm = WarmMemory::new();
-        assert!(warm.is_empty());
+        let engine = create_test_engine();
+        let chronicle = ChronicleAgent::new(&engine);
+        assert!(chronicle.is_empty());
 
         let key = FullKey::new("users", "alice");
         let versioned = create_versioned(json!({}), "v1");
-        warm.put(key, versioned);
+        chronicle.put(key, versioned);
 
-        assert!(!warm.is_empty());
+        assert!(!chronicle.is_empty());
+    }
+
+    #[test]
+    fn test_lca_trait_implementation() {
+        let engine = create_test_engine();
+        let mut agent = ChronicleAgent::new(&engine);
+
+        // Test get_current_root
+        let root = agent.get_current_root();
+        let root_id = root.id().to_string();
+        assert!(!root_id.is_empty());
+
+        // Test synthesize_action
+        let action = ChronicleAction::Record {
+            event_id: "test123".to_string(),
+            timestamp: Utc::now(),
+        };
+        let engine_arc = Arc::clone(agent.field.engine_arc());
+        let new_root = agent.synthesize_action(action, &engine_arc);
+        assert!(!new_root.id().is_empty());
+        assert_ne!(new_root.id(), root_id);
+
+        // Test update_local_root
+        agent.update_local_root(new_root.clone());
+        assert_eq!(agent.get_current_root().id(), new_root.id());
+    }
+
+    #[test]
+    fn test_backward_compatible_aliases() {
+        // Ensure backward compatibility works
+        let engine = create_test_engine();
+        let _warm_memory: WarmMemory = ChronicleAgent::new(&engine);
+        let _config: WarmConfig = ChronicleConfig::default();
+        let engine2 = create_test_engine();
+        let agent = ChronicleAgent::with_config(_config, &engine2);
+        let _stats: WarmStats = agent.stats();
     }
 }

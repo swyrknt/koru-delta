@@ -196,6 +196,7 @@ pub struct ConsolidationStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::SharedEngine;
     use crate::memory::WarmMemory;
     use serde_json::json;
     use std::sync::Arc;
@@ -211,10 +212,15 @@ mod tests {
         )
     }
 
+    fn create_test_engine() -> SharedEngine {
+        SharedEngine::new()
+    }
+
     #[test]
     fn test_handle_hot_eviction() {
         let consolidation = ConsolidationProcess::new();
-        let warm = WarmMemory::new();
+        let engine = create_test_engine();
+        let warm = WarmMemory::new(&engine);
         let key = crate::types::FullKey::new("ns", "key1");
         let versioned = create_versioned("v1");
 
@@ -227,7 +233,8 @@ mod tests {
     #[test]
     fn test_consolidation_stats() {
         let consolidation = ConsolidationProcess::new();
-        let warm = WarmMemory::new();
+        let engine = create_test_engine();
+        let warm = WarmMemory::new(&engine);
 
         // Simulate some evictions
         for i in 0..5 {

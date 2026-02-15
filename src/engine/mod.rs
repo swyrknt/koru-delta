@@ -275,6 +275,13 @@ impl FieldHandle {
     pub fn engine(&self) -> &DistinctionEngine {
         &self.engine
     }
+
+    /// Get the underlying engine as an Arc reference.
+    ///
+    /// This is needed for LCA trait implementations that require `&Arc<DistinctionEngine>`.
+    pub fn engine_arc(&self) -> &Arc<DistinctionEngine> {
+        &self.engine
+    }
 }
 
 #[cfg(test)]

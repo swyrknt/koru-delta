@@ -1309,6 +1309,113 @@ impl NetworkAction {
     }
 }
 
+// ============================================================================
+// CANONICALIZABLE IMPLEMENTATIONS
+// ============================================================================
+// Each action type must be convertible to a canonical distinction structure.
+// This follows the LCA pattern: ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+// ============================================================================
+
+impl Canonicalizable for TemperatureAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = TemperatureActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for ChronicleAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = ChronicleActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for ArchiveAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = ArchiveActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for EssenceAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = EssenceActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for SleepAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = SleepActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for EvolutionAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = EvolutionActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for LineageAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = LineageActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for PerspectiveAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = PerspectiveActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for IdentityAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = IdentityActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl Canonicalizable for NetworkAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = NetworkActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

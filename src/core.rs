@@ -331,14 +331,17 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         let storage = Arc::new(storage);
 
-        // Initialize memory tiers
-        let hot = Arc::new(RwLock::new(HotMemory::with_config(HotConfig {
-            capacity: config.memory.hot_capacity,
-            promote_threshold: 2,
-        })));
+        // Initialize memory tiers with LCA agents
+        let hot = Arc::new(RwLock::new(HotMemory::with_config(
+            HotConfig {
+                capacity: config.memory.hot_capacity,
+                promote_threshold: 2,
+            },
+            &shared_engine,
+        )));
 
-        let warm = Arc::new(RwLock::new(WarmMemory::new()));
-        let cold = Arc::new(RwLock::new(ColdMemory::new()));
+        let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
+        let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
         let deep = Arc::new(RwLock::new(DeepMemory::new()));
 
         // Initialize reconciliation
@@ -418,14 +421,17 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Create storage using the shared engine
         let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
 
-        // Initialize memory tiers
-        let hot = Arc::new(RwLock::new(HotMemory::with_config(HotConfig {
-            capacity: config.memory.hot_capacity,
-            promote_threshold: 2,
-        })));
+        // Initialize memory tiers with LCA agents
+        let hot = Arc::new(RwLock::new(HotMemory::with_config(
+            HotConfig {
+                capacity: config.memory.hot_capacity,
+                promote_threshold: 2,
+            },
+            &shared_engine,
+        )));
 
-        let warm = Arc::new(RwLock::new(WarmMemory::new()));
-        let cold = Arc::new(RwLock::new(ColdMemory::new()));
+        let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
+        let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
         let deep = Arc::new(RwLock::new(DeepMemory::new()));
 
         // Initialize reconciliation
@@ -722,14 +728,17 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Get the storage agent's local root
         let local_root = shared_engine.root(RootType::Storage).clone();
 
-        // Initialize memory tiers
-        let hot = Arc::new(RwLock::new(HotMemory::with_config(HotConfig {
-            capacity: config.memory.hot_capacity,
-            promote_threshold: 2,
-        })));
+        // Initialize memory tiers with LCA agents
+        let hot = Arc::new(RwLock::new(HotMemory::with_config(
+            HotConfig {
+                capacity: config.memory.hot_capacity,
+                promote_threshold: 2,
+            },
+            &shared_engine,
+        )));
 
-        let warm = Arc::new(RwLock::new(WarmMemory::new()));
-        let cold = Arc::new(RwLock::new(ColdMemory::new()));
+        let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
+        let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
         let deep = Arc::new(RwLock::new(DeepMemory::new()));
 
         // Initialize reconciliation
