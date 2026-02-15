@@ -48,14 +48,16 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 #[cfg(not(target_arch = "wasm32"))]
 use futures::FutureExt;
-use koru_lambda_core::DistinctionEngine;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
 use tracing::{debug, error, info, trace, warn};
 #[cfg(target_arch = "wasm32")]
 use tracing::{debug, info, trace};
 
+use crate::actions::StorageAction;
 use crate::auth::{AuthConfig, AuthManager};
+use crate::engine::{FieldHandle, SharedEngine};
 use crate::error::DeltaResult;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::lifecycle::{LifecycleConfig, LifecycleManager};
@@ -63,6 +65,7 @@ use crate::memory::{ColdMemory, DeepMemory, HotConfig, HotMemory, WarmMemory};
 use crate::processes::ProcessRunner;
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
 use crate::reconciliation::ReconciliationManager;
+use crate::roots::RootType;
 use crate::runtime::sync::RwLock;
 use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
 use crate::storage::CausalStorage;
@@ -177,12 +180,18 @@ impl Default for ReconciliationConfig {
     }
 }
 
-/// The main KoruDelta database instance.
+/// The main KoruDelta database instance - Storage Agent.
 ///
-/// KoruDelta is the invisible database that gives you:
-/// - Git-like history (every change is versioned)
-/// - Redis-like simplicity (minimal API, zero configuration)
-/// - Mathematical guarantees (built on distinction calculus)
+/// KoruDelta is the Storage Agent in the unified consciousness field.
+/// It implements `LocalCausalAgent`, meaning all operations are synthesized
+/// from its local root perspective.
+///
+/// # LCA Architecture
+///
+/// As a Local Causal Agent:
+/// - **Local Root**: The agent's causal anchor (Root: STORAGE)
+/// - **Actions**: Storage operations (Store, Retrieve, History, Query, Delete)
+/// - **Synthesis**: All state changes follow ΔNew = ΔLocal_Root ⊕ ΔAction
 ///
 /// # Thread Safety
 ///
@@ -207,8 +216,12 @@ pub struct KoruDeltaGeneric<R: Runtime> {
     db_path: Option<PathBuf>,
     /// The underlying storage engine
     storage: Arc<CausalStorage>,
-    /// The distinction engine (for advanced operations)
-    engine: Arc<DistinctionEngine>,
+    /// The shared field engine (for LCA operations)
+    shared_engine: SharedEngine,
+    /// Field handle for synthesis operations
+    field: FieldHandle,
+    /// Local causal root - this agent's perspective (Root: STORAGE)
+    local_root: Distinction,
     /// View manager for materialized views
     views: Arc<ViewManager>,
     /// Subscription manager for change notifications (non-WASM only)
@@ -251,7 +264,7 @@ impl<R: Runtime> std::fmt::Debug for KoruDeltaGeneric<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("KoruDelta")
             .field("storage", &self.storage)
-            .field("engine", &self.engine)
+            .field("local_root", &self.local_root.id())
             .finish()
     }
 }
@@ -289,6 +302,13 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let config = CoreConfig::default();
         let runtime = R::new();
 
+        // Create the shared field engine (LCA foundation)
+        let shared_engine = SharedEngine::new();
+        let field = FieldHandle::new(&shared_engine);
+
+        // Get the storage agent's local root from canonical roots
+        let local_root = shared_engine.root(RootType::Storage).clone();
+
         // Acquire lock and check for unclean shutdown
         let lock_state = persistence::acquire_lock(&path).await?;
         if lock_state == persistence::LockState::Unclean {
@@ -300,18 +320,16 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Load from WAL if exists
         let storage = if persistence::exists(&path).await {
             info!("Loading existing database from WAL");
-            let engine = Arc::new(DistinctionEngine::new());
-            let storage = persistence::load_from_wal(&path, engine).await?;
+            let storage = persistence::load_from_wal(&path, Arc::clone(shared_engine.inner())).await?;
             let key_count = storage.key_count();
             info!(keys = key_count, "Database loaded from WAL");
             storage
         } else {
             info!("Creating new database");
-            CausalStorage::new(Arc::new(DistinctionEngine::new()))
+            CausalStorage::new(Arc::clone(shared_engine.inner()))
         };
 
         let storage = Arc::new(storage);
-        let engine = storage.engine();
 
         // Initialize memory tiers
         let hot = Arc::new(RwLock::new(HotMemory::with_config(HotConfig {
@@ -351,7 +369,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             config,
             db_path: Some(path),
             storage,
-            engine,
+            shared_engine,
+            field,
+            local_root,
             hot,
             warm,
             cold,
@@ -388,8 +408,15 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
     /// Create a new KoruDelta with the given configuration and runtime.
     pub async fn new_with_runtime(config: CoreConfig, runtime: R) -> DeltaResult<Self> {
-        let engine = Arc::new(DistinctionEngine::new());
-        let storage = Arc::new(CausalStorage::new(Arc::clone(&engine)));
+        // Create the shared field engine (LCA foundation)
+        let shared_engine = SharedEngine::new();
+        let field = FieldHandle::new(&shared_engine);
+
+        // Get the storage agent's local root from canonical roots
+        let local_root = shared_engine.root(RootType::Storage).clone();
+
+        // Create storage using the shared engine
+        let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
 
         // Initialize memory tiers
         let hot = Arc::new(RwLock::new(HotMemory::with_config(HotConfig {
@@ -429,7 +456,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             config,
             db_path: None,
             storage,
-            engine,
+            shared_engine,
+            field,
+            local_root,
             hot,
             warm,
             cold,
@@ -686,6 +715,13 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ) -> Self {
         let config = CoreConfig::default();
 
+        // Create shared engine from existing engine
+        let shared_engine = SharedEngine::with_engine(engine);
+        let field = FieldHandle::new(&shared_engine);
+
+        // Get the storage agent's local root
+        let local_root = shared_engine.root(RootType::Storage).clone();
+
         // Initialize memory tiers
         let hot = Arc::new(RwLock::new(HotMemory::with_config(HotConfig {
             capacity: config.memory.hot_capacity,
@@ -724,7 +760,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             config: CoreConfig::default(),
             db_path: None,
             storage,
-            engine,
+            shared_engine,
+            field,
+            local_root,
             hot,
             warm,
             cold,
@@ -1467,7 +1505,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
     /// Get distinction engine reference.
     pub fn engine(&self) -> &Arc<DistinctionEngine> {
-        &self.engine
+        self.shared_engine.inner()
     }
 
     // =========================================================================
@@ -1632,6 +1670,145 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // TODO: Wait for background processes to complete
         info!("KoruDelta shutdown complete");
         Ok(())
+    }
+
+    // =========================================================================
+    // LCA (Local Causal Agent) Operations
+    // =========================================================================
+
+    /// Perform a storage action via causal synthesis.
+    ///
+    /// This is the LCA way: ΔNew = ΔLocal_Root ⊕ ΔAction
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let action = StorageAction::Store {
+    ///     namespace: "users".to_string(),
+    ///     key: "alice".to_string(),
+    ///     value_json: json!({"name": "Alice"}),
+    /// };
+    /// let new_root = db.synthesize_storage_action(action).await?;
+    /// ```
+    pub async fn synthesize_storage_action(
+        &mut self,
+        action: StorageAction,
+    ) -> DeltaResult<Distinction> {
+        // Validate the action
+        action.validate().map_err(|e| crate::error::DeltaError::InvalidData { reason: e })?;
+
+        // Synthesize: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(self.field.engine());
+        let new_root = self.field.synthesize(&self.local_root, &action_distinction);
+
+        // Execute the action (this creates the causal effect)
+        self.execute_storage_action(&action).await?;
+
+        // Update local root to the new synthesis
+        self.local_root = new_root.clone();
+
+        Ok(new_root)
+    }
+
+    /// Execute a storage action (the causal effect).
+    ///
+    /// This performs the actual storage operation based on the action type.
+    async fn execute_storage_action(&self, action: &StorageAction) -> DeltaResult<()> {
+        match action {
+            StorageAction::Store { namespace, key, value_json } => {
+                // Store via the existing put mechanism
+                let _ = self.put(namespace.clone(), key.clone(), value_json.clone()).await?;
+            }
+            StorageAction::Retrieve { namespace, key } => {
+                // Retrieve is handled by get, but we don't need the value here
+                let _ = self.get(namespace.clone(), key.clone()).await?;
+            }
+            StorageAction::History { namespace, key } => {
+                let _ = self.history(namespace, key).await?;
+            }
+            StorageAction::Query { .. } => {
+                // Query all collections
+                let namespaces = self.storage.list_namespaces();
+                for ns in namespaces {
+                    self.query(&ns, Query::new()).await?;
+                }
+            }
+            StorageAction::Delete { namespace, key } => {
+                self.delete(namespace, key).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Get the current local root distinction.
+    ///
+    /// This is the agent's causal perspective.
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    /// Get the shared field engine.
+    pub fn shared_engine(&self) -> &SharedEngine {
+        &self.shared_engine
+    }
+
+    /// Get the field handle for synthesis operations.
+    pub fn field(&self) -> &FieldHandle {
+        &self.field
+    }
+}
+
+// ============================================================================
+// Local Causal Agent Implementation
+// ============================================================================
+
+impl<R: Runtime> LocalCausalAgent for KoruDeltaGeneric<R> {
+    type ActionData = StorageAction;
+
+    /// Get the current local root distinction.
+    ///
+    /// This is the Storage Agent's causal anchor (Root: STORAGE).
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    /// Synthesize a new state from local root + action data.
+    ///
+    /// Formula: ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+    ///
+    /// This method:
+    /// 1. Canonicalizes the action data into a distinction
+    /// 2. Synthesizes local_root ⊕ action_distinction
+    /// 3. Executes the storage action (causal effect)
+    /// 4. Returns the new distinction representing the state transition
+    fn synthesize_action(
+        &mut self,
+        action_data: Self::ActionData,
+        _engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        // Validate the action
+        if let Err(e) = action_data.validate() {
+            tracing::warn!("Invalid action: {}", e);
+            return self.local_root.clone();
+        }
+
+        // Canonicalize action into distinction
+        let action_distinction = action_data.to_canonical_structure(self.field.engine());
+
+        // Synthesize: ΔNew = ΔLocal ⊕ ΔAction
+        let new_root = self.field.synthesize(&self.local_root, &action_distinction);
+
+        // Update local root
+        self.local_root = new_root.clone();
+
+        new_root
+    }
+
+    /// Update the local root to a new distinction.
+    ///
+    /// This moves the agent's perspective forward in the causal chain.
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
     }
 }
 
@@ -1818,5 +1995,140 @@ mod tests {
         assert_eq!(stats2.key_count, 2);
         assert_eq!(stats2.total_versions, 3);
         assert_eq!(stats2.namespace_count, 1);
+    }
+
+    // =========================================================================
+    // LCA (Local Causal Agent) Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_lca_local_root_exists() {
+        let db = create_test_db().await;
+
+        // The local root should be initialized
+        let root = db.local_root();
+        assert!(!root.id().is_empty());
+
+        // It should be the STORAGE root
+        let expected_root = db.shared_engine().root(RootType::Storage);
+        assert_eq!(root.id(), expected_root.id());
+    }
+
+    #[tokio::test]
+    async fn test_lca_synthesize_storage_action() {
+        use crate::actions::StorageAction;
+
+        let mut db = create_test_db().await;
+        let initial_root = db.local_root().clone();
+
+        // Synthesize a store action
+        let action = StorageAction::Store {
+            namespace: "users".to_string(),
+            key: "alice".to_string(),
+            value_json: json!({"name": "Alice"}),
+        };
+
+        let new_root = db.synthesize_storage_action(action).await.unwrap();
+
+        // The new root should be different from initial
+        assert_ne!(new_root.id(), initial_root.id());
+
+        // The local root should be updated
+        assert_eq!(db.local_root().id(), new_root.id());
+
+        // The data should actually be stored
+        let retrieved = db.get("users", "alice").await.unwrap();
+        assert_eq!(retrieved.value()["name"], "Alice");
+    }
+
+    #[tokio::test]
+    async fn test_lca_local_causal_agent_trait() {
+        use koru_lambda_core::LocalCausalAgent;
+        use crate::actions::StorageAction;
+
+        let mut db = create_test_db().await;
+        let engine = Arc::new(DistinctionEngine::new());
+
+        // Test get_current_root
+        let root = db.get_current_root();
+        assert!(!root.id().is_empty());
+
+        // Test synthesize_action
+        let action = StorageAction::Retrieve {
+            namespace: "users".to_string(),
+            key: "alice".to_string(),
+        };
+
+        let new_root = db.synthesize_action(action, &engine);
+        assert!(!new_root.id().is_empty());
+
+        // The root should have changed (even though retrieval doesn't store)
+        // because synthesis still happens
+    }
+
+    #[tokio::test]
+    async fn test_lca_shared_engine() {
+        let db = create_test_db().await;
+
+        // The shared engine should be accessible
+        let engine = db.shared_engine();
+        let stats = engine.stats();
+
+        // Should have distinctions (12 roots are created during initialization,
+        // each synthesized from d0/d1, so there should be many distinctions)
+        assert!(stats.distinction_count >= 12, "Expected at least 12 distinctions (roots), got {}", stats.distinction_count);
+    }
+
+    #[tokio::test]
+    async fn test_lca_field_handle() {
+        let db = create_test_db().await;
+
+        // The field handle should provide access to d0 and d1
+        let d0 = db.field().d0();
+        let d1 = db.field().d1();
+
+        assert!(!d0.id().is_empty());
+        assert!(!d1.id().is_empty());
+        assert_ne!(d0.id(), d1.id());
+    }
+
+    #[tokio::test]
+    async fn test_lca_causal_chain() {
+        use crate::actions::StorageAction;
+
+        let mut db = create_test_db().await;
+        let root1 = db.local_root().clone();
+
+        // First action
+        let action1 = StorageAction::Store {
+            namespace: "test".to_string(),
+            key: "key1".to_string(),
+            value_json: json!(1),
+        };
+        let root2 = db.synthesize_storage_action(action1).await.unwrap();
+        assert_ne!(root1.id(), root2.id());
+
+        // Second action
+        let action2 = StorageAction::Store {
+            namespace: "test".to_string(),
+            key: "key2".to_string(),
+            value_json: json!(2),
+        };
+        let root3 = db.synthesize_storage_action(action2).await.unwrap();
+        assert_ne!(root2.id(), root3.id());
+
+        // Third action
+        let action3 = StorageAction::Store {
+            namespace: "test".to_string(),
+            key: "key3".to_string(),
+            value_json: json!(3),
+        };
+        let root4 = db.synthesize_storage_action(action3).await.unwrap();
+        assert_ne!(root3.id(), root4.id());
+
+        // Each root should be unique (causal chain)
+        assert_ne!(root1.id(), root3.id());
+        assert_ne!(root1.id(), root4.id());
+        assert_ne!(root2.id(), root4.id());
     }
 }

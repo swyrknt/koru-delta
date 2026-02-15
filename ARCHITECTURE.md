@@ -258,6 +258,121 @@ Provided by `koru-lambda-core`, this gives us:
 - **Thread-safety**: Lock-free concurrent operations via `DashMap`
 - **Mathematical guarantees**: Five core axioms ensure consistency
 
+## LCA Architecture (Phase 2) 🔄
+
+**Status: Phase 2.1 Complete (Storage Agent)**
+
+KoruDelta is being refactored into a **Local Causal Agent (LCA)** architecture. This means the database itself is an agent—a perspective within a unified consciousness field.
+
+### Core Concept
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        THE KORU FIELD                                    │
+│                   (Shared DistinctionEngine)                             │
+│                                                                         │
+│   ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐        │
+│   │  StorageAgent   │  │ TemperatureAgent│  │ ChronicleAgent  │        │
+│   │   (Root: MEMORY)│  │   (Root: HOT)   │  │ (Root: CHRONICLE│        │
+│   │                 │  │                 │  │                 │        │
+│   │ local_root ─────┼──┼─────────────────┼──┼─────────────────┤        │
+│   │ ΔNew = ΔLocal ⊕ │  │ ΔNew = ΔLocal ⊕ │  │ ΔNew = ΔLocal ⊕ │        │
+│   │   ΔAction       │  │   ΔAction       │  │   ΔAction       │        │
+│   └─────────────────┘  └─────────────────┘  └─────────────────┘        │
+│                                                                         │
+│   ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐        │
+│   │  ArchiveAgent   │  │  EssenceAgent   │  │   SleepAgent    │        │
+│   │ (Root: ARCHIVE) │  │ (Root: ESSENCE) │  │  (Root: DREAMS) │        │
+│   └─────────────────┘  └─────────────────┘  └─────────────────┘        │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### The Synthesis Pattern
+
+All state changes follow the **synthesis formula**:
+
+```
+ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+```
+
+Where:
+- `ΔLocal_Root` is the agent's current causal perspective (a Distinction)
+- `ΔAction_Data` is the canonical form of the action being performed
+- `⊕` is synthesis (the fundamental operation of distinction calculus)
+- `ΔNew` becomes the agent's new local root
+
+### Canonical Roots (`src/roots.rs`)
+
+All agents derive their identity from 12 canonical roots, synthesized deterministically from d0 and d1:
+
+| Root | Symbol | Purpose |
+|------|--------|---------|
+| `field` | 🌌 FIELD | The unified field itself |
+| `storage` | 💾 MEMORY | Storage agent (KoruDelta core) |
+| `temperature` | 🔥 HOT | Temperature/activity tracking |
+| `chronicle` | 📜 CHRONICLE | Historical record keeping |
+| `archive` | 🗄️ ARCHIVE | Cold storage management |
+| `essence` | 💎 ESSENCE | Genome/DNA extraction |
+| `sleep` | 🌙 DREAMS | Consolidation processes |
+| `evolution` | 🧬 EVOLUTION | Fitness-based selection |
+| `lineage` | 👁️ LINEAGE | Perspective tracking |
+| `perspective` | 🔮 PERSPECTIVE | View/query management |
+| `identity` | 🎭 IDENTITY | Auth/identity management |
+| `network` | 🌐 NETWORK | Network reconciliation |
+
+### LocalCausalAgent Trait
+
+All agents implement the `LocalCausalAgent` trait from `koru-lambda-core`:
+
+```rust
+pub trait LocalCausalAgent {
+    type ActionData: Canonicalizable;
+    
+    fn get_current_root(&self) -> &Distinction;
+    fn update_local_root(&mut self, new_root: Distinction);
+    
+    fn synthesize_action(&mut self, action: Self::ActionData, engine: &DistinctionEngine) 
+        -> Distinction;
+}
+```
+
+### StorageAction (`src/actions/mod.rs`)
+
+The Storage Agent operates on `StorageAction` variants:
+
+```rust
+pub enum StorageAction {
+    Store { namespace, key, value_json },
+    Retrieve { namespace, key },
+    History { namespace, key },
+    Query { pattern_json },
+    Delete { namespace, key },
+}
+```
+
+Each action implements `Canonicalizable`, converting to a `Distinction` via:
+1. Serialize action to canonical bytes
+2. Fold bytes through synthesis: `bytes.fold(d0, |acc, b| synthesize(acc, byte_distinction(b)))`
+
+### Integration Status
+
+| Phase | Component | Status |
+|-------|-----------|--------|
+| 2.1 | Storage Agent (`KoruDelta`) | ✅ Complete |
+| 2.2 | Temperature Agent | 🔄 Pending |
+| 2.3 | Chronicle Agent | 🔄 Pending |
+| 2.4 | Archive/Essence/Sleep Agents | 🔄 Pending |
+| 2.5 | Auth/Network Agents | 🔄 Pending |
+
+### Benefits
+
+1. **Unified Causal Graph**: All agents share one distinction engine
+2. **Deterministic Replay**: Any agent state can be reconstructed from roots + actions
+3. **Perspective-Aware Queries**: Each agent sees the field from its own root
+4. **Mathematical Foundations**: All operations grounded in distinction calculus
+5. **Distributed by Design**: Agents can migrate, replicate, or synchronize naturally
+
 ## Key Data Types
 
 ### `FullKey` (`src/types.rs`)

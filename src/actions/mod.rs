@@ -221,6 +221,25 @@ pub enum StorageAction {
     },
 }
 
+impl Canonicalizable for StorageAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        // Convert to serializable form, then to bytes, then synthesize
+        let serializable = StorageActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+/// Convert bytes to distinction via synthesis.
+fn bytes_to_distinction(bytes: &[u8], engine: &DistinctionEngine) -> Distinction {
+    bytes
+        .iter()
+        .map(|&byte| byte.to_canonical_structure(engine))
+        .fold(engine.d0().clone(), |acc, d| engine.synthesize(&acc, &d))
+}
+
 /// Serializable version of StorageAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 enum StorageActionSerializable {
@@ -269,7 +288,8 @@ impl From<&StorageAction> for StorageActionSerializable {
 }
 
 impl StorageAction {
-    fn validate(&self) -> Result<(), String> {
+    /// Validate the storage action.
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             StorageAction::Store { namespace, key, .. } => {
                 if namespace.is_empty() {
@@ -380,7 +400,7 @@ impl From<&TemperatureAction> for TemperatureActionSerializable {
 }
 
 impl TemperatureAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             TemperatureAction::Heat { distinction_id, .. }
             | TemperatureAction::Cool { distinction_id }
@@ -474,7 +494,7 @@ impl From<&ChronicleAction> for ChronicleActionSerializable {
 }
 
 impl ChronicleAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             ChronicleAction::Record { event_id, .. } => {
                 if event_id.is_empty() {
@@ -571,7 +591,7 @@ impl From<&ArchiveAction> for ArchiveActionSerializable {
 }
 
 impl ArchiveAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             ArchiveAction::EpochStart { .. } => Ok(()),
             ArchiveAction::EpochSeal { content_id, .. } => {
@@ -666,7 +686,7 @@ impl From<&EssenceAction> for EssenceActionSerializable {
 }
 
 impl EssenceAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             EssenceAction::ExtractTopology { source_id } => {
                 if source_id.is_empty() {
@@ -746,7 +766,7 @@ impl From<&SleepAction> for SleepActionSerializable {
 }
 
 impl SleepAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             SleepAction::EnterPhase { .. } | SleepAction::Dream | SleepAction::Wake => Ok(()),
             SleepAction::Consolidate { from_tier, to_tier } => {
@@ -836,7 +856,7 @@ impl From<&EvolutionAction> for EvolutionActionSerializable {
 }
 
 impl EvolutionAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             EvolutionAction::EvaluateFitness { candidate_id } => {
                 if candidate_id.is_empty() {
@@ -933,7 +953,7 @@ impl From<&LineageAction> for LineageActionSerializable {
 }
 
 impl LineageAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             LineageAction::RecordBirth { child_id, parent_ids } => {
                 if child_id.is_empty() {
@@ -1044,7 +1064,7 @@ impl From<&PerspectiveAction> for PerspectiveActionSerializable {
 }
 
 impl PerspectiveAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             PerspectiveAction::FormView { name, .. } => {
                 if name.is_empty() {
@@ -1157,7 +1177,7 @@ impl From<&IdentityAction> for IdentityActionSerializable {
 }
 
 impl IdentityAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             IdentityAction::MineIdentity { .. } => Ok(()),
             IdentityAction::Authenticate { identity_id, challenge } => {
@@ -1264,7 +1284,7 @@ impl From<&NetworkAction> for NetworkActionSerializable {
 }
 
 impl NetworkAction {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             NetworkAction::Join { peer_address } => {
                 if peer_address.is_empty() {

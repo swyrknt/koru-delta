@@ -88,11 +88,16 @@ impl SharedEngine {
         let engine = Arc::new(DistinctionEngine::new());
         let roots = KoruRoots::initialize(&engine);
 
+        // Count distinctions created during root initialization
+        let distinction_count = engine.distinction_count() as u64;
+        // Estimate synthesis count: 12 roots × ~5 syntheses each = ~60
+        let synthesis_count = distinction_count.saturating_sub(2); // Subtract d0 and d1
+
         Self {
             engine,
             roots,
-            synthesis_count: Arc::new(AtomicU64::new(0)),
-            distinction_count: Arc::new(AtomicU64::new(0)),
+            synthesis_count: Arc::new(AtomicU64::new(synthesis_count)),
+            distinction_count: Arc::new(AtomicU64::new(distinction_count)),
         }
     }
 

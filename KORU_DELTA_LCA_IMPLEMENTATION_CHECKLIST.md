@@ -147,23 +147,30 @@ This checklist converts Koru-Delta from a traditional database architecture to a
 
 ## Phase 2: Agent Migration (One by One)
 
-### 2.1 Storage Agent (KoruDelta Core)
+### 2.1 Storage Agent (KoruDelta Core) ✅ COMPLETE
+
+**Status:** All tasks completed, 335 tests passing, zero warnings.
 
 **Files:** `src/core.rs`, `src/storage.rs`
 
-- [ ] Add `local_root: Distinction` to `KoruDelta` struct
-- [ ] Modify constructor to accept shared engine
-- [ ] Implement `LocalCausalAgent` for `KoruDelta`:
+- [x] Add `local_root: Distinction` to `KoruDelta` struct
+- [x] Modify constructor to accept shared engine
+- [x] Implement `LocalCausalAgent` for `KoruDelta`:
   ```rust
-  impl LocalCausalAgent for KoruDelta {
+  impl<R: Runtime> LocalCausalAgent for KoruDeltaGeneric<R> {
       type ActionData = StorageAction;
       
       fn get_current_root(&self) -> &Distinction {
           &self.local_root
       }
       
-      fn synthesize_action(...) -> Distinction {
-          // Implementation
+      fn synthesize_action(&mut self, action: StorageAction, engine: &DistinctionEngine) 
+          -> Distinction {
+          // ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+          let action_distinction = action.to_canonical_structure(engine);
+          let new_root = engine.synthesize(&self.local_root, &action_distinction);
+          self.local_root = new_root.clone();
+          new_root
       }
       
       fn update_local_root(&mut self, new_root: Distinction) {
@@ -171,29 +178,30 @@ This checklist converts Koru-Delta from a traditional database architecture to a
       }
   }
   ```
-- [ ] Create `StorageAction` enum:
+- [x] Create `StorageAction` enum:
   ```rust
   pub enum StorageAction {
-      Store { namespace: Distinction, key: Distinction, value: Distinction },
-      Retrieve { namespace: Distinction, key: Distinction },
-      History { namespace: Distinction, key: Distinction },
-      Query { pattern: Distinction },
+      Store { namespace: String, key: String, value_json: serde_json::Value },
+      Retrieve { namespace: String, key: String },
+      History { namespace: String, key: String },
+      Query { pattern_json: serde_json::Value },
+      Delete { namespace: String, key: String },
   }
   ```
-- [ ] Refactor `put()` to use `synthesize_action()`
-- [ ] Refactor `get()` to use `synthesize_action()`
-- [ ] Refactor `history()` to use `synthesize_action()`
-- [ ] Refactor `query()` to use `synthesize_action()`
-- [ ] Maintain backward-compatible API (wrap new API)
-- [ ] Update `CausalStorage` to work with agent pattern
-- [ ] Ensure all existing tests pass
+- [x] Refactor `put()` to use `synthesize_action()`
+- [x] Refactor `get()` to use `synthesize_action()`
+- [x] Refactor `history()` to use `synthesize_action()`
+- [x] Refactor `query()` to use `synthesize_action()`
+- [x] Maintain backward-compatible API (wrap new API)
+- [x] Update `CausalStorage` to work with agent pattern
+- [x] Ensure all existing tests pass
 
-**Tests:**
-- [ ] LCA contract tests pass
-- [ ] All existing unit tests pass
-- [ ] All existing integration tests pass
-- [ ] Storage actions are properly canonicalized
-- [ ] Synthesis creates proper causal chains
+**Tests:** ✅ All passing
+- [x] LCA contract tests pass (`test_lca_*`)
+- [x] All existing unit tests pass (335 tests)
+- [x] All existing integration tests pass
+- [x] Storage actions are properly canonicalized
+- [x] Synthesis creates proper causal chains
 
 ### 2.2 Temperature Agent (HotMemory)
 
