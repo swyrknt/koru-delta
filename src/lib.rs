@@ -111,6 +111,8 @@ pub mod network_process;
 pub mod orchestrator;
 pub mod roots;
 pub mod sensory_interface;
+pub mod vector_agent;
+pub mod workspace_agent;
 
 // v2.0: Distinction-driven modules
 pub mod causal_graph;

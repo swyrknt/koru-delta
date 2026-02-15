@@ -62,9 +62,7 @@ use crate::error::DeltaResult;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::lifecycle::{LifecycleConfig, LifecycleManager};
 use crate::memory::{ColdMemory, DeepMemory, HotConfig, HotMemory, WarmMemory};
-use crate::processes::ProcessRunner;
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
-use crate::reconciliation::ReconciliationManager;
 use crate::roots::RootType;
 use crate::runtime::sync::RwLock;
 use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
@@ -232,12 +230,6 @@ pub struct KoruDeltaGeneric<R: Runtime> {
     warm: Arc<RwLock<WarmMemory>>,
     cold: Arc<RwLock<ColdMemory>>,
     deep: Arc<RwLock<DeepMemory>>,
-    /// Process runner for background tasks (Phase 7)
-    #[allow(dead_code)]
-    process_runner: Option<Arc<ProcessRunner>>,
-    /// Reconciliation manager for distributed sync (Phase 7/8)
-    #[allow(dead_code)]
-    reconciliation: Arc<RwLock<ReconciliationManager>>,
     /// Auth manager (LCA Identity Agent)
     auth: Arc<AuthManager>,
     /// Lifecycle manager for memory consolidation (non-WASM only)
@@ -344,9 +336,6 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
         let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
-        // Initialize reconciliation
-        let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
-
         // Initialize auth with LCA identity agent
         let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
@@ -380,8 +369,6 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             warm,
             cold,
             deep,
-            process_runner: None,
-            reconciliation,
             auth,
             #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
@@ -435,9 +422,6 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
         let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
-        // Initialize reconciliation
-        let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
-
         // Initialize auth with LCA identity agent
         let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
@@ -471,8 +455,6 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             warm,
             cold,
             deep,
-            process_runner: None,
-            reconciliation,
             auth,
             #[cfg(not(target_arch = "wasm32"))]
             lifecycle,
@@ -743,9 +725,6 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
         let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
-        // Initialize reconciliation
-        let reconciliation = Arc::new(RwLock::new(ReconciliationManager::new()));
-
         // Initialize auth with LCA identity agent
         let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
@@ -779,8 +758,6 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             warm,
             cold,
             deep,
-            process_runner: None,
-            reconciliation,
             auth,
             #[cfg(not(target_arch = "wasm32"))]
             lifecycle,

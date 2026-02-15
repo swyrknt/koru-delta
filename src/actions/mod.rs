@@ -75,11 +75,27 @@ pub enum KoruAction {
     Network(NetworkAction),
     /// Pulse operations - orchestrator coordination.
     Pulse(PulseAction),
+    /// Workspace operations - memory space management.
+    Workspace(WorkspaceAction),
+    /// Vector operations - embedding and similarity search.
+    Vector(VectorAction),
 }
 
 impl From<PulseAction> for KoruAction {
     fn from(action: PulseAction) -> Self {
         KoruAction::Pulse(action)
+    }
+}
+
+impl From<WorkspaceAction> for KoruAction {
+    fn from(action: WorkspaceAction) -> Self {
+        KoruAction::Workspace(action)
+    }
+}
+
+impl From<VectorAction> for KoruAction {
+    fn from(action: VectorAction) -> Self {
+        KoruAction::Vector(action)
     }
 }
 
@@ -99,6 +115,8 @@ impl KoruAction {
             KoruAction::Identity(_) => "IDENTITY",
             KoruAction::Network(_) => "NETWORK",
             KoruAction::Pulse(_) => "PULSE",
+            KoruAction::Workspace(_) => "WORKSPACE",
+            KoruAction::Vector(_) => "VECTOR",
         }
     }
 
@@ -119,6 +137,8 @@ impl KoruAction {
             KoruAction::Identity(action) => action.validate(),
             KoruAction::Network(action) => action.validate(),
             KoruAction::Pulse(action) => action.validate(),
+            KoruAction::Workspace(action) => action.validate(),
+            KoruAction::Vector(action) => action.validate(),
         }
     }
 }
@@ -139,6 +159,8 @@ impl Canonicalizable for KoruAction {
             KoruAction::Identity(action) => action.to_canonical_structure(engine),
             KoruAction::Network(action) => action.to_canonical_structure(engine),
             KoruAction::Pulse(action) => action.to_canonical_structure(engine),
+            KoruAction::Workspace(action) => action.to_canonical_structure(engine),
+            KoruAction::Vector(action) => action.to_canonical_structure(engine),
         }
     }
 }
@@ -180,6 +202,8 @@ enum ActionSerializable {
     Identity(IdentityActionSerializable),
     Network(NetworkActionSerializable),
     Pulse(PulseActionSerializable),
+    Workspace(WorkspaceActionSerializable),
+    Vector(VectorActionSerializable),
 }
 
 impl From<&KoruAction> for ActionSerializable {
@@ -197,6 +221,8 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Identity(a) => ActionSerializable::Identity(a.into()),
             KoruAction::Network(a) => ActionSerializable::Network(a.into()),
             KoruAction::Pulse(a) => ActionSerializable::Pulse(a.into()),
+            KoruAction::Workspace(a) => ActionSerializable::Workspace(a.into()),
+            KoruAction::Vector(a) => ActionSerializable::Vector(a.into()),
         }
     }
 }
@@ -1424,6 +1450,319 @@ impl Canonicalizable for PulseAction {
         match bincode::serialize(&serializable) {
             Ok(bytes) => bytes_to_distinction(&bytes, engine),
             Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+/// Actions for the workspace agent.
+///
+/// The workspace agent manages isolated, versioned memory spaces with
+/// natural lifecycle management. All workspace operations are synthesized
+/// into the unified field. Each action targets a specific workspace
+/// identified by `workspace_id`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkspaceAction {
+    /// Remember an item in the workspace.
+    Remember {
+        /// Workspace to store in.
+        workspace_id: String,
+        /// Item identifier.
+        item_id: String,
+        /// Item content as JSON.
+        content_json: serde_json::Value,
+    },
+    /// Recall items matching a query.
+    Recall {
+        /// Workspace to recall from.
+        workspace_id: String,
+        /// Query string.
+        query: String,
+    },
+    /// Consolidate items in the workspace.
+    Consolidate {
+        /// Workspace to consolidate.
+        workspace_id: String,
+    },
+    /// Search the workspace with options.
+    Search {
+        /// Workspace to search.
+        workspace_id: String,
+        /// Search pattern.
+        pattern: String,
+        /// Search options.
+        options: WorkspaceSearchOptions,
+    },
+}
+
+/// Serializable version of WorkspaceAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum WorkspaceActionSerializable {
+    Remember { workspace_id: String, item_id: String, content_json: serde_json::Value },
+    Recall { workspace_id: String, query: String },
+    Consolidate { workspace_id: String },
+    Search { workspace_id: String, pattern: String, options: WorkspaceSearchOptionsSerializable },
+}
+
+impl From<&WorkspaceAction> for WorkspaceActionSerializable {
+    fn from(action: &WorkspaceAction) -> Self {
+        match action {
+            WorkspaceAction::Remember { workspace_id, item_id, content_json } => {
+                WorkspaceActionSerializable::Remember {
+                    workspace_id: workspace_id.clone(),
+                    item_id: item_id.clone(),
+                    content_json: content_json.clone(),
+                }
+            }
+            WorkspaceAction::Recall { workspace_id, query } => {
+                WorkspaceActionSerializable::Recall {
+                    workspace_id: workspace_id.clone(),
+                    query: query.clone(),
+                }
+            }
+            WorkspaceAction::Consolidate { workspace_id } => {
+                WorkspaceActionSerializable::Consolidate {
+                    workspace_id: workspace_id.clone(),
+                }
+            }
+            WorkspaceAction::Search { workspace_id, pattern, options } => {
+                WorkspaceActionSerializable::Search {
+                    workspace_id: workspace_id.clone(),
+                    pattern: pattern.clone(),
+                    options: options.into(),
+                }
+            }
+        }
+    }
+}
+
+impl WorkspaceAction {
+    /// Validate the workspace action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            WorkspaceAction::Remember { workspace_id, item_id, content_json } => {
+                if workspace_id.is_empty() {
+                    return Err("WorkspaceAction::Remember: workspace_id is empty".to_string());
+                }
+                if item_id.is_empty() {
+                    return Err("WorkspaceAction::Remember: item_id is empty".to_string());
+                }
+                if content_json.is_null() {
+                    return Err("WorkspaceAction::Remember: content_json is null".to_string());
+                }
+                Ok(())
+            }
+            WorkspaceAction::Recall { workspace_id, query } => {
+                if workspace_id.is_empty() {
+                    return Err("WorkspaceAction::Recall: workspace_id is empty".to_string());
+                }
+                if query.is_empty() {
+                    return Err("WorkspaceAction::Recall: query is empty".to_string());
+                }
+                Ok(())
+            }
+            WorkspaceAction::Consolidate { workspace_id } => {
+                if workspace_id.is_empty() {
+                    return Err("WorkspaceAction::Consolidate: workspace_id is empty".to_string());
+                }
+                Ok(())
+            }
+            WorkspaceAction::Search { workspace_id, pattern, .. } => {
+                if workspace_id.is_empty() {
+                    return Err("WorkspaceAction::Search: workspace_id is empty".to_string());
+                }
+                if pattern.is_empty() {
+                    return Err("WorkspaceAction::Search: pattern is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Canonicalizable for WorkspaceAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = WorkspaceActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+/// Actions for the vector agent.
+///
+/// The vector agent manages embedding vectors and similarity search.
+/// All vector operations are synthesized into the unified field.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VectorAction {
+    /// Embed data into a vector.
+    Embed {
+        /// Data to embed (as JSON).
+        data_json: serde_json::Value,
+        /// Embedding model identifier.
+        model: String,
+        /// Vector dimensions.
+        dimensions: usize,
+    },
+    /// Search for similar vectors.
+    Search {
+        /// Query vector (as array of floats).
+        query_vector: Vec<f32>,
+        /// Top-k results.
+        top_k: usize,
+        /// Similarity threshold.
+        threshold: f32,
+    },
+    /// Index a vector with a key.
+    Index {
+        /// Vector to index (as array of floats).
+        vector: Vec<f32>,
+        /// Key to associate with the vector.
+        key: String,
+        /// Model identifier.
+        model: String,
+    },
+}
+
+/// Serializable version of VectorAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum VectorActionSerializable {
+    Embed { data_json: serde_json::Value, model: String, dimensions: usize },
+    Search { query_vector: Vec<f32>, top_k: usize, threshold: f32 },
+    Index { vector: Vec<f32>, key: String, model: String },
+}
+
+impl From<&VectorAction> for VectorActionSerializable {
+    fn from(action: &VectorAction) -> Self {
+        match action {
+            VectorAction::Embed { data_json, model, dimensions } => {
+                VectorActionSerializable::Embed {
+                    data_json: data_json.clone(),
+                    model: model.clone(),
+                    dimensions: *dimensions,
+                }
+            }
+            VectorAction::Search { query_vector, top_k, threshold } => {
+                VectorActionSerializable::Search {
+                    query_vector: query_vector.clone(),
+                    top_k: *top_k,
+                    threshold: *threshold,
+                }
+            }
+            VectorAction::Index { vector, key, model } => {
+                VectorActionSerializable::Index {
+                    vector: vector.clone(),
+                    key: key.clone(),
+                    model: model.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl VectorAction {
+    /// Validate the vector action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            VectorAction::Embed { data_json, model, dimensions } => {
+                if data_json.is_null() {
+                    return Err("VectorAction::Embed: data_json is null".to_string());
+                }
+                if model.is_empty() {
+                    return Err("VectorAction::Embed: model is empty".to_string());
+                }
+                if *dimensions == 0 {
+                    return Err("VectorAction::Embed: dimensions is zero".to_string());
+                }
+                Ok(())
+            }
+            VectorAction::Search { query_vector, top_k, threshold } => {
+                if query_vector.is_empty() {
+                    return Err("VectorAction::Search: query_vector is empty".to_string());
+                }
+                if *top_k == 0 {
+                    return Err("VectorAction::Search: top_k is zero".to_string());
+                }
+                if *threshold < 0.0 || *threshold > 1.0 {
+                    return Err("VectorAction::Search: threshold must be in [0.0, 1.0]".to_string());
+                }
+                Ok(())
+            }
+            VectorAction::Index { vector, key, model } => {
+                if vector.is_empty() {
+                    return Err("VectorAction::Index: vector is empty".to_string());
+                }
+                if key.is_empty() {
+                    return Err("VectorAction::Index: key is empty".to_string());
+                }
+                if model.is_empty() {
+                    return Err("VectorAction::Index: model is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Canonicalizable for VectorAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = VectorActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+// ============================================================================
+// WORKSPACE SEARCH OPTIONS
+// ============================================================================
+
+/// Options for workspace search operations.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkspaceSearchOptions {
+    /// Maximum number of results to return.
+    pub limit: usize,
+    /// Tag filters to apply.
+    pub tag_filters: Vec<String>,
+    /// Whether to include deleted items.
+    pub include_deleted: bool,
+}
+
+impl Default for WorkspaceSearchOptions {
+    fn default() -> Self {
+        Self {
+            limit: 10,
+            tag_filters: Vec::new(),
+            include_deleted: false,
+        }
+    }
+}
+
+/// Serializable version of WorkspaceSearchOptions.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WorkspaceSearchOptionsSerializable {
+    pub limit: usize,
+    pub tag_filters: Vec<String>,
+    pub include_deleted: bool,
+}
+
+impl Default for WorkspaceSearchOptionsSerializable {
+    fn default() -> Self {
+        Self {
+            limit: 10,
+            tag_filters: Vec::new(),
+            include_deleted: false,
+        }
+    }
+}
+
+impl From<&WorkspaceSearchOptions> for WorkspaceSearchOptionsSerializable {
+    fn from(options: &WorkspaceSearchOptions) -> Self {
+        Self {
+            limit: options.limit,
+            tag_filters: options.tag_filters.clone(),
+            include_deleted: options.include_deleted,
         }
     }
 }

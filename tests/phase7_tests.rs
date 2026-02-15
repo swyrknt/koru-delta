@@ -7,6 +7,7 @@
 //! - Genome extraction
 
 use koru_delta::KoruDelta;
+use koru_delta::engine::SharedEngine;
 use serde_json::json;
 
 /// Test tiered memory GET with promotion
@@ -84,7 +85,8 @@ async fn test_genome_storage() {
     let genome = process.extract_genome();
 
     // Store in deep memory
-    let deep = DeepMemory::new();
+    let shared_engine = SharedEngine::new();
+    let deep = DeepMemory::new(&shared_engine);
     deep.store_genome("test_genome", genome.clone());
 
     // Retrieve it

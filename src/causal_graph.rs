@@ -40,7 +40,7 @@ use crate::roots::RootType;
 use dashmap::{DashMap, DashSet};
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::collections::{HashSet, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// A unique identifier for a distinction in the causal graph.
 pub type DistinctionId = String;
@@ -76,8 +76,7 @@ pub struct LineageAgent {
 
     /// Family tree - synthesis of all lineage
     /// Updated as new distinctions are added to the graph
-    #[allow(dead_code)]
-    family_tree: Distinction,
+    family_tree: RwLock<Distinction>,
 }
 
 impl LineageAgent {
@@ -94,7 +93,7 @@ impl LineageAgent {
         let field = FieldHandle::new(shared_engine);
 
         // Initial family tree is just the local root
-        let family_tree = local_root.clone();
+        let family_tree = RwLock::new(local_root.clone());
 
         Self {
             parents: DashMap::new(),
@@ -105,6 +104,11 @@ impl LineageAgent {
             field,
             family_tree,
         }
+    }
+
+    /// Get the family tree - synthesis of all lineage.
+    pub fn family_tree(&self) -> Distinction {
+        self.family_tree.read().unwrap().clone()
     }
 
     /// Add a distinction to the graph.
@@ -405,10 +409,17 @@ impl LineageAgent {
     /// Internal synthesis helper.
     ///
     /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+    /// Also updates the family_tree with each new lineage record.
     fn synthesize_action_internal(&self, action: LineageAction) -> Distinction {
         let engine = self.field.engine_arc();
-        let action_distinction = action.to_canonical_structure(engine);
+        let action_distinction = action.to_canonical_structure(&engine);
         let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        
+        // Update family_tree - synthesize this action into the lineage synthesis
+        let current_family = self.family_tree.read().unwrap().clone();
+        let new_family = engine.synthesize(&current_family, &action_distinction);
+        *self.family_tree.write().unwrap() = new_family;
+        
         new_root
     }
 }

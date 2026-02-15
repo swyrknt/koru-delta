@@ -126,6 +126,18 @@ pub struct KoruRoots {
     /// Anchors all agent registration and coordination. The orchestrator
     /// synthesizes from this root with coordination actions.
     pub orchestrator: Distinction,
+
+    /// Workspace root - perspective of isolated memory spaces (Root: WORKSPACE).
+    ///
+    /// Anchors all workspace operations. Workspaces are synthesized
+    /// from this root with memory actions.
+    pub workspace: Distinction,
+
+    /// Vector root - perspective of embeddings and similarity (Root: VECTOR).
+    ///
+    /// Anchors all vector operations. Embeddings are synthesized
+    /// from this root with vector actions.
+    pub vector: Distinction,
 }
 
 impl KoruRoots {
@@ -168,6 +180,8 @@ impl KoruRoots {
         let identity = Self::synthesize_agent_root(engine, &d1, b"IDENTITY");
         let network = Self::synthesize_agent_root(engine, &d1, b"NETWORK");
         let orchestrator = Self::synthesize_agent_root(engine, &d1, b"ORCHESTRATOR");
+        let workspace = Self::synthesize_agent_root(engine, &d1, b"WORKSPACE");
+        let vector = Self::synthesize_agent_root(engine, &d1, b"VECTOR");
 
         // The field root is the synthesis of all agent roots
         // This represents the unified consciousness field
@@ -187,6 +201,8 @@ impl KoruRoots {
                 &identity,
                 &network,
                 &orchestrator,
+                &workspace,
+                &vector,
             ],
         );
 
@@ -204,6 +220,8 @@ impl KoruRoots {
             identity,
             network,
             orchestrator,
+            workspace,
+            vector,
         }
     }
 
@@ -263,6 +281,8 @@ impl KoruRoots {
             RootType::Perspective => &self.perspective,
             RootType::Identity => &self.identity,
             RootType::Network => &self.network,
+            RootType::Workspace => &self.workspace,
+            RootType::Vector => &self.vector,
         }
     }
 }
@@ -296,6 +316,10 @@ pub enum RootType {
     Identity,
     /// Network agent root.
     Network,
+    /// Workspace root.
+    Workspace,
+    /// Vector root.
+    Vector,
 }
 
 impl RootType {
@@ -315,6 +339,8 @@ impl RootType {
             RootType::Perspective => "PERSPECTIVE",
             RootType::Identity => "IDENTITY",
             RootType::Network => "NETWORK",
+            RootType::Workspace => "WORKSPACE",
+            RootType::Vector => "VECTOR",
         }
     }
 }
@@ -368,6 +394,8 @@ mod tests {
             roots.perspective.id(),
             roots.identity.id(),
             roots.network.id(),
+            roots.workspace.id(),
+            roots.vector.id(),
         ];
 
         for i in 0..ids.len() {
@@ -434,7 +462,9 @@ mod tests {
                 9 => Ok(RootType::Perspective),
                 10 => Ok(RootType::Identity),
                 11 => Ok(RootType::Network),
-                _ => Err(()),
+                12 => Ok(RootType::Workspace),
+                13 => Ok(RootType::Vector),
+                _ => Err(())
             }
         }
     }

@@ -567,16 +567,14 @@ impl IdentityAgent {
     }
 
     /// Update the local root (used by LCA synthesis).
-    #[allow(dead_code)]
-    fn update_local_root(&self, new_root: Distinction) {
+    pub fn update_local_root(&self, new_root: Distinction) {
         *self.local_root.write().unwrap() = new_root;
     }
 
     /// Synthesize an action with the current local root.
     ///
     /// Follows the LCA pattern: `ΔNew = ΔLocal_Root ⊕ ΔAction`
-    #[allow(dead_code)]
-    fn synthesize_action(
+    pub fn synthesize_action(
         &self,
         action: IdentityAction,
         engine: &Arc<DistinctionEngine>,
