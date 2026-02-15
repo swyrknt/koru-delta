@@ -106,6 +106,7 @@ mod types;
 // Foundation: canonical roots, actions, and shared engine
 pub mod actions;
 pub mod engine;
+pub mod network_agent;
 pub mod orchestrator;
 pub mod roots;
 pub mod sensory_interface;
