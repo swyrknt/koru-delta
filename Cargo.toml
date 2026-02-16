@@ -1,7 +1,7 @@
 [package]
 name = "koru-delta"
 version = "3.0.0"
-edition = "2021"
+edition = "2024"
 authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "The invisible database: causal, consistent, and everywhere—without configuration"
