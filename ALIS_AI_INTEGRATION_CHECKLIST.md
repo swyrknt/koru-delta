@@ -159,7 +159,7 @@ This checklist tracks the implementation of graph-aware APIs needed for ALIS AI'
 - [ ] Returns true if path exists between two distinctions
 - [ ] **Future:** Add `are_connected_cross(ns_a, key_a, ns_b, key_b)` if cross-namespace needed
 
-- [ ] Implement `get_connection_path()`:
+- [ ] Implement `get_connection_path()` (P1 - needed for tension explanation):
   ```rust
   pub async fn get_connection_path(
       &self,
@@ -169,6 +169,7 @@ This checklist tracks the implementation of graph-aware APIs needed for ALIS AI'
   ) -> Result<Option<Vec<String>>, DeltaError>
   ```
 - [ ] Returns path of distinction IDs if connected
+- [ ] ALIS uses this to explain why distinctions are connected (tension detection)
 
 ### 2.3 Highly-Connected Query
 
@@ -432,7 +433,7 @@ db.put_similar(
 ### 6.4 Random Walk
 
 - [ ] `random_walk_combinations_js()` - WASM export
-- [ ] `record_dream_synthesis_js()` - WASM export
+- [ ] ~~`record_dream_synthesis_js()`~~ - Removed (use metadata tags instead)
 
 ### 6.5 TypeScript Definitions
 
@@ -520,7 +521,8 @@ impl LocalCausalAgent for ConsolidationAgent {
                 });
                 
                 // Synthesize: ΔNew = ΔLocal_Root ⊕ ΔAction_Data
-                let action_distinction = engine.canonicalize(&action_data);
+                let action_str = serde_json::to_string(&action_data).unwrap();
+                let action_distinction = engine.canonicalize(&action_str);
                 let new_root = engine.synthesize(&self.local_root, &action_distinction);
                 
                 self.update_local_root(new_root.clone());
@@ -539,18 +541,18 @@ Add to `src/actions/mod.rs`:
 ```rust
 pub enum ConsolidationAction {
     CleanupExpired,
-    FindUnconnectedPairs { k: usize, threshold: f32 },
+    FindSimilarUnconnectedPairs { k: usize, threshold: f32 },  // explicit naming
     // ...
 }
 
 pub enum LineageAction {
-    QueryConnectivity { a: String, b: String },
+    QueryConnected { a: String, b: String },  // shorter
     QueryHighlyConnected { k: usize },
     // ...
 }
 
 pub enum SleepAction {
-    DreamSynthesis { n: usize, steps: usize },
+    RandomWalkCombinations { n: usize, steps: usize },  // matches method name
     // ...
 }
 ```
@@ -568,6 +570,7 @@ pub enum SleepAction {
 | **P0** | `find_similar_unconnected_pairs()` | Consolidation agent proactive synthesis | 3 |
 | **P0** | `get_expired_predictions()` | Surprise detection in active inference | 1.3 |
 | **P1** | `are_connected()` | Tension detection (surprise calculation) | 2.2 |
+| **P1** | `get_connection_path()` | Explain connection paths | 2.2 |
 | **P1** | `cleanup_expired()` | Memory management | 1.2 |
 | **P2** | `random_walk_combinations()` | Dream phase (creative synthesis) | 4 |
 | **P2** | Python/WASM bindings | External interfaces | 5-6 |
@@ -618,6 +621,32 @@ pub enum SleepAction {
 
 ---
 
+## ✅ Final Verdict
+
+**Status: APPROVED - Ship it.**
+
+The checklist is production-ready. The P0 items are exactly what ALIS needs to reach Nursery stage:
+
+| P0 Feature | Purpose |
+|------------|---------|
+| `put_similar_with_ttl()` | Active inference predictions with expiration |
+| `get_highly_connected()` | Expression agent candidate selection |
+| `find_similar_unconnected_pairs()` | Consolidation agent proactive synthesis |
+| `get_expired_predictions()` | Surprise detection in active inference |
+
+**The 2-3 day P0 estimate is realistic** if the KoruDelta team leverages the existing HNSW index for similarity queries.
+
+### Design Principles Maintained
+
+- ✅ **Simple** - Single-namespace focus, no unnecessary abstractions
+- ✅ **Elegant** - Uses existing patterns (metadata tags vs new APIs)
+- ✅ **Minimal** - P0 is only 4 core methods
+- ✅ **Complete** - Covers all ALIS critical path requirements
+- ✅ **Just Works** - Leverages existing HNSW index, LCA architecture
+
+---
+
 **Created:** 2026-02-16  
+**Updated:** 2026-02-16 (v1.1 - ALIS team feedback incorporated)  
 **Status:** Ready for implementation  
 **Owner:** AI Agent Team
