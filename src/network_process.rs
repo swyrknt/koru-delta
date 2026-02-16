@@ -57,11 +57,11 @@
 // HashSet removed - not used in process model
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::RwLock;
+use std::sync::Arc;
 
-use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 
-// NetworkAction removed - using direct synthesis instead
+
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::network::NodeId;
 use crate::roots::RootType;
@@ -101,7 +101,7 @@ pub struct NetworkProcess {
 
     /// LCA: This node's local network perspective
     /// Every synthesis updates this, creating the node's causal chain
-    local_root: RwLock<Distinction>,
+    local_root: Distinction,
 
     /// LCA: Handle to the unified field
     field: FieldHandle,
@@ -260,7 +260,7 @@ impl NetworkProcess {
             node_id,
             bind_addr,
             network_root,
-            local_root: RwLock::new(local_root),
+            local_root,
             field,
             sequence: AtomicU64::new(0),
             distinctions_synthesized: AtomicU64::new(0),
@@ -287,8 +287,8 @@ impl NetworkProcess {
     ///
     /// The local root is the cumulative synthesis of all network operations.
     /// It represents this node's current causal state in the network.
-    pub fn local_root(&self) -> Distinction {
-        self.local_root.read().unwrap().clone()
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
     }
 
     // ========================================================================
@@ -305,7 +305,7 @@ impl NetworkProcess {
     ///
     /// This is the fundamental network operation. Content enters the causal
     /// chain and becomes observable by other nodes.
-    pub fn synthesize(&self, content: NetworkContent) -> NetworkDistinction {
+    pub fn synthesize(&mut self, content: NetworkContent) -> NetworkDistinction {
         let seq = self.sequence.fetch_add(1, Ordering::SeqCst);
 
         // Build synthesis context
@@ -320,12 +320,11 @@ impl NetworkProcess {
         let content_distinction = content.to_canonical_structure(self.field.engine_arc());
         let context_distinction = context.to_canonical_structure(self.field.engine_arc());
 
-        let local_root = self.local_root();
-        let with_content = self.field.synthesize(&local_root, &content_distinction);
+        let with_content = self.field.synthesize(&self.local_root, &content_distinction);
         let new_root = self.field.synthesize(&with_content, &context_distinction);
 
         // Update local root
-        *self.local_root.write().unwrap() = new_root.clone();
+        self.local_root = new_root.clone();
 
         self.distinctions_synthesized.fetch_add(1, Ordering::SeqCst);
 
@@ -347,11 +346,10 @@ impl NetworkProcess {
     /// ```text
     /// ΔNew = ΔLocal_Root ⊕ ΔObservedDistinction
     /// ```
-    pub fn observe(&self, distinction: &Distinction) -> Distinction {
-        let local_root = self.local_root();
-        let new_root = self.field.synthesize(&local_root, distinction);
+    pub fn observe(&mut self, distinction: &Distinction) -> Distinction {
+        let new_root = self.field.synthesize(&self.local_root, distinction);
 
-        *self.local_root.write().unwrap() = new_root.clone();
+        self.local_root = new_root.clone();
         self.propagations_observed.fetch_add(1, Ordering::SeqCst);
 
         new_root
@@ -360,7 +358,7 @@ impl NetworkProcess {
     /// Announce this node's presence to the network.
     ///
     /// Creates a PeerPresence distinction that other nodes can observe.
-    pub fn announce_presence(&self) -> NetworkDistinction {
+    pub fn announce_presence(&mut self) -> NetworkDistinction {
         let content = NetworkContent::PeerPresence {
             node_id: self.node_id.to_string(),
             address: self.bind_addr,
@@ -369,7 +367,7 @@ impl NetworkProcess {
     }
 
     /// Synthesize a data write into the network.
-    pub fn write_data(&self, key: FullKey, value: &serde_json::Value) -> NetworkDistinction {
+    pub fn write_data(&mut self, key: FullKey, value: &serde_json::Value) -> NetworkDistinction {
         // Hash the value for content addressing
         let value_hash = Self::hash_value(value);
 
@@ -466,7 +464,7 @@ impl NetworkProcess {
             distinctions_synthesized: self.distinctions_synthesized.load(Ordering::SeqCst),
             propagations_observed: self.propagations_observed.load(Ordering::SeqCst),
             current_sequence: self.sequence.load(Ordering::SeqCst),
-            local_root_id: self.local_root().id().to_string(),
+            local_root_id: self.local_root.id().to_string(),
             network_root_id: self.network_root.id().to_string(),
         }
     }
@@ -494,6 +492,33 @@ impl Canonicalizable for SynthesisContext {
             .iter()
             .map(|&byte| byte.to_canonical_structure(engine))
             .fold(engine.d0().clone(), |acc, d| engine.synthesize(&acc, &d))
+    }
+}
+
+// ============================================================================
+// LCA Trait Implementation
+// ============================================================================
+
+impl LocalCausalAgent for NetworkProcess {
+    type ActionData = NetworkContent;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: NetworkContent,
+        _engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        // NetworkProcess uses its field handle, but signature requires engine param
+        // We use the existing synthesize method which handles context and sequence
+        let network_distinction = self.synthesize(action);
+        network_distinction.distinction
     }
 }
 
@@ -530,24 +555,24 @@ mod tests {
 
     #[test]
     fn test_synthesis_advances_local_root() {
-        let process = create_test_process();
-        let root_before = process.local_root();
+        let mut process = create_test_process();
+        let root_before_id = process.local_root().id().to_string();
 
         let dist = process.synthesize(NetworkContent::PeerPresence {
             node_id: "test".to_string(),
             address: "127.0.0.1:9999".parse().unwrap(),
         });
 
-        let root_after = process.local_root();
+        let root_after_id = process.local_root().id();
 
         // Local root should advance
-        assert_ne!(root_after.id(), root_before.id());
-        assert_eq!(root_after.id(), dist.distinction.id());
+        assert_ne!(root_after_id, root_before_id);
+        assert_eq!(root_after_id, dist.distinction.id());
     }
 
     #[test]
     fn test_synthesis_sequence_increments() {
-        let process = create_test_process();
+        let mut process = create_test_process();
 
         let dist1 = process.synthesize(NetworkContent::Custom {
             content_type: "test".to_string(),
@@ -571,7 +596,7 @@ mod tests {
     fn test_synthesis_deterministic() {
         // Same content should produce same distinction (content-addressed)
         let shared_engine = SharedEngine::new();
-        let addr = "127.0.0.1:7878".parse().unwrap();
+        let addr: std::net::SocketAddr = "127.0.0.1:7878".parse().unwrap();
 
         let process1 = NetworkProcess::new(&shared_engine, addr);
         let process2 = NetworkProcess::new(&shared_engine, addr);
@@ -595,23 +620,23 @@ mod tests {
 
     #[test]
     fn test_observation_advances_local_root() {
-        let process = create_test_process();
-        let root_before = process.local_root();
+        let mut process = create_test_process();
+        let root_before_id = process.local_root().id().to_string();
 
         // Create a distinction (simulating receipt from another node)
         let observed = process.network_root().clone();
 
         let new_root = process.observe(&observed);
 
-        let root_after = process.local_root();
+        let root_after_id = process.local_root().id();
 
-        assert_ne!(new_root.id(), root_before.id());
-        assert_eq!(root_after.id(), new_root.id());
+        assert_ne!(new_root.id(), root_before_id);
+        assert_eq!(root_after_id, new_root.id());
     }
 
     #[test]
     fn test_observation_tracks_propagations() {
-        let process = create_test_process();
+        let mut process = create_test_process();
 
         let observed = process.network_root().clone();
         process.observe(&observed);
@@ -628,7 +653,7 @@ mod tests {
 
     #[test]
     fn test_peer_presence_synthesis() {
-        let process = create_test_process();
+        let mut process = create_test_process();
 
         let dist = process.announce_presence();
 
@@ -645,7 +670,7 @@ mod tests {
 
     #[test]
     fn test_data_write_synthesis() {
-        let process = create_test_process();
+        let mut process = create_test_process();
         let key = FullKey::new("test_ns", "test_key");
         let value = serde_json::json!({"field": "value"});
 
@@ -667,8 +692,8 @@ mod tests {
 
     #[test]
     fn test_causal_parents_tracked() {
-        let process = create_test_process();
-        let initial_root = process.local_root();
+        let mut process = create_test_process();
+        let initial_root_id = process.local_root().id().to_string();
 
         let dist1 = process.synthesize(NetworkContent::Custom {
             content_type: "first".to_string(),
@@ -682,14 +707,14 @@ mod tests {
 
         // Each synthesis should have the previous local root as causal parent
         // First synthesis: parent is initial local root
-        assert!(dist1.context.causal_parents.contains(&initial_root.id().to_string()));
+        assert!(dist1.context.causal_parents.contains(&initial_root_id));
         // Second synthesis: parent is the result of first synthesis
         assert!(dist2.context.causal_parents.contains(&dist1.distinction.id().to_string()));
     }
 
     #[test]
     fn test_synthesis_creates_distinct_distinctions() {
-        let process = create_test_process();
+        let mut process = create_test_process();
 
         let dist1 = process.synthesize(NetworkContent::Custom {
             content_type: "test".to_string(),
@@ -711,8 +736,8 @@ mod tests {
 
     #[test]
     fn test_empty_content_still_synthesizes() {
-        let process = create_test_process();
-        let root_before = process.local_root();
+        let mut process = create_test_process();
+        let root_before_id = process.local_root().id().to_string();
 
         let dist = process.synthesize(NetworkContent::Custom {
             content_type: "".to_string(),
@@ -720,13 +745,13 @@ mod tests {
         });
 
         // Even empty content advances the local root
-        assert_ne!(process.local_root().id(), root_before.id());
+        assert_ne!(process.local_root().id(), root_before_id);
         assert_eq!(dist.distinction.id(), process.local_root().id());
     }
 
     #[test]
     fn test_large_sequence_numbers() {
-        let process = create_test_process();
+        let mut process = create_test_process();
 
         // Simulate many syntheses
         for i in 0..1000 {

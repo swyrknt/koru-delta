@@ -143,7 +143,7 @@ pub struct SynthesizedMemory {
 ///
 /// let engine = Arc::new(DistinctionEngine::new());
 /// let roots = KoruRoots::initialize(&engine);
-/// let agent = WorkspaceAgent::new(roots.workspace.clone(), engine);
+/// let mut agent = WorkspaceAgent::new(roots.workspace.clone(), engine);
 ///
 /// // Synthesize a new workspace
 /// let workspace = agent.create_workspace("ws-1", "My Workspace");

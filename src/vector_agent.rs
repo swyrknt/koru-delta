@@ -155,7 +155,7 @@ pub struct VectorSearchItem {
 ///
 /// let engine = Arc::new(DistinctionEngine::new());
 /// let roots = KoruRoots::initialize(&engine);
-/// let agent = VectorAgent::new(roots.vector.clone(), engine);
+/// let mut agent = VectorAgent::new(roots.vector.clone(), engine);
 ///
 /// // Index a vector
 /// agent.index("doc1", vec![0.1, 0.2, 0.3], "text-embedding-3-small");
