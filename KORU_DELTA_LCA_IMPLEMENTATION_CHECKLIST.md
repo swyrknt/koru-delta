@@ -22,6 +22,31 @@ This checklist converts Koru-Delta from a traditional database architecture to a
 
 ---
 
+## 🎯 Current Priority: ALIS AI Integration
+
+**Status:** Foundation complete (Phases 0-7). Now focusing on ALIS-specific features.
+
+The remaining items in this checklist (Phases 8-10) will be completed **AFTER** finishing the ALIS AI integration features.
+
+### ALIS AI Integration Checklist
+
+📋 **See: [`ALIS_AI_INTEGRATION_CHECKLIST.md`](./ALIS_AI_INTEGRATION_CHECKLIST.md)**
+
+**Priority Order:**
+1. **Complete ALIS integration first** (~2-3 days for P0 features)
+2. **Then return to this checklist** for Phases 8-10 (documentation, release, final verification)
+
+**Rationale:** ALIS AI is the primary consumer of KoruDelta's LCA architecture. Ensuring the Delta Agent (Memory Consciousness) has all required APIs for ALIS takes precedence over general documentation and release tasks.
+
+**What's in the ALIS Checklist:**
+- P0: TTL support, highly-connected queries, similar unconnected pairs (2-3 days)
+- P1: Graph connectivity, cleanup (1 day)
+- P2: Dream phase, full bindings (1-2 days)
+
+---
+
+---
+
 ## Phase 0: Foundation & Preparation ✅ COMPLETE
 
 ### 0.1 Repository Setup ✅
