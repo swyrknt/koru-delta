@@ -231,7 +231,7 @@ impl WorkspaceAgent {
         let config_distinction = self.engine.synthesize(&config_distinction, &seq_distinction);
 
         // Synthesize new workspace from local root
-        let distinction = self.engine.synthesize(&local_root, &config_distinction);
+        let distinction = self.engine.synthesize(local_root, &config_distinction);
 
         // Create a local root for this specific workspace
         let local_root_seed = format!("workspace-local-{}", metadata.id);

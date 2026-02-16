@@ -38,6 +38,127 @@ KoruDelta is architected in layers that enable distinction-driven operations:
 └─────────────────────────────────────────┘
 ```
 
+## LCA Architecture (Local Causal Agent)
+
+KoruDelta implements the **Local Causal Agent** pattern from koru-lambda-core, where every component is an agent with a causal perspective in the unified field.
+
+### The Synthesis Formula
+
+All operations follow the universal pattern:
+```
+ΔNew = ΔLocal_Root ⊕ ΔAction_Data
+```
+
+Where:
+- **ΔLocal_Root** - The agent's current causal perspective (a distinction)
+- **ΔAction_Data** - The action being performed (canonicalized to a distinction)
+- **ΔNew** - The new local root after synthesis
+- **⊕** - The synthesis operation (from distinction calculus)
+
+### Agent Structure
+
+All 21 agents follow this pattern:
+
+```rust
+pub struct SomeAgent {
+    local_root: Distinction,  // RootType::SomeRoot
+    // ... other fields
+}
+
+impl SomeAgent {
+    pub fn do_something(&self, data: Data) -> Result<Distinction> {
+        // 1. Create action
+        let action = SomeAction::from(data);
+        
+        // 2. Synthesize: ΔNew = ΔLocal ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        
+        // 3. Update local root
+        self.update_local_root(new_root.clone());
+        
+        Ok(new_root)
+    }
+}
+```
+
+### Canonical Roots
+
+All agents anchor to one of 19 canonical roots (see `src/roots.rs`):
+
+| Root | Agent | Purpose |
+|------|-------|---------|
+| `FIELD` | All agents | Universal foundation |
+| `STORAGE` | StorageAgent | Memory operations |
+| `TEMPERATURE` | TemperatureAgent | Activity tracking |
+| `CHRONICLE` | ChronicleAgent | Recent history |
+| `ARCHIVE` | ArchiveAgent | Long-term storage |
+| `ESSENCE` | EssenceAgent | Causal topology |
+| `SLEEP` | SleepAgent | Rhythmic consolidation |
+| `EVOLUTION` | EvolutionAgent | Natural selection |
+| `LINEAGE` | LineageAgent | Ancestry tracking |
+| `PERSPECTIVE` | PerspectiveAgent | View management |
+| `IDENTITY` | IdentityAgent | Authentication |
+| `NETWORK` | NetworkProcess | Distributed awareness |
+| `ORCHESTRATOR` | KoruOrchestrator | Agent coordination |
+| `WORKSPACE` | WorkspaceAgent | Isolated spaces |
+| `VECTOR` | VectorAgent | Embeddings |
+| `LIFECYCLE` | LifecycleAgent | Tier transitions |
+| `SESSION` | SessionAgent | Auth sessions |
+| `SUBSCRIPTION` | SubscriptionAgent | Pub/sub |
+| `PROCESS` | ProcessAgent | Background tasks |
+| `RECONCILIATION` | ReconciliationAgent | Distributed sync |
+
+### Action Types
+
+All 19 action types (see `src/actions/mod.rs`):
+
+```rust
+pub enum KoruAction {
+    Storage(StorageAction),         // Store, Retrieve, Query, Delete
+    Temperature(TemperatureAction), // Heat, Cool, Access
+    Chronicle(ChronicleAction),     // Record, Recall, Promote
+    Archive(ArchiveAction),         // Epoch operations
+    Essence(EssenceAction),         // Genome extraction
+    Sleep(SleepAction),             // Consolidation phases
+    Evolution(EvolutionAction),     // Fitness selection
+    Lineage(LineageAction),         // Ancestry queries
+    Perspective(PerspectiveAction), // View operations
+    Identity(IdentityAction),       // Auth operations
+    Network(NetworkAction),         // Peer operations
+    Pulse(PulseAction),             // Coordination
+    Workspace(WorkspaceAction),     // Memory spaces
+    Vector(VectorAction),           // Embeddings
+    Lifecycle(LifecycleAction),     // Tier transitions
+    Session(SessionAction),         // Session management
+    Subscription(SubscriptionAction), // Pub/sub
+    Process(ProcessAction),         // Background tasks
+    Reconciliation(ReconciliationAction), // Sync
+}
+```
+
+### Cross-Agent Synthesis
+
+The orchestrator enables agents to synthesize together:
+
+```rust
+// Combine multiple agent perspectives
+let combined = orchestrator.synthesize_cross_agent(
+    &["storage", "vector"],
+    KoruAction::Storage(StorageAction::Query { ... })
+);
+```
+
+This creates distinctions that span multiple agent causal chains.
+
+### Why This Architecture?
+
+1. **Determinism** - Same action + same root = same distinction (content-addressed)
+2. **Auditability** - Every operation leaves a causal trace
+3. **Composability** - Agents can be combined through synthesis
+4. **Distributed-ready** - Distinctions are universal identifiers
+5. **Time-travel** - Query any past state by traversing causal chains
+
 ### Layer 1: Public API (`src/core.rs`)
 
 The user-facing interface that abstracts away all internal complexity.

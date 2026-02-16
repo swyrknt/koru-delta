@@ -187,6 +187,89 @@ The causal graph is the **source of truth** for history:
 - Traversal yields complete history
 - Time travel queries navigate this graph
 
+## Local Causal Agent (LCA) Design
+
+KoruDelta implements the **Local Causal Agent** pattern, where every component is an agent with a local causal perspective in a unified field.
+
+### The Core Formula
+
+All operations follow:
+```
+ΔNew = ΔLocal_Root ⊕ ΔAction
+```
+
+This is not just documentation—it's the actual implementation pattern:
+
+```rust
+// Every agent has a local root (its causal perspective)
+local_root: Distinction,
+
+// Every operation synthesizes action with local root
+let action_distinction = action.to_canonical_structure(engine);
+let new_root = engine.synthesize(&local_root, &action_distinction);
+self.local_root = new_root.clone();
+```
+
+### Why LCA?
+
+**1. Deterministic Identity**
+- Same action + same root = same distinction ID
+- Content-addressed (Blake3 hash)
+- No UUIDs, no randomness
+
+**2. Complete Audit Trail**
+- Every operation leaves a causal trace
+- Query: "How did we get here?"
+- Answer: Follow the synthesis chain
+
+**3. Composable Agents**
+- Agents combine through synthesis
+- Cross-agent causality is natural
+- `orchestrator.synthesize_cross_agent(&["agent1", "agent2"], action)`
+
+**4. Universal Addressing**
+- Distinction IDs are universal
+- Same data = same ID on any node
+- Natural for distributed systems
+
+### Interior Mutability Pattern
+
+For ergonomic APIs, agents use interior mutability:
+
+```rust
+// Internal: RwLock for local_root
+local_root: RwLock<Distinction>,
+
+// Public: &self API
+pub fn do_something(&self, data: Data) -> Result<Distinction> {
+    // Synthesize internally
+    let new_root = self.synthesize_action(data)?;
+    *self.local_root.write().unwrap() = new_root;
+    Ok(new_root)
+}
+```
+
+This preserves the simple `&self` API while following LCA internally.
+
+### The Unified Field
+
+All 21 agents share one `DistinctionEngine` (the "field"):
+
+```
+┌─────────────────────────────────────┐
+│       DistinctionEngine             │  ← The unified field
+│  (single instance, shared by all)   │
+└─────────────────────────────────────┘
+         │         │         │
+    ┌────┘    ┌────┘    ┌────┘
+┌───┴───┐ ┌───┴───┐ ┌───┴───┐
+│Storage│ │Vector │ │Identity│  ← Agents with local roots
+│ Agent │ │ Agent │ │ Agent  │
+└───────┘ └───────┘ └────────┘
+```
+
+Each agent has its own `local_root` (perspective), but they all synthesize into the same field.
+
 ## Development Phases
 
 ### Phase 1: Single Node (Complete)

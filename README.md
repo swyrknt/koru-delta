@@ -186,6 +186,27 @@ let identity = mine_identity(
 
 No central authority. Users own their keys.
 
+### 📦 Workspaces (v2.0.0)
+
+Isolated memory spaces with causal boundaries—like separate databases within one:
+
+```rust
+use koru_delta::workspace_agent::{WorkspaceAgent, WorkspaceMetadata};
+
+let mut workspaces = WorkspaceAgent::new(workspace_root, engine);
+
+// Create isolated workspace
+let ws = workspaces.create_workspace("project-a", "Project A");
+
+// Store in workspace (isolated from other workspaces)
+workspaces.remember(&ws.id, "task-1", json!({"title": "Design API"}))?;
+
+// Search within workspace only
+let results = workspaces.recall(&ws.id, "design API")?;
+```
+
+**Use cases:** Multi-tenant SaaS, project isolation, sandboxed experiments.
+
 ### 🌐 Browser/WASM
 
 ```javascript
@@ -240,6 +261,37 @@ KoruDelta is built on [koru-lambda-core](https://github.com/swyrknt/koru-lambda-
 - **Structural integrity** - Can't corrupt by design  
 - **Deterministic operations** - Same inputs → same results
 - **Natural distribution** - Consensus emerges from axioms
+
+### LCA Architecture (Local Causal Agent)
+
+KoruDelta implements the **Local Causal Agent** pattern—21 specialized agents, each with a causal perspective in a unified field:
+
+```
+┌─────────────────────────────────────────┐
+│        Unified Field (SharedEngine)     │
+│     Single DistinctionEngine instance   │
+└─────────────────────────────────────────┘
+         │              │              │
+    ┌────┘         ┌────┘         ┌────┘
+┌───┴───┐      ┌───┴───┐     ┌───┴────┐
+│Storage│      │Vector │     │Identity│
+│ Agent │      │ Agent │     │ Agent  │
+└───────┘      └───────┘     └────────┘
+```
+
+**All operations follow:** `ΔNew = ΔLocal_Root ⊕ ΔAction`
+
+Each agent:
+1. Has a `local_root` (its causal perspective)
+2. Receives actions (Store, Query, etc.)
+3. Synthesizes: `new_root = synthesize(local_root, action)`
+4. Updates its perspective
+
+**Benefits:**
+- Complete audit trail (every operation leaves a causal trace)
+- Content-addressed (same data = same ID everywhere)
+- Cross-agent synthesis (combine multiple perspectives)
+- Natural distribution (distinctions are universal)
 
 ### Storage: WAL + Content-Addressed
 

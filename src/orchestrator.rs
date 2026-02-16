@@ -364,6 +364,64 @@ impl KoruOrchestrator {
     }
 
     // ========================================================================
+    // Cross-Agent Synthesis
+    // ========================================================================
+
+    /// Get the local root of a registered agent.
+    ///
+    /// This enables cross-agent synthesis by allowing one agent to reference
+    /// another's causal anchor.
+    pub fn get_agent_root(&self, agent_id: &str) -> Option<Distinction> {
+        self.get_agent(agent_id).map(|info| info.root)
+    }
+
+    /// Synthesize a distinction from multiple agent roots.
+    ///
+    /// This is the foundation of cross-agent causality - creating distinctions
+    /// that span multiple agent perspectives.
+    ///
+    /// # Formula
+    /// `ΔCombined = ΔAgent1_Root ⊕ ΔAgent2_Root ⊕ ... ⊕ ΔAction`
+    pub fn synthesize_cross_agent(
+        &self,
+        agent_ids: &[&str],
+        action: KoruAction,
+    ) -> Option<Distinction> {
+        let engine = self.field.engine_arc();
+
+        // Collect all agent roots
+        let roots: Vec<Distinction> = agent_ids
+            .iter()
+            .filter_map(|id| self.get_agent_root(id))
+            .collect();
+
+        if roots.is_empty() {
+            return None;
+        }
+
+        // Synthesize all roots together
+        let combined_root = roots.iter().skip(1).fold(roots[0].clone(), |acc, root| {
+            engine.synthesize(&acc, root)
+        });
+
+        // Synthesize with action
+        let action_distinction = action.to_canonical_structure(engine);
+        Some(engine.synthesize(&combined_root, &action_distinction))
+    }
+
+    /// Get all registered agent IDs.
+    pub fn list_agent_ids(&self) -> Vec<String> {
+        let agents = self.agents.read().unwrap();
+        agents.agents.keys().cloned().collect()
+    }
+
+    /// Get count of registered agents.
+    pub fn agent_count(&self) -> usize {
+        let agents = self.agents.read().unwrap();
+        agents.agents.len()
+    }
+
+    // ========================================================================
     // Statistics
     // ========================================================================
 
