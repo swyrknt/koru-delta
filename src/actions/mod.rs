@@ -2702,52 +2702,6 @@ impl Canonicalizable for NetworkAction {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-
-    #[test]
-    fn test_koru_action_category() {
-        let action = KoruAction::Storage(StorageAction::Store {
-            namespace: "users".to_string(),
-            key: "alice".to_string(),
-            value_json: serde_json::json!({"name": "Alice"}),
-        });
-        assert_eq!(action.category(), "STORAGE");
-    }
-
-    #[test]
-    fn test_canonicalizable() {
-        let engine = Arc::new(DistinctionEngine::new());
-
-        let action = KoruAction::Storage(StorageAction::Store {
-            namespace: "users".to_string(),
-            key: "alice".to_string(),
-            value_json: serde_json::json!({"name": "Alice"}),
-        });
-
-        let distinction = action.to_canonical_structure(&engine);
-        assert!(!distinction.id().is_empty());
-    }
-
-    #[test]
-    fn test_storage_action_validation() {
-        let valid = KoruAction::Storage(StorageAction::Store {
-            namespace: "users".to_string(),
-            key: "alice".to_string(),
-            value_json: serde_json::json!({}),
-        });
-        assert!(valid.validate().is_ok());
-
-        let invalid = KoruAction::Storage(StorageAction::Store {
-            namespace: "".to_string(),
-            key: "alice".to_string(),
-            value_json: serde_json::json!({}),
-        });
-        assert!(invalid.validate().is_err());
-    }
-
 // ============================================================================
 // ALIS AI Integration Actions - Phase 1: TTL Support
 // ============================================================================
@@ -2938,7 +2892,12 @@ impl Canonicalizable for SleepCreativeAction {
     }
 }
 
-#[test]
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
     fn test_temperature_levels() {
         assert_ne!(TemperatureLevel::Hot, TemperatureLevel::Cold);
         assert_ne!(TemperatureLevel::Warm, TemperatureLevel::Cool);

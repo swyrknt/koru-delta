@@ -167,7 +167,7 @@ pub mod wasm;
 // Public API exports
 pub use core::{CoreConfig, DatabaseStats, KoruDelta, MemoryConfig};
 pub use error::{DeltaError, DeltaResult};
-pub use types::{CausalWriteResult, FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue};
+pub use types::{CausalWriteResult, ConnectedDistinction, FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue};
 
 // Query exports
 pub use query::{
@@ -211,9 +211,10 @@ pub use koru_lambda_core::DistinctionEngine;
 // LCA Architecture exports (v3.0)
 // Actions for all agents
 pub use actions::{
-    ArchiveAction, ChronicleAction, EssenceAction, EvolutionAction, IdentityAction,
-    KoruAction, LineageAction, NetworkAction, PerspectiveAction, SleepAction, SleepPhase,
-    StorageAction, TemperatureAction, TemperatureLevel,
+    ArchiveAction, ChronicleAction, ConsolidationAction, EssenceAction, EvolutionAction,
+    IdentityAction, KoruAction, LineageAction, LineageQueryAction, NetworkAction,
+    PerspectiveAction, SleepAction, SleepCreativeAction, SleepPhase, StorageAction,
+    TemperatureAction, TemperatureLevel,
 };
 
 // Shared engine and field infrastructure

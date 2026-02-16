@@ -361,6 +361,32 @@ impl From<&VersionedValue> for HistoryEntry {
     }
 }
 
+/// A distinction with connectivity information.
+///
+/// Returned by `get_highly_connected()` to represent distinctions
+/// that are central to the causal graph (highly connected).
+///
+/// # Fields
+///
+/// * `namespace` - The namespace containing this distinction
+/// * `key` - The key (distinction ID)
+/// * `connection_score` - Total connectivity score (parents + children + synthesis events)
+/// * `parents` - Causal parents (what caused this distinction)
+/// * `children` - Causal children (what this distinction caused)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectedDistinction {
+    /// The namespace containing this distinction
+    pub namespace: String,
+    /// The key (distinction ID)
+    pub key: String,
+    /// Total connectivity score (parents + children + synthesis events)
+    pub connection_score: u32,
+    /// Causal parents (what caused this distinction)
+    pub parents: Vec<String>,
+    /// Causal children (what this distinction caused)
+    pub children: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
