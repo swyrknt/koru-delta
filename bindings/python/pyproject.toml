@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "koru-delta"
-version = "3.0.0"
+version = "3.0.1"
 description = "The invisible database for AI agents - LCA Architecture v3.0.0"
 readme = "README.md"
 license = {text = "MIT OR Apache-2.0"}
