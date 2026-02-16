@@ -66,6 +66,7 @@ impl Default for SleepConfig {
 ///
 /// Like sleep consolidating memories from short-term to long-term.
 /// All operations are synthesized through the unified field.
+#[derive(Debug)]
 pub struct SleepAgent {
     /// Configuration
     config: SleepConfig,

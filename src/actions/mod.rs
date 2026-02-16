@@ -85,6 +85,8 @@ pub enum KoruAction {
     Session(SessionAction),
     /// Subscription operations - pub/sub change notifications.
     Subscription(SubscriptionAction),
+    /// Process operations - background evolutionary processes.
+    Process(ProcessAction),
 }
 
 impl From<PulseAction> for KoruAction {
@@ -126,6 +128,7 @@ impl KoruAction {
             KoruAction::Lifecycle(_) => "LIFECYCLE",
             KoruAction::Session(_) => "SESSION",
             KoruAction::Subscription(_) => "SUBSCRIPTION",
+            KoruAction::Process(_) => "PROCESS",
         }
     }
 
@@ -151,6 +154,7 @@ impl KoruAction {
             KoruAction::Lifecycle(action) => action.validate(),
             KoruAction::Session(action) => action.validate(),
             KoruAction::Subscription(action) => action.validate(),
+            KoruAction::Process(action) => action.validate(),
         }
     }
 }
@@ -176,6 +180,7 @@ impl Canonicalizable for KoruAction {
             KoruAction::Lifecycle(action) => action.to_canonical_structure(engine),
             KoruAction::Session(action) => action.to_canonical_structure(engine),
             KoruAction::Subscription(action) => action.to_canonical_structure(engine),
+            KoruAction::Process(action) => action.to_canonical_structure(engine),
         }
     }
 }
@@ -219,6 +224,7 @@ pub(crate) enum ActionSerializable {
     Lifecycle(LifecycleActionSerializable),
     Session(SessionActionSerializable),
     Subscription(SubscriptionActionSerializable),
+    Process(ProcessActionSerializable),
 }
 
 impl From<&KoruAction> for ActionSerializable {
@@ -241,6 +247,7 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Lifecycle(a) => ActionSerializable::Lifecycle(a.into()),
             KoruAction::Session(a) => ActionSerializable::Session(a.into()),
             KoruAction::Subscription(a) => ActionSerializable::Subscription(a.into()),
+            KoruAction::Process(a) => ActionSerializable::Process(a.into()),
         }
     }
 }
@@ -2171,6 +2178,194 @@ impl SubscriptionAction {
 impl Canonicalizable for SubscriptionAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
         let serializable = SubscriptionActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+// ============================================================================
+// PROCESS ACTIONS
+// ============================================================================
+
+/// Actions for process management agent.
+///
+/// Process operations follow the LCA pattern:
+/// - Each process operation synthesizes a new distinction
+/// - Process lifecycle is content-addressed by action history
+/// - All process state changes are causal distinctions
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcessAction {
+    /// Spawn a new background process.
+    SpawnProcess {
+        /// Type of process to spawn.
+        process_type: ProcessType,
+        /// Process configuration.
+        config: ProcessConfig,
+    },
+    /// Pause a running process.
+    PauseProcess {
+        /// Process ID to pause.
+        process_id: String,
+    },
+    /// Resume a paused process.
+    ResumeProcess {
+        /// Process ID to resume.
+        process_id: String,
+    },
+    /// Terminate a process.
+    TerminateProcess {
+        /// Process ID to terminate.
+        process_id: String,
+    },
+    /// Send heartbeat to keep process alive.
+    Heartbeat {
+        /// Process ID to heartbeat.
+        process_id: String,
+    },
+    /// Get process status.
+    GetStatus {
+        /// Process ID to query.
+        process_id: String,
+    },
+    /// List all running processes.
+    ListProcesses,
+}
+
+/// Type of evolutionary process.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ProcessType {
+    /// Consolidation process - rhythmic memory movement.
+    Consolidation,
+    /// Distillation process - fitness-based selection.
+    Distillation,
+    /// Genome update process - DNA maintenance.
+    GenomeUpdate,
+}
+
+/// Configuration for process spawning.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ProcessConfig {
+    /// Interval in seconds between process runs.
+    pub interval_secs: u64,
+    /// Whether process should auto-start.
+    pub auto_start: bool,
+    /// Process-specific configuration as JSON.
+    pub config_json: serde_json::Value,
+}
+
+impl Default for ProcessConfig {
+    fn default() -> Self {
+        Self {
+            interval_secs: 3600,
+            auto_start: true,
+            config_json: serde_json::json!({}),
+        }
+    }
+}
+
+/// Serializable version of ProcessAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum ProcessActionSerializable {
+    SpawnProcess { process_type: ProcessType, config: ProcessConfig },
+    PauseProcess { process_id: String },
+    ResumeProcess { process_id: String },
+    TerminateProcess { process_id: String },
+    Heartbeat { process_id: String },
+    GetStatus { process_id: String },
+    ListProcesses,
+}
+
+impl From<&ProcessAction> for ProcessActionSerializable {
+    fn from(action: &ProcessAction) -> Self {
+        match action {
+            ProcessAction::SpawnProcess { process_type, config } => {
+                ProcessActionSerializable::SpawnProcess {
+                    process_type: process_type.clone(),
+                    config: config.clone(),
+                }
+            }
+            ProcessAction::PauseProcess { process_id } => {
+                ProcessActionSerializable::PauseProcess {
+                    process_id: process_id.clone(),
+                }
+            }
+            ProcessAction::ResumeProcess { process_id } => {
+                ProcessActionSerializable::ResumeProcess {
+                    process_id: process_id.clone(),
+                }
+            }
+            ProcessAction::TerminateProcess { process_id } => {
+                ProcessActionSerializable::TerminateProcess {
+                    process_id: process_id.clone(),
+                }
+            }
+            ProcessAction::Heartbeat { process_id } => {
+                ProcessActionSerializable::Heartbeat {
+                    process_id: process_id.clone(),
+                }
+            }
+            ProcessAction::GetStatus { process_id } => {
+                ProcessActionSerializable::GetStatus {
+                    process_id: process_id.clone(),
+                }
+            }
+            ProcessAction::ListProcesses => ProcessActionSerializable::ListProcesses,
+        }
+    }
+}
+
+impl ProcessAction {
+    /// Validate the process action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            ProcessAction::SpawnProcess { process_type, config } => {
+                if config.interval_secs == 0 {
+                    return Err("ProcessAction::SpawnProcess: interval_secs cannot be 0".to_string());
+                }
+                match process_type {
+                    ProcessType::Consolidation | ProcessType::Distillation | ProcessType::GenomeUpdate => Ok(()),
+                }
+            }
+            ProcessAction::PauseProcess { process_id } => {
+                if process_id.is_empty() {
+                    return Err("ProcessAction::PauseProcess: process_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ProcessAction::ResumeProcess { process_id } => {
+                if process_id.is_empty() {
+                    return Err("ProcessAction::ResumeProcess: process_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ProcessAction::TerminateProcess { process_id } => {
+                if process_id.is_empty() {
+                    return Err("ProcessAction::TerminateProcess: process_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ProcessAction::Heartbeat { process_id } => {
+                if process_id.is_empty() {
+                    return Err("ProcessAction::Heartbeat: process_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ProcessAction::GetStatus { process_id } => {
+                if process_id.is_empty() {
+                    return Err("ProcessAction::GetStatus: process_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ProcessAction::ListProcesses => Ok(()),
+        }
+    }
+}
+
+impl Canonicalizable for ProcessAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = ProcessActionSerializable::from(self);
         match bincode::serialize(&serializable) {
             Ok(bytes) => bytes_to_distinction(&bytes, engine),
             Err(_) => engine.d0().clone(),

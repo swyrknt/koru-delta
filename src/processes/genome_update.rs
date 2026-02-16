@@ -46,6 +46,7 @@ impl Default for GenomeUpdateConfig {
 }
 
 /// Genome Update Process - maintains system DNA.
+#[derive(Debug)]
 pub struct GenomeUpdateProcess {
     config: GenomeUpdateConfig,
     updates_performed: AtomicU64,

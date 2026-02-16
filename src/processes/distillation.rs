@@ -68,6 +68,7 @@ impl Default for EvolutionConfig {
 ///
 /// Like evolution: fitness-based selection, survival of the fittest.
 /// All operations are synthesized through the unified field.
+#[derive(Debug)]
 pub struct EvolutionAgent {
     /// Configuration
     config: EvolutionConfig,

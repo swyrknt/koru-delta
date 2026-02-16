@@ -156,6 +156,12 @@ pub struct KoruRoots {
     /// Anchors all subscription operations. Subscriptions are synthesized
     /// from this root with subscription actions.
     pub subscription: Distinction,
+
+    /// Process root - perspective of evolutionary processes (Root: PROCESS).
+    ///
+    /// Anchors all process operations. Background processes are synthesized
+    /// from this root with process actions.
+    pub process: Distinction,
 }
 
 impl KoruRoots {
@@ -203,6 +209,7 @@ impl KoruRoots {
         let lifecycle = Self::synthesize_agent_root(engine, &d1, b"LIFECYCLE");
         let session = Self::synthesize_agent_root(engine, &d1, b"SESSION");
         let subscription = Self::synthesize_agent_root(engine, &d1, b"SUBSCRIPTION");
+        let process = Self::synthesize_agent_root(engine, &d1, b"PROCESS");
 
         // The field root is the synthesis of all agent roots
         // This represents the unified consciousness field
@@ -227,6 +234,7 @@ impl KoruRoots {
                 &lifecycle,
                 &session,
                 &subscription,
+                &process,
             ],
         );
 
@@ -249,6 +257,7 @@ impl KoruRoots {
             lifecycle,
             session,
             subscription,
+            process,
         }
     }
 
@@ -313,6 +322,7 @@ impl KoruRoots {
             RootType::Lifecycle => &self.lifecycle,
             RootType::Session => &self.session,
             RootType::Subscription => &self.subscription,
+            RootType::Process => &self.process,
         }
     }
 }
@@ -356,6 +366,8 @@ pub enum RootType {
     Session,
     /// Subscription root.
     Subscription,
+    /// Process root.
+    Process,
 }
 
 impl RootType {
@@ -380,6 +392,7 @@ impl RootType {
             RootType::Lifecycle => "LIFECYCLE",
             RootType::Session => "SESSION",
             RootType::Subscription => "SUBSCRIPTION",
+            RootType::Process => "PROCESS",
         }
     }
 }

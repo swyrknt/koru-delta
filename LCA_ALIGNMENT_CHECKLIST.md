@@ -12,9 +12,9 @@ This checklist aligns all remaining components to follow the LCA (Local Causal A
 **The Law:** `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
 
 ### Current State
-- **11 agents** fully implement `LocalCausalAgent` trait ✅
-- **4 agents** follow pattern but don't implement trait ⚠️
-- **3 managers** have NO LCA at all 🔴
+- **12 agents** fully implement `LocalCausalAgent` trait ✅
+- **3 agents** follow pattern but don't implement trait ⚠️
+- **2 managers** have NO LCA at all 🔴
 - **Goal:** 100% trait implementation across all interactive components
 
 ### Alignment Strategy
@@ -341,27 +341,81 @@ impl LocalCausalAgent for SubscriptionAgent {
 
 ---
 
-### A.5 ProcessRunner → ProcessAgent
+### A.5 ProcessRunner → ProcessAgent ✅ COMPLETE
 
 **File:** `src/processes/mod.rs` (refactor)
 
-**Current State:**
-- Direct process spawning and management
-- NO local_root, NO synthesis
+**Status:** All tasks completed, 459 tests passing, zero warnings.
 
-**Target State:**
+**Implementation:**
 ```rust
 pub struct ProcessAgent {
-    local_root: Distinction,  // NEW
+    local_root: Distinction,           // ✅ RootType::Process (NEW)
+    _field: SharedEngine,              // ✅ LCA field handle
+    engine: Arc<DistinctionEngine>,
+    consolidation: ConsolidationProcess,
+    distillation: DistillationProcess,
+    genome_update: GenomeUpdateProcess,
 }
 
 impl LocalCausalAgent for ProcessAgent {
     type ActionData = ProcessAction;
+    
+    fn synthesize_action(&mut self, action: ProcessAction, engine: &Arc<DistinctionEngine>) 
+        -> Distinction {
+        // ✅ Formula: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
 }
 ```
 
-**Actions to Implement:**
-- [ ] `ProcessAction::SpawnProcess { process_type, config }`
+**Actions Implemented:**
+- [x] `ProcessAction::SpawnProcess { process_type, config }`
+- [x] `ProcessAction::PauseProcess { process_id }`
+- [x] `ProcessAction::ResumeProcess { process_id }`
+- [x] `ProcessAction::TerminateProcess { process_id }`
+- [x] `ProcessAction::Heartbeat { process_id }`
+- [x] `ProcessAction::GetStatus { process_id }`
+- [x] `ProcessAction::ListProcesses`
+
+**Additional Types Added:**
+- `ProcessType` enum (Consolidation, Distillation, GenomeUpdate)
+- `ProcessConfig` struct with interval_secs, auto_start, config_json
+
+**Synthesis Methods Added:**
+- `spawn_process_synthesized()` - Spawn with synthesis
+- `pause_process_synthesized()` - Pause with synthesis
+- `resume_process_synthesized()` - Resume with synthesis
+- `terminate_process_synthesized()` - Terminate with synthesis
+- `heartbeat_synthesized()` - Heartbeat with synthesis
+- `get_status_synthesized()` - Get status with synthesis
+- `list_processes_synthesized()` - List with synthesis
+
+**New Tests (9 added):**
+- `test_process_agent_implements_lca_trait`
+- `test_process_agent_has_unique_local_root`
+- `test_spawn_process_synthesizes`
+- `test_pause_process_synthesizes`
+- `test_resume_process_synthesizes`
+- `test_terminate_process_synthesizes`
+- `test_heartbeat_synthesizes`
+- `test_list_processes_synthesizes`
+- `test_apply_action_changes_root`
+
+**Verification:**
+- [x] Background processes synthesize
+- [x] Process lifecycle managed through LCA
+- [x] 459 tests passing (⬆️ +9 new LCA tests)
+
+**Backward Compatibility:**
+- `pub type ProcessRunner = ProcessAgent;` (type alias)
+- Existing constructors work with SharedEngine
+
+**Additional Changes:**
+- Added `#[derive(Debug)]` to `SleepAgent`, `EvolutionAgent`, `GenomeUpdateProcess`
 - [ ] `ProcessAction::PauseProcess { process_id }`
 - [ ] `ProcessAction::ResumeProcess { process_id }`
 - [ ] `ProcessAction::TerminateProcess { process_id }`
