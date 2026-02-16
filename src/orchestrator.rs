@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::RwLock;
 
-use koru_lambda_core::{Canonicalizable, Distinction};
+use koru_lambda_core::{Canonicalizable, Distinction, LocalCausalAgent};
 
 use crate::actions::{KoruAction, PulseAction};
 use crate::engine::{FieldHandle, SharedEngine};
@@ -61,7 +61,7 @@ pub struct KoruOrchestrator {
     field: FieldHandle,
 
     /// LCA: Local root distinction (Root: ORCHESTRATOR)
-    local_root: RwLock<Distinction>,
+    local_root: Distinction,
 
     /// Registry of all agents
     agents: RwLock<AgentRegistry>,
@@ -189,7 +189,7 @@ impl KoruOrchestrator {
         Self {
             engine,
             field,
-            local_root: RwLock::new(local_root),
+            local_root,
             agents: RwLock::new(AgentRegistry::default()),
             pulse,
             agents_registered: AtomicU64::new(0),
@@ -208,8 +208,8 @@ impl KoruOrchestrator {
     }
 
     /// Get the local root distinction.
-    pub fn local_root(&self) -> Distinction {
-        self.local_root.read().unwrap().clone()
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
     }
 
     // ========================================================================
@@ -221,7 +221,7 @@ impl KoruOrchestrator {
     /// # LCA Pattern
     ///
     /// Registration synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔRegisterAgent_Action`
-    pub fn register_agent(&self, info: AgentInfo) {
+    pub fn register_agent(&mut self, info: AgentInfo) {
         // Synthesize registration action
         let action = PulseAction::RegisterAgent {
             agent_id: info.id.clone(),
@@ -252,7 +252,7 @@ impl KoruOrchestrator {
     /// # LCA Pattern
     ///
     /// Unregistration synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔUnregisterAgent_Action`
-    pub fn unregister_agent(&self, agent_id: &str) {
+    pub fn unregister_agent(&mut self, agent_id: &str) {
         // Synthesize unregistration action
         let action = PulseAction::UnregisterAgent {
             agent_id: agent_id.to_string(),
@@ -307,7 +307,7 @@ impl KoruOrchestrator {
     /// # LCA Pattern
     ///
     /// Pulse triggers synthesize: `ΔNew = ΔLocal_Root ⊕ ΔPulse_Action`
-    pub fn pulse(&self, phase: CoordinationPhase) {
+    pub fn pulse(&mut self, phase: CoordinationPhase) {
         // Update pulse coordinator
         *self.pulse.current_phase.write().unwrap() = phase;
 
@@ -320,7 +320,7 @@ impl KoruOrchestrator {
     }
 
     /// Advance to the next phase in the sequence.
-    pub fn advance_phase(&self) {
+    pub fn advance_phase(&mut self) {
         let next = self.pulse.next_phase();
         self.pulse(next);
     }
@@ -344,22 +344,20 @@ impl KoruOrchestrator {
     /// # LCA Pattern
     ///
     /// `ΔNew = ΔLocal_Root ⊕ ΔAction`
-    pub fn synthesize_action(&self, action: KoruAction) -> Distinction {
+    pub fn synthesize_action(&mut self, action: KoruAction) -> Distinction {
         let engine = self.field.engine_arc();
         let action_distinction = action.to_canonical_structure(engine);
-        let local_root = self.local_root.read().unwrap().clone();
-        let new_root = engine.synthesize(&local_root, &action_distinction);
-        *self.local_root.write().unwrap() = new_root.clone();
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
         new_root
     }
 
     /// Internal synthesis helper for orchestrator-specific actions.
-    fn synthesize_action_internal(&self, action: PulseAction) -> Distinction {
+    fn synthesize_action_internal(&mut self, action: PulseAction) -> Distinction {
         let engine = self.field.engine_arc();
         let action_distinction = action.to_canonical_structure(engine);
-        let local_root = self.local_root.read().unwrap().clone();
-        let new_root = engine.synthesize(&local_root, &action_distinction);
-        *self.local_root.write().unwrap() = new_root.clone();
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
         new_root
     }
 
@@ -382,6 +380,33 @@ impl KoruOrchestrator {
 impl Default for KoruOrchestrator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ============================================================================
+// LCA Trait Implementation
+// ============================================================================
+
+impl LocalCausalAgent for KoruOrchestrator {
+    type ActionData = PulseAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: PulseAction,
+        engine: &std::sync::Arc<koru_lambda_core::DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = self.field.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
     }
 }
 
@@ -512,7 +537,7 @@ mod tests {
 
     #[test]
     fn test_agent_registration() {
-        let orch = KoruOrchestrator::new();
+        let mut orch = KoruOrchestrator::new();
 
         let agent = AgentInfo {
             id: "test_agent".to_string(),
@@ -530,7 +555,7 @@ mod tests {
 
     #[test]
     fn test_agent_unregistration() {
-        let orch = KoruOrchestrator::new();
+        let mut orch = KoruOrchestrator::new();
 
         let agent = AgentInfo {
             id: "test_agent".to_string(),
@@ -548,7 +573,7 @@ mod tests {
 
     #[test]
     fn test_find_by_capability() {
-        let orch = KoruOrchestrator::new();
+        let mut orch = KoruOrchestrator::new();
 
         let agent1 = AgentInfo {
             id: "storage_agent".to_string(),
@@ -576,7 +601,7 @@ mod tests {
 
     #[test]
     fn test_pulse_coordination() {
-        let orch = KoruOrchestrator::new();
+        let mut orch = KoruOrchestrator::new();
 
         assert_eq!(orch.current_phase(), CoordinationPhase::Idle);
 
@@ -590,7 +615,7 @@ mod tests {
 
     #[test]
     fn test_pulse_sequence_wraps() {
-        let orch = KoruOrchestrator::new();
+        let mut orch = KoruOrchestrator::new();
 
         // Advance through all phases
         for _ in 0..4 {
@@ -603,8 +628,8 @@ mod tests {
 
     #[test]
     fn test_synthesize_action() {
-        let orch = KoruOrchestrator::new();
-        let root_before = orch.local_root();
+        let mut orch = KoruOrchestrator::new();
+        let root_before_id = orch.local_root().id().to_string();
 
         let action = KoruAction::Storage(crate::actions::StorageAction::Query {
             pattern_json: serde_json::json!({}),
@@ -612,7 +637,7 @@ mod tests {
 
         let new_root = orch.synthesize_action(action);
 
-        assert_ne!(new_root.id(), root_before.id());
+        assert_ne!(new_root.id(), root_before_id);
         assert_eq!(orch.local_root().id(), new_root.id());
     }
 
@@ -638,7 +663,7 @@ mod tests {
 
     #[test]
     fn test_custom_capability() {
-        let orch = KoruOrchestrator::new();
+        let mut orch = KoruOrchestrator::new();
 
         let agent = AgentInfo {
             id: "custom_agent".to_string(),

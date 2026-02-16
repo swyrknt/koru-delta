@@ -25,7 +25,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
-use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 
 use crate::actions::IdentityAction;
 use crate::auth::capability::{create_capability, create_revocation, CapabilityManager};
@@ -101,7 +101,7 @@ pub struct IdentityAgent {
     config: IdentityConfig,
 
     /// LCA: Local root distinction (Root: IDENTITY)
-    local_root: RwLock<Distinction>,
+    local_root: Distinction,
 
     /// LCA: Synthesis of all identities
     identities: RwLock<Distinction>,
@@ -152,7 +152,7 @@ impl IdentityAgent {
             sessions: SessionManager::with_ttl(shared_engine, config.session_ttl_seconds),
             capabilities: RwLock::new(CapabilityManager::new()),
             config,
-            local_root: RwLock::new(local_root),
+            local_root,
             identities: RwLock::new(identities),
             field,
             identities_mined: AtomicU64::new(0),
@@ -168,12 +168,11 @@ impl IdentityAgent {
     /// Internal synthesis helper.
     ///
     /// Performs the LCA synthesis: `ΔNew = ΔLocal_Root ⊕ ΔAction`
-    fn synthesize_action_internal(&self, action: IdentityAction) -> Distinction {
+    fn synthesize_action_internal(&mut self, action: IdentityAction) -> Distinction {
         let engine = self.field.engine_arc();
         let action_distinction = action.to_canonical_structure(engine);
-        let local_root = self.local_root.read().unwrap().clone();
-        let new_root = engine.synthesize(&local_root, &action_distinction);
-        *self.local_root.write().unwrap() = new_root.clone();
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
         new_root
     }
 
@@ -187,7 +186,7 @@ impl IdentityAgent {
     ///
     /// Mining synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔMineIdentity_Action`
     /// then the identity is synthesized into the identities distinction.
-    pub fn create_identity(&self, user_data: IdentityUserData) -> Result<(Identity, Vec<u8>), AuthError> {
+    pub fn create_identity(&mut self, user_data: IdentityUserData) -> Result<(Identity, Vec<u8>), AuthError> {
         // Synthesize mine identity action
         let pow_json = serde_json::json!({
             "difficulty": self.config.identity_difficulty,
@@ -277,7 +276,7 @@ impl IdentityAgent {
     /// # Returns
     /// Session ID on success.
     pub fn verify_and_create_session(
-        &self,
+        &mut self,
         public_key: &str,
         challenge: &str,
         response: &str,
@@ -364,7 +363,7 @@ impl IdentityAgent {
     /// * `permission` - The level of access
     /// * `expires_at` - Optional expiration
     pub fn grant_capability(
-        &self,
+        &mut self,
         granter_identity: &Identity,
         granter_secret_key: &[u8],
         grantee: &str,
@@ -441,7 +440,7 @@ impl IdentityAgent {
     ///
     /// Authorization synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔVerifyAccess_Action`
     pub fn authorize(
-        &self,
+        &mut self,
         identity_key: &str,
         namespace: &str,
         key: &str,
@@ -473,7 +472,7 @@ impl IdentityAgent {
 
     /// Check if an identity has a permission on a resource.
     pub fn check_permission(
-        &self,
+        &mut self,
         identity_key: &str,
         namespace: &str,
         key: &str,
@@ -558,27 +557,53 @@ pub struct IdentityStats {
 /// multi-threaded contexts like HTTP handlers.
 impl IdentityAgent {
     /// Get the current local root distinction.
-    pub fn get_local_root(&self) -> Distinction {
-        self.local_root.read().unwrap().clone()
+    pub fn get_local_root(&self) -> &Distinction {
+        &self.local_root
     }
 
     /// Update the local root (used by LCA synthesis).
-    pub fn update_local_root(&self, new_root: Distinction) {
-        *self.local_root.write().unwrap() = new_root;
+    pub fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
     }
 
     /// Synthesize an action with the current local root.
     ///
     /// Follows the LCA pattern: `ΔNew = ΔLocal_Root ⊕ ΔAction`
     pub fn synthesize_action(
-        &self,
+        &mut self,
         action: IdentityAction,
         engine: &Arc<DistinctionEngine>,
     ) -> Distinction {
         let action_distinction = action.to_canonical_structure(engine);
-        let local_root = self.local_root.read().unwrap().clone();
-        let new_root = engine.synthesize(&local_root, &action_distinction);
-        *self.local_root.write().unwrap() = new_root.clone();
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
+// ============================================================================
+// LCA Trait Implementation
+// ============================================================================
+
+impl LocalCausalAgent for IdentityAgent {
+    type ActionData = IdentityAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: IdentityAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
         new_root
     }
 }
@@ -609,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_create_and_get_identity() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         let user_data = IdentityUserData {
             display_name: Some("Alice".to_string()),
@@ -627,7 +652,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_identity() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         let user_data = IdentityUserData::default();
         let (identity, _secret_key) = manager.create_identity(user_data.clone()).unwrap();
@@ -639,7 +664,7 @@ mod tests {
 
     #[test]
     fn test_full_auth_flow() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         // 1. Create identity
         let user_data = IdentityUserData::default();
@@ -674,7 +699,7 @@ mod tests {
 
     #[test]
     fn test_capability_management() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         // Create granter
         let (granter, granter_key) = manager
@@ -733,7 +758,7 @@ mod tests {
 
     #[test]
     fn test_authorize_without_capability() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         // Create identity but don't grant any capabilities
         let (identity, _secret_key) = manager
@@ -751,7 +776,7 @@ mod tests {
 
     #[test]
     fn test_admin_permission() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         let (granter, granter_key) = manager
             .create_identity(IdentityUserData::default())
@@ -795,7 +820,7 @@ mod tests {
 
     #[test]
     fn test_cleanup() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         // Create identity and challenge
         let (identity, _secret_key) = manager
@@ -814,7 +839,7 @@ mod tests {
 
     #[test]
     fn test_invalid_challenge_response() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         let (identity, _secret_key) = manager
             .create_identity(IdentityUserData::default())
@@ -846,7 +871,7 @@ mod tests {
 
     #[test]
     fn test_stats_tracking() {
-        let manager = create_test_manager();
+        let mut manager = create_test_manager();
 
         // Initial stats
         let stats = manager.stats();

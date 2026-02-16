@@ -38,7 +38,7 @@
 //! // ΔNew = ΔOrchestrator_Root ⊕ ΔPhaseTrigger
 //! ```
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::actions::{KoruAction, PulseAction};
 use crate::orchestrator::{CoordinationPhase, KoruOrchestrator};
@@ -53,7 +53,7 @@ use crate::orchestrator::{CoordinationPhase, KoruOrchestrator};
 /// APIs, just like any internal agent.
 pub struct SensoryInterface {
     /// Reference to the orchestrator (access to the unified field)
-    orchestrator: Arc<KoruOrchestrator>,
+    orchestrator: Arc<RwLock<KoruOrchestrator>>,
 
     /// Channel for receiving external sensory events
     event_rx: std::sync::mpsc::Receiver<SensoryEvent>,
@@ -90,7 +90,7 @@ impl SensoryInterface {
     /// * `orchestrator` - The orchestrator managing the unified field
     /// * `event_rx` - Channel receiver for external events
     pub fn new(
-        orchestrator: Arc<KoruOrchestrator>,
+        orchestrator: Arc<RwLock<KoruOrchestrator>>,
         event_rx: std::sync::mpsc::Receiver<SensoryEvent>,
     ) -> Self {
         Self {
@@ -123,7 +123,7 @@ impl SensoryInterface {
     /// with the orchestrator's local root.
     fn process_event(&self, event: SensoryEvent) {
         let action = self.event_to_action(event);
-        let _ = self.orchestrator.synthesize_action(action);
+        let _ = self.orchestrator.write().unwrap().synthesize_action(action);
     }
 
     /// Translate a sensory event into a KoruAction.
@@ -137,7 +137,7 @@ impl SensoryInterface {
                 let phase_enum = self.parse_phase(&phase);
                 
                 // Trigger the phase in the orchestrator
-                self.orchestrator.pulse(phase_enum);
+                self.orchestrator.write().unwrap().pulse(phase_enum);
                 
                 // Return the action for synthesis
                 KoruAction::from(PulseAction::TriggerPulse { phase })
@@ -174,7 +174,7 @@ impl SensoryInterface {
     ///
     /// External systems use this to observe the field's state
     /// through the normal API.
-    pub fn orchestrator(&self) -> &Arc<KoruOrchestrator> {
+    pub fn orchestrator(&self) -> &Arc<RwLock<KoruOrchestrator>> {
         &self.orchestrator
     }
 }
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_sensory_interface_creation() {
-        let orch = Arc::new(KoruOrchestrator::new());
+        let orch = Arc::new(RwLock::new(KoruOrchestrator::new()));
         let (tx, rx) = channel();
         let _sensory = SensoryInterface::new(orch, rx);
         
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_phase_trigger_event() {
-        let orch = Arc::new(KoruOrchestrator::new());
+        let orch = Arc::new(RwLock::new(KoruOrchestrator::new()));
         let (tx, rx) = channel();
         let sensory = SensoryInterface::new(orch.clone(), rx);
 
@@ -216,17 +216,17 @@ mod tests {
         }
 
         // Verify phase was triggered
-        assert_eq!(orch.current_phase(), CoordinationPhase::Input);
+        assert_eq!(orch.read().unwrap().current_phase(), CoordinationPhase::Input);
     }
 
     #[test]
     fn test_agent_registration_event() {
-        let orch = Arc::new(KoruOrchestrator::new());
+        let orch = Arc::new(RwLock::new(KoruOrchestrator::new()));
         let (tx, rx) = channel();
         let sensory = SensoryInterface::new(orch.clone(), rx);
 
         // Get root before processing
-        let root_before = orch.local_root();
+        let root_before = orch.read().unwrap().local_root().clone();
 
         // Send agent registration
         tx.send(SensoryEvent::AgentRegistered {
@@ -241,18 +241,18 @@ mod tests {
         }
 
         // Verify the event was synthesized (local root changed)
-        let root_after = orch.local_root();
+        let root_after = orch.read().unwrap().local_root().clone();
         assert_ne!(root_after.id(), root_before.id());
     }
 
     #[test]
     fn test_custom_event() {
-        let orch = Arc::new(KoruOrchestrator::new());
+        let orch = Arc::new(RwLock::new(KoruOrchestrator::new()));
         let (tx, rx) = channel();
         let sensory = SensoryInterface::new(orch.clone(), rx);
 
         // Get root before processing
-        let root_before = orch.local_root();
+        let root_before = orch.read().unwrap().local_root().clone();
 
         // Send custom event
         tx.send(SensoryEvent::Custom {
@@ -268,13 +268,13 @@ mod tests {
 
         // Verify the event was synthesized (local root changed)
         // The distinction is in the field, accessible through causal queries
-        let root_after = orch.local_root();
+        let root_after = orch.read().unwrap().local_root().clone();
         assert_ne!(root_after.id(), root_before.id());
     }
 
     #[test]
     fn test_phase_parsing() {
-        let orch = Arc::new(KoruOrchestrator::new());
+        let orch = Arc::new(RwLock::new(KoruOrchestrator::new()));
         let (_tx, rx) = channel();
         let sensory = SensoryInterface::new(orch.clone(), rx);
 

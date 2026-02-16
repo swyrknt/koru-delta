@@ -66,6 +66,23 @@ impl<T> RwLock<T> {
         }
     }
 
+    /// Acquire a write lock (blocking, for sync contexts).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn blocking_write(&self) -> RwLockWriteGuard<'_, T> {
+        RwLockWriteGuard {
+            guard: self.inner.blocking_write(),
+        }
+    }
+
+    /// Acquire a write lock (blocking, for sync contexts) - WASM fallback.
+    #[cfg(target_arch = "wasm32")]
+    pub fn blocking_write(&self) -> RwLockWriteGuard<'_, T> {
+        // WASM is single-threaded, so just acquire the lock
+        RwLockWriteGuard {
+            guard: self.inner.write().unwrap(),
+        }
+    }
+
     /// Try to acquire a read lock.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn try_read(&self) -> Option<RwLockReadGuard<'_, T>> {

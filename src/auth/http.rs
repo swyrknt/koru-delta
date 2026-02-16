@@ -36,6 +36,7 @@
 //! ```
 
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use axum::{
     extract::State,
@@ -251,7 +252,7 @@ pub struct AuthErrorResponse {
 // ============================================================================
 
 /// Create auth routes.
-pub fn auth_routes(auth: Arc<AuthManager>) -> Router {
+pub fn auth_routes(auth: Arc<RwLock<AuthManager>>) -> Router {
     Router::new()
         // Identity management
         .route("/api/v1/auth/register", post(handle_register))
@@ -269,7 +270,7 @@ pub fn auth_routes(auth: Arc<AuthManager>) -> Router {
 }
 
 /// Create protected routes that require authentication.
-pub fn protected_routes(auth: Arc<AuthManager>) -> Router {
+pub fn protected_routes(auth: Arc<RwLock<AuthManager>>) -> Router {
     Router::new()
         // Session management
         .route("/api/v1/auth/session/revoke", post(handle_revoke_session))
@@ -300,7 +301,7 @@ pub fn protected_routes(auth: Arc<AuthManager>) -> Router {
 ///     .route("/protected", get(protected_handler))
 ///     .layer(auth_layer(auth_manager));
 /// ```
-pub fn auth_layer(auth: Arc<AuthManager>) -> axum::Extension<Arc<AuthManager>> {
+pub fn auth_layer(auth: Arc<RwLock<AuthManager>>) -> axum::Extension<Arc<RwLock<AuthManager>>> {
     axum::Extension(auth)
 }
 
@@ -310,7 +311,7 @@ pub fn auth_layer(auth: Arc<AuthManager>) -> axum::Extension<Arc<AuthManager>> {
 /// ```rust,ignore
 /// async fn handler(
 ///     headers: axum::http::HeaderMap,
-///     State(auth): State<Arc<AuthManager>>,
+///     State(auth): State<Arc<RwLock<AuthManager>>>,
 /// ) -> Result<Response, StatusCode> {
 ///     let ctx = extract_auth_context(&headers, &auth).await?;
 ///     // Use ctx...
@@ -368,12 +369,13 @@ pub async fn require_auth_context(
 
 /// Handle identity registration.
 async fn handle_register(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     // For now, we mine the identity server-side
     // In production, client should mine and just submit the proof
-    let (identity, _secret_key) = auth
+    let mut auth_guard = auth.write().await;
+    let (identity, _secret_key) = auth_guard
         .create_identity(request.user_data)
         .map_err(auth_error)?;
 
@@ -385,10 +387,11 @@ async fn handle_register(
 
 /// Handle challenge request.
 async fn handle_challenge(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     Json(request): Json<ChallengeRequest>,
 ) -> Result<Json<ChallengeResponse>, (StatusCode, Json<AuthErrorResponse>)> {
-    let challenge = auth
+    let auth_guard = auth.read().await;
+    let challenge = auth_guard
         .create_challenge(&request.public_key)
         .map_err(auth_error)?;
 
@@ -400,10 +403,11 @@ async fn handle_challenge(
 
 /// Handle challenge verification and session creation.
 async fn handle_verify(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     Json(request): Json<VerifyRequest>,
 ) -> Result<Json<SessionResponse>, (StatusCode, Json<AuthErrorResponse>)> {
-    let session = auth
+    let mut auth_guard = auth.write().await;
+    let session = auth_guard
         .verify_and_create_session(&request.public_key, &request.challenge, &request.response)
         .map_err(auth_error)?;
 
@@ -416,10 +420,11 @@ async fn handle_verify(
 
 /// Handle session validation.
 async fn handle_validate_session(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     Json(request): Json<ValidateSessionRequest>,
 ) -> Json<ValidateSessionResponse> {
-    match auth.validate_session(&request.session_id) {
+    let auth_guard = auth.read().await;
+    match auth_guard.validate_session(&request.session_id) {
         Ok(session) => Json(ValidateSessionResponse {
             valid: true,
             session: Some(SessionInfo {
@@ -437,12 +442,13 @@ async fn handle_validate_session(
 
 /// Handle session revocation.
 async fn handle_revoke_session(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     headers: axum::http::HeaderMap,
     Json(request): Json<ValidateSessionRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
+    let auth_guard = auth.read().await;
     // Require authentication
-    let _ = require_auth_context(&headers, &auth).await.map_err(|e| {
+    let _ = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
         (
             e,
             Json(AuthErrorResponse {
@@ -453,7 +459,7 @@ async fn handle_revoke_session(
     });
 
     // Revoke the session
-    match auth.revoke_session(&request.session_id) {
+    match auth_guard.revoke_session(&request.session_id) {
         Ok(()) => Ok(StatusCode::OK),
         Err(e) => Err(auth_error(e)),
     }
@@ -461,12 +467,13 @@ async fn handle_revoke_session(
 
 /// Handle capability grant.
 async fn handle_grant_capability(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     headers: axum::http::HeaderMap,
     Json(request): Json<GrantCapabilityRequest>,
 ) -> Result<Json<CapabilityResponse>, (StatusCode, Json<AuthErrorResponse>)> {
+    let auth_guard = auth.read().await;
     // Require authentication
-    let (_identity, _) = require_auth_context(&headers, &auth).await.map_err(|e| {
+    let (_identity, _) = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
         (
             e,
             Json(AuthErrorResponse {
@@ -511,12 +518,13 @@ async fn handle_grant_capability(
 
 /// Handle capability revocation.
 async fn handle_revoke_capability(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     headers: axum::http::HeaderMap,
     Json(_request): Json<RevokeCapabilityRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
+    let auth_guard = auth.read().await;
     // Require authentication
-    let _ = require_auth_context(&headers, &auth).await.map_err(|e| {
+    let _ = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
         (
             e,
             Json(AuthErrorResponse {
@@ -539,12 +547,13 @@ async fn handle_revoke_capability(
 
 /// Handle authorization check.
 async fn handle_authorize(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     headers: axum::http::HeaderMap,
     Json(request): Json<AuthorizeRequest>,
 ) -> Result<Json<AuthorizeResponse>, (StatusCode, Json<AuthErrorResponse>)> {
+    let mut auth_guard = auth.write().await;
     // Require authentication
-    let (identity, _) = require_auth_context(&headers, &auth).await.map_err(|e| {
+    let (identity, _) = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
         (
             e,
             Json(AuthErrorResponse {
@@ -555,7 +564,7 @@ async fn handle_authorize(
     })?;
 
     // Check authorization
-    let authorized = auth.check_permission(
+    let authorized = auth_guard.check_permission(
         &identity.public_key,
         &request.namespace,
         &request.key,
@@ -570,11 +579,12 @@ async fn handle_authorize(
 
 /// Handle listing capabilities.
 async fn handle_list_capabilities(
-    State(auth): State<Arc<AuthManager>>,
+    State(auth): State<Arc<RwLock<AuthManager>>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<Capability>>, (StatusCode, Json<AuthErrorResponse>)> {
+    let auth_guard = auth.read().await;
     // Get identity key from headers (may be unauthenticated)
-    let ctx = extract_auth_context(&headers, &auth).await.map_err(|e| {
+    let ctx = extract_auth_context(&headers, &auth_guard).await.map_err(|e| {
         (
             e,
             Json(AuthErrorResponse {
@@ -589,7 +599,7 @@ async fn handle_list_capabilities(
     };
 
     // Get capabilities
-    let capabilities = auth.get_capabilities(identity_key).map_err(auth_error)?;
+    let capabilities = auth_guard.get_capabilities(identity_key).map_err(auth_error)?;
 
     Ok(Json(capabilities))
 }

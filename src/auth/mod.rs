@@ -210,7 +210,7 @@ mod integration_tests {
 
     #[test]
     fn test_full_auth_flow() {
-        let auth = create_test_auth();
+        let mut auth = create_test_auth();
 
         // 1. Create identity
         let user_data = IdentityUserData {

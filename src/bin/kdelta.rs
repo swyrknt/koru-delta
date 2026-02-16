@@ -1635,6 +1635,7 @@ async fn main() -> Result<()> {
 
                     let (identity, _secret_key) = db
                         .auth()
+                        .blocking_write()
                         .create_identity(IdentityUserData {
                             display_name: name.clone(),
                             ..Default::default()
