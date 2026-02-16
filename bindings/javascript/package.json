@@ -1,7 +1,7 @@
 {
   "name": "koru-delta",
-  "version": "3.0.0",
-  "description": "The invisible database for AI agents - LCA Architecture v3.0.0 with semantic search, time-travel, and identity",
+  "version": "3.1.0",
+  "description": "The invisible database for AI agents - LCA Architecture v3.1.0 with TTL, causal graph queries, and ALIS AI integration",
   "main": "index.js",
   "types": "index.d.ts",
   "files": [

@@ -686,6 +686,276 @@ impl PyDatabase {
             db: self.db.clone(),
         }
     }
+
+    /// Store a value with TTL (time-to-live) in seconds
+    ///
+    /// The value will be automatically deleted after the specified number of seconds.
+    /// This is useful for temporary data, sessions, cache entries, etc.
+    ///
+    /// # Example
+    /// ```python
+    /// # Store a session that expires in 1 hour
+    /// await db.put_with_ttl("sessions", "user_123", {"user": "alice"}, 3600)
+    /// ```
+    #[pyo3(signature = (namespace, key, value, ttl_seconds))]
+    fn put_with_ttl<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: &str,
+        key: &str,
+        value: &'py PyAny,
+        ttl_seconds: u64,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.to_string();
+        let k = key.to_string();
+        let json_value = pyobject_to_json(value)?;
+
+        future_into_py(py, async move {
+            db.put_with_ttl(ns, k, json_value, ttl_seconds)
+                .await
+                .map_err(to_python_error)?;
+            Ok(())
+        })
+    }
+
+    /// Store content with TTL and automatic distinction-based embedding
+    ///
+    /// Combines semantic storage with automatic expiration.
+    #[pyo3(signature = (namespace, key, content, ttl_seconds, metadata = None))]
+    fn put_similar_with_ttl<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: &str,
+        key: &str,
+        content: &'py PyAny,
+        ttl_seconds: u64,
+        metadata: Option<PyObject>,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.to_string();
+        let k = key.to_string();
+        let json_content = pyobject_to_json(content)?;
+        let meta = metadata.and_then(|m| {
+            Python::with_gil(|py| {
+                pyobject_to_json(m.as_ref(py)).ok()
+            })
+        });
+
+        future_into_py(py, async move {
+            // First store with semantic embedding
+            db.put_similar(ns.clone(), k.clone(), json_content.clone(), meta.clone())
+                .await
+                .map_err(to_python_error)?;
+            
+            // Then set TTL by re-putting with TTL (overwrites with same content but adds TTL)
+            db.put_with_ttl(ns, k, json_content, ttl_seconds)
+                .await
+                .map_err(to_python_error)?;
+            Ok(())
+        })
+    }
+
+    /// Clean up all expired TTL values
+    ///
+    /// Returns the number of items that were removed.
+    fn cleanup_expired<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+
+        future_into_py(py, async move {
+            let count = db.cleanup_expired().await.map_err(to_python_error)?;
+            Ok(count)
+        })
+    }
+
+    /// Get remaining TTL for a key in seconds
+    ///
+    /// Returns None if the key doesn't exist or has no TTL.
+    fn get_ttl_remaining<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: &str,
+        key: &str,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.to_string();
+        let k = key.to_string();
+
+        future_into_py(py, async move {
+            let ttl = db.get_ttl_remaining(&ns, &k).await.map_err(to_python_error)?;
+            Python::with_gil(|py| Ok(ttl.to_object(py)))
+        })
+    }
+
+    /// List keys expiring soon (within the given seconds)
+    ///
+    /// Returns a list of (namespace, key, seconds_remaining) tuples.
+    #[pyo3(signature = (within_seconds))]
+    fn list_expiring_soon<'py>(
+        &self,
+        py: Python<'py>,
+        within_seconds: u64,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+
+        future_into_py(py, async move {
+            let expiring = db.list_expiring_soon(within_seconds).await.map_err(to_python_error)?;
+            
+            Python::with_gil(|py| {
+                let list = PyList::new(py, Vec::<PyObject>::new());
+                for (ns, key, remaining) in expiring {
+                    let tuple = PyTuple::new(py, &[ns.to_object(py), key.to_object(py), remaining.to_object(py)]);
+                    list.append(tuple).ok();
+                }
+                Ok(list.to_object(py))
+            })
+        })
+    }
+
+    /// Check if two distinctions are causally connected
+    ///
+    /// Returns True if there is a causal path between the two distinctions.
+    fn are_connected<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: &str,
+        key_a: &str,
+        key_b: &str,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.to_string();
+        let ka = key_a.to_string();
+        let kb = key_b.to_string();
+
+        future_into_py(py, async move {
+            let connected = db.are_connected(&ns, &ka, &kb).await.map_err(to_python_error)?;
+            Python::with_gil(|py| Ok(connected.to_object(py)))
+        })
+    }
+
+    /// Get the causal connection path between two distinctions
+    ///
+    /// Returns a list of distinction IDs representing the path, or None if not connected.
+    fn get_connection_path<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: &str,
+        key_a: &str,
+        key_b: &str,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.to_string();
+        let ka = key_a.to_string();
+        let kb = key_b.to_string();
+
+        future_into_py(py, async move {
+            let path = db.get_connection_path(&ns, &ka, &kb).await.map_err(to_python_error)?;
+            Python::with_gil(|py| Ok(path.to_object(py)))
+        })
+    }
+
+    /// Get the most highly-connected distinctions
+    ///
+    /// Returns a list of dictionaries with distinction info and connection scores.
+    #[pyo3(signature = (namespace = None, k = 10))]
+    fn get_highly_connected<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: Option<&str>,
+        k: usize,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.map(|s| s.to_string());
+
+        future_into_py(py, async move {
+            let results = db.get_highly_connected(ns.as_deref(), k).await.map_err(to_python_error)?;
+            
+            Python::with_gil(|py| {
+                let list = PyList::new(py, Vec::<PyObject>::new());
+                for dist in results {
+                    let dict = PyDict::new(py);
+                    dict.set_item("namespace", &dist.namespace).ok();
+                    dict.set_item("key", &dist.key).ok();
+                    dict.set_item("connection_score", dist.connection_score).ok();
+                    dict.set_item("parents", dist.parents).ok();
+                    dict.set_item("children", dist.children).ok();
+                    list.append(dict).ok();
+                }
+                Ok(list.to_object(py))
+            })
+        })
+    }
+
+    /// Find similar distinctions that are not causally connected
+    ///
+    /// These pairs are candidates for synthesis. Returns a list of dictionaries
+    /// with pair info and similarity scores.
+    #[pyo3(signature = (namespace = None, k = 10, threshold = 0.7))]
+    fn find_similar_unconnected_pairs<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: Option<&str>,
+        k: usize,
+        threshold: f32,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.map(|s| s.to_string());
+
+        future_into_py(py, async move {
+            let pairs = db.find_similar_unconnected_pairs(ns.as_deref(), k, threshold)
+                .await
+                .map_err(to_python_error)?;
+            
+            Python::with_gil(|py| {
+                let list = PyList::new(py, Vec::<PyObject>::new());
+                for pair in pairs {
+                    let dict = PyDict::new(py);
+                    dict.set_item("namespace_a", &pair.namespace_a).ok();
+                    dict.set_item("key_a", &pair.key_a).ok();
+                    dict.set_item("namespace_b", &pair.namespace_b).ok();
+                    dict.set_item("key_b", &pair.key_b).ok();
+                    dict.set_item("similarity_score", pair.similarity_score).ok();
+                    list.append(dict).ok();
+                }
+                Ok(list.to_object(py))
+            })
+        })
+    }
+
+    /// Generate random walk combinations for dream-phase creative synthesis
+    ///
+    /// Performs random walks through the causal graph to discover novel combinations.
+    /// Returns a list of dictionaries with start/end info and novelty scores.
+    #[pyo3(signature = (n = 5, steps = 10))]
+    fn random_walk_combinations<'py>(
+        &self,
+        py: Python<'py>,
+        n: usize,
+        steps: usize,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+
+        future_into_py(py, async move {
+            let combinations = db.random_walk_combinations(n, steps)
+                .await
+                .map_err(to_python_error)?;
+            
+            Python::with_gil(|py| {
+                let list = PyList::new(py, Vec::<PyObject>::new());
+                for combo in combinations {
+                    let dict = PyDict::new(py);
+                    dict.set_item("start_namespace", &combo.start_namespace).ok();
+                    dict.set_item("start_key", &combo.start_key).ok();
+                    dict.set_item("end_namespace", &combo.end_namespace).ok();
+                    dict.set_item("end_key", &combo.end_key).ok();
+                    dict.set_item("path", combo.path).ok();
+                    dict.set_item("novelty_score", combo.novelty_score).ok();
+                    list.append(dict).ok();
+                }
+                Ok(list.to_object(py))
+            })
+        })
+    }
 }
 
 /// Identity management for Python

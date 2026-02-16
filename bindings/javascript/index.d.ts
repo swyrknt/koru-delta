@@ -172,6 +172,68 @@ export class WorkspaceHandle {
 }
 
 /**
+ * A highly-connected distinction in the causal graph
+ */
+export interface ConnectedDistinction {
+  /** The namespace containing this distinction */
+  namespace: string;
+  /** The key (distinction ID) */
+  key: string;
+  /** Total connectivity score (parents + children + synthesis events) */
+  connectionScore: number;
+  /** Causal parents (what caused this distinction) */
+  parents: string[];
+  /** Causal children (what this distinction caused) */
+  children: string[];
+}
+
+/**
+ * A pair of similar but causally unconnected distinctions
+ */
+export interface UnconnectedPair {
+  /** First distinction's namespace */
+  namespaceA: string;
+  /** First distinction's key */
+  keyA: string;
+  /** Second distinction's namespace */
+  namespaceB: string;
+  /** Second distinction's key */
+  keyB: string;
+  /** Cosine similarity score (0.0 - 1.0) */
+  similarityScore: number;
+}
+
+/**
+ * A random combination discovered through dream-phase random walks
+ */
+export interface RandomCombination {
+  /** Starting distinction's namespace */
+  startNamespace: string;
+  /** Starting distinction's key */
+  startKey: string;
+  /** Ending distinction's namespace */
+  endNamespace: string;
+  /** Ending distinction's key */
+  endKey: string;
+  /** Intermediate distinction IDs in the walk */
+  path: string[];
+  /** Novelty score - higher means more distant/interesting (0.0 - 1.0) */
+  noveltyScore: number;
+}
+
+/**
+ * TTL information for expiring keys
+ */
+export interface ExpiringKey {
+  /** The namespace */
+  namespace: string;
+  /** The key */
+  key: string;
+  /** Seconds remaining until expiration */
+  secondsRemaining: number;
+}
+
+/**
  * Main database class for JavaScript/TypeScript environments.
  * 
  * Provides content-addressed storage with causal consistency, time-travel queries,
@@ -558,6 +620,193 @@ export class KoruDeltaWasm {
    * This will delete all data stored in IndexedDB. Use with caution!
    */
   clearPersistence(): Promise<void>;
+
+  // ============================================================================
+  // TTL (Time-To-Live) Methods
+  // ============================================================================
+
+  /**
+   * Store a value with TTL (time-to-live) in seconds.
+   * 
+   * The value will be automatically deleted after the specified number of seconds.
+   * This is useful for temporary data, sessions, cache entries, etc.
+   * 
+   * @param namespace - The namespace
+   * @param key - The key
+   * @param value - Any JSON-serializable value
+   * @param ttlSeconds - Time-to-live in seconds
+   * @returns A Promise that resolves to the versioned stored value
+   * @example
+   * ```typescript
+   * // Store a session that expires in 1 hour
+   * await db.putWithTtl('sessions', 'user_123', { user: 'alice' }, 3600);
+   * ```
+   */
+  putWithTtl(namespace: string, key: string, value: any, ttlSeconds: number): Promise<VersionedValue>;
+
+  /**
+   * Store content with TTL and automatic semantic embedding.
+   * 
+   * Combines semantic storage with automatic expiration.
+   * 
+   * @param namespace - The namespace
+   * @param key - The key
+   * @param content - Content to store (will be embedded)
+   * @param ttlSeconds - Time-to-live in seconds
+   * @param metadata - Optional metadata object
+   * @returns A Promise that resolves when stored
+   * @example
+   * ```typescript
+   * await db.putSimilarWithTtl('cache', 'article1', 'Hello world', 1800, { type: 'greeting' });
+   * ```
+   */
+  putSimilarWithTtl(namespace: string, key: string, content: any, ttlSeconds: number, metadata?: any): Promise<void>;
+
+  /**
+   * Clean up all expired TTL values.
+   * 
+   * @returns A Promise that resolves to the count of items removed
+   */
+  cleanupExpired(): Promise<number>;
+
+  /**
+   * Get remaining TTL for a key in seconds.
+   * 
+   * @param namespace - The namespace
+   * @param key - The key
+   * @returns A Promise that resolves to seconds remaining, or null if no TTL
+   */
+  getTtlRemaining(namespace: string, key: string): Promise<number | null>;
+
+  /**
+   * List keys expiring soon.
+   * 
+   * @param withinSeconds - Return keys expiring within this many seconds
+   * @returns A Promise that resolves to an array of expiring key info
+   * @example
+   * ```typescript
+   * // Find all keys expiring in the next hour
+   * const expiring = await db.listExpiringSoon(3600);
+   * expiring.forEach(k => {
+   *   console.log(`${k.namespace}/${k.key}: ${k.secondsRemaining}s remaining`);
+   * });
+   * ```
+   */
+  listExpiringSoon(withinSeconds: number): Promise<ExpiringKey[]>;
+
+  // ============================================================================
+  // Graph Connectivity Methods
+  // ============================================================================
+
+  /**
+   * Check if two distinctions are causally connected.
+   * 
+   * Returns true if there is a causal path between the two distinctions
+   * through the causal graph (ancestor/descendant relationship).
+   * 
+   * @param namespace - The namespace containing both keys
+   * @param keyA - First distinction key
+   * @param keyB - Second distinction key
+   * @returns A Promise that resolves to boolean indicating connection
+   * @example
+   * ```typescript
+   * const connected = await db.areConnected('docs', 'article1', 'article2');
+   * if (connected) {
+   *   console.log('These documents are causally related');
+   * }
+   * ```
+   */
+  areConnected(namespace: string, keyA: string, keyB: string): Promise<boolean>;
+
+  /**
+   * Get the causal connection path between two distinctions.
+   * 
+   * Returns an array of distinction IDs representing the path from keyA to keyB,
+   * or null if they are not connected.
+   * 
+   * @param namespace - The namespace containing both keys
+   * @param keyA - Starting distinction key
+   * @param keyB - Target distinction key
+   * @returns A Promise that resolves to the path array or null
+   * @example
+   * ```typescript
+   * const path = await db.getConnectionPath('docs', 'article1', 'article2');
+   * if (path) {
+   *   console.log(`Connection path: ${path.join(' -> ')}`);
+   * }
+   * ```
+   */
+  getConnectionPath(namespace: string, keyA: string, keyB: string): Promise<string[] | null>;
+
+  /**
+   * Get the most highly-connected distinctions.
+   * 
+   * Returns distinctions ranked by their connectivity score (parents + children).
+   * Useful for finding "central" or "important" distinctions in the causal graph.
+   * 
+   * @param namespace - Optional namespace filter (null for all)
+   * @param k - Maximum number of results (default: 10)
+   * @returns A Promise that resolves to an array of connected distinctions
+   * @example
+   * ```typescript
+   * // Get top 5 most connected distinctions in the 'docs' namespace
+   * const central = await db.getHighlyConnected('docs', 5);
+   * central.forEach(d => {
+   *   console.log(`${d.key}: score ${d.connectionScore} (${d.parents.length} parents, ${d.children.length} children)`);
+   * });
+   * ```
+   */
+  getHighlyConnected(namespace: string | null, k: number): Promise<ConnectedDistinction[]>;
+
+  // ============================================================================
+  // Similar Unconnected Pairs (Consolidation Agent)
+  // ============================================================================
+
+  /**
+   * Find similar distinctions that are not causally connected.
+   * 
+   * These pairs are candidates for synthesis by the Consolidation agent.
+   * Uses vector similarity search combined with causal graph analysis.
+   * 
+   * @param namespace - Optional namespace filter (null for all)
+   * @param k - Maximum number of pairs to return (default: 10)
+   * @param threshold - Minimum similarity threshold 0.0-1.0 (default: 0.7)
+   * @returns A Promise that resolves to an array of unconnected pairs
+   * @example
+   * ```typescript
+   * // Find similar but disconnected document pairs
+   * const pairs = await db.findSimilarUnconnectedPairs('docs', 5, 0.8);
+   * pairs.forEach(p => {
+   *   console.log(`${p.keyA} <-> ${p.keyB}: ${p.similarityScore.toFixed(2)} similarity`);
+   * });
+   * ```
+   */
+  findSimilarUnconnectedPairs(namespace: string | null, k: number, threshold: number): Promise<UnconnectedPair[]>;
+
+  // ============================================================================
+  // Random Walk (Dream Phase)
+  // ============================================================================
+
+  /**
+   * Generate random walk combinations for dream-phase creative synthesis.
+   * 
+   * Performs random walks through the causal graph to discover novel combinations
+   * of distant distinctions. Used by the Sleep agent during REM phase.
+   * 
+   * @param n - Number of combinations to generate (default: 5)
+   * @param steps - Number of steps per random walk (default: 10)
+   * @returns A Promise that resolves to an array of random combinations
+   * @example
+   * ```typescript
+   * // Generate 5 random walks of 10 steps each
+   * const combinations = await db.randomWalkCombinations(5, 10);
+   * combinations.forEach(c => {
+   *   console.log(`${c.startKey} -> ${c.endKey} (novelty: ${c.noveltyScore.toFixed(2)})`);
+   *   console.log(`  Path: ${c.path.join(' -> ')}`);
+   * });
+   * ```
+   */
+  randomWalkCombinations(n: number, steps: number): Promise<RandomCombination[]>;
 }
 
 /**

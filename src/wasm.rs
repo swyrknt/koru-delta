@@ -945,6 +945,302 @@ impl KoruDeltaWasm {
             namespace: name.to_string(),
         }
     }
+
+    /// Store a value with TTL (time-to-live) in seconds
+    ///
+    /// The value will be automatically deleted after the specified number of seconds.
+    /// This is useful for temporary data, sessions, cache entries, etc.
+    ///
+    /// # Arguments
+    /// * `namespace` - The namespace
+    /// * `key` - The key
+    /// * `value` - JSON value to store
+    /// * `ttl_seconds` - Time-to-live in seconds
+    #[wasm_bindgen(js_name = putWithTtl)]
+    pub async fn put_with_ttl_js(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: JsValue,
+        ttl_seconds: u64,
+    ) -> Result<JsValue, JsValue> {
+        let json_value: JsonValue = serde_wasm_bindgen::from_value(value)
+            .map_err(|e| JsValue::from_str(&format!("Invalid JSON value: {}", e)))?;
+
+        let versioned = self
+            .db
+            .put_with_ttl(namespace, key, json_value.clone(), ttl_seconds)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to store value with TTL: {}", e)))?;
+
+        // Auto-save to IndexedDB if persistence is enabled
+        if let Err(e) = self.save_to_storage(namespace, key, &json_value).await {
+            web_sys::console::warn_1(&format!("Failed to save to IndexedDB: {:?}", e).into());
+        }
+
+        versioned_to_js(&versioned)
+    }
+
+    /// Store content with TTL and automatic distinction-based embedding
+    ///
+    /// Combines semantic storage with automatic expiration.
+    #[wasm_bindgen(js_name = putSimilarWithTtl)]
+    pub async fn put_similar_with_ttl_js(
+        &self,
+        namespace: &str,
+        key: &str,
+        content: JsValue,
+        ttl_seconds: u64,
+        metadata: Option<JsValue>,
+    ) -> Result<(), JsValue> {
+        let json_content: JsonValue = serde_wasm_bindgen::from_value(content)
+            .map_err(|e| JsValue::from_str(&format!("Invalid content: {}", e)))?;
+
+        let meta = metadata
+            .and_then(|m| serde_wasm_bindgen::from_value(m).ok());
+
+        // First store with semantic embedding
+        self.db
+            .put_similar(namespace, key, json_content.clone(), meta.clone())
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to store similar content: {}", e)))?;
+        
+        // Then set TTL by re-putting with TTL
+        self.db
+            .put_with_ttl(namespace, key, json_content, ttl_seconds)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to set TTL: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Clean up all expired TTL values
+    ///
+    /// Returns the number of items that were removed.
+    #[wasm_bindgen(js_name = cleanupExpired)]
+    pub async fn cleanup_expired_js(&self) -> Result<usize, JsValue> {
+        let count = self
+            .db
+            .cleanup_expired()
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to cleanup expired: {}", e)))?;
+        Ok(count)
+    }
+
+    /// Get remaining TTL for a key in seconds
+    ///
+    /// Returns null if the key doesn't exist or has no TTL.
+    #[wasm_bindgen(js_name = getTtlRemaining)]
+    pub async fn get_ttl_remaining_js(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> Result<JsValue, JsValue> {
+        let ttl = self
+            .db
+            .get_ttl_remaining(namespace, key)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to get TTL: {}", e)))?;
+        
+        match ttl {
+            Some(seconds) => Ok(JsValue::from_f64(seconds as f64)),
+            None => Ok(JsValue::NULL),
+        }
+    }
+
+    /// List keys expiring soon (within the given seconds)
+    ///
+    /// Returns an array of objects with namespace, key, and secondsRemaining.
+    #[wasm_bindgen(js_name = listExpiringSoon)]
+    pub async fn list_expiring_soon_js(&self, within_seconds: u64) -> Result<JsValue, JsValue> {
+        let expiring = self
+            .db
+            .list_expiring_soon(within_seconds)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to list expiring: {}", e)))?;
+        
+        let js_array = js_sys::Array::new();
+        for (ns, key, remaining) in expiring {
+            let obj = js_sys::Object::new();
+            js_sys::Reflect::set(&obj, &"namespace".into(), &JsValue::from_str(&ns))?;
+            js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&key))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"secondsRemaining".into(),
+                &JsValue::from_f64(remaining as f64),
+            )?;
+            js_array.push(&obj);
+        }
+        
+        Ok(js_array.into())
+    }
+
+    /// Check if two distinctions are causally connected
+    ///
+    /// Returns true if there is a causal path between the two distinctions.
+    #[wasm_bindgen(js_name = areConnected)]
+    pub async fn are_connected_js(
+        &self,
+        namespace: &str,
+        key_a: &str,
+        key_b: &str,
+    ) -> Result<bool, JsValue> {
+        let connected = self
+            .db
+            .are_connected(namespace, key_a, key_b)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to check connection: {}", e)))?;
+        Ok(connected)
+    }
+
+    /// Get the causal connection path between two distinctions
+    ///
+    /// Returns an array of distinction IDs representing the path, or null if not connected.
+    #[wasm_bindgen(js_name = getConnectionPath)]
+    pub async fn get_connection_path_js(
+        &self,
+        namespace: &str,
+        key_a: &str,
+        key_b: &str,
+    ) -> Result<JsValue, JsValue> {
+        let path = self
+            .db
+            .get_connection_path(namespace, key_a, key_b)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to get connection path: {}", e)))?;
+        
+        match path {
+            Some(path_vec) => {
+                let js_array = js_sys::Array::new();
+                for id in path_vec {
+                    js_array.push(&JsValue::from_str(&id));
+                }
+                Ok(js_array.into())
+            }
+            None => Ok(JsValue::NULL),
+        }
+    }
+
+    /// Get the most highly-connected distinctions
+    ///
+    /// Returns an array of objects with distinction info and connection scores.
+    #[wasm_bindgen(js_name = getHighlyConnected)]
+    pub async fn get_highly_connected_js(
+        &self,
+        namespace: Option<String>,
+        k: usize,
+    ) -> Result<JsValue, JsValue> {
+        let results = self
+            .db
+            .get_highly_connected(namespace.as_deref(), k)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to get highly connected: {}", e)))?;
+        
+        let js_array = js_sys::Array::new();
+        for dist in results {
+            let obj = js_sys::Object::new();
+            js_sys::Reflect::set(&obj, &"namespace".into(), &JsValue::from_str(&dist.namespace))?;
+            js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&dist.key))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"connectionScore".into(),
+                &JsValue::from_f64(dist.connection_score as f64),
+            )?;
+            
+            // Convert parents to JS array
+            let parents_array = js_sys::Array::new();
+            for parent in &dist.parents {
+                parents_array.push(&JsValue::from_str(parent));
+            }
+            js_sys::Reflect::set(&obj, &"parents".into(), &parents_array)?;
+            
+            // Convert children to JS array
+            let children_array = js_sys::Array::new();
+            for child in &dist.children {
+                children_array.push(&JsValue::from_str(child));
+            }
+            js_sys::Reflect::set(&obj, &"children".into(), &children_array)?;
+            
+            js_array.push(&obj);
+        }
+        
+        Ok(js_array.into())
+    }
+
+    /// Find similar distinctions that are not causally connected
+    ///
+    /// These pairs are candidates for synthesis.
+    #[wasm_bindgen(js_name = findSimilarUnconnectedPairs)]
+    pub async fn find_similar_unconnected_pairs_js(
+        &self,
+        namespace: Option<String>,
+        k: usize,
+        threshold: f32,
+    ) -> Result<JsValue, JsValue> {
+        let pairs = self
+            .db
+            .find_similar_unconnected_pairs(namespace.as_deref(), k, threshold)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to find pairs: {}", e)))?;
+        
+        let js_array = js_sys::Array::new();
+        for pair in pairs {
+            let obj = js_sys::Object::new();
+            js_sys::Reflect::set(&obj, &"namespaceA".into(), &JsValue::from_str(&pair.namespace_a))?;
+            js_sys::Reflect::set(&obj, &"keyA".into(), &JsValue::from_str(&pair.key_a))?;
+            js_sys::Reflect::set(&obj, &"namespaceB".into(), &JsValue::from_str(&pair.namespace_b))?;
+            js_sys::Reflect::set(&obj, &"keyB".into(), &JsValue::from_str(&pair.key_b))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"similarityScore".into(),
+                &JsValue::from_f64(pair.similarity_score as f64),
+            )?;
+            js_array.push(&obj);
+        }
+        
+        Ok(js_array.into())
+    }
+
+    /// Generate random walk combinations for dream-phase creative synthesis
+    ///
+    /// Performs random walks through the causal graph to discover novel combinations.
+    #[wasm_bindgen(js_name = randomWalkCombinations)]
+    pub async fn random_walk_combinations_js(
+        &self,
+        n: usize,
+        steps: usize,
+    ) -> Result<JsValue, JsValue> {
+        let combinations = self
+            .db
+            .random_walk_combinations(n, steps)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to generate combinations: {}", e)))?;
+        
+        let js_array = js_sys::Array::new();
+        for combo in combinations {
+            let obj = js_sys::Object::new();
+            js_sys::Reflect::set(&obj, &"startNamespace".into(), &JsValue::from_str(&combo.start_namespace))?;
+            js_sys::Reflect::set(&obj, &"startKey".into(), &JsValue::from_str(&combo.start_key))?;
+            js_sys::Reflect::set(&obj, &"endNamespace".into(), &JsValue::from_str(&combo.end_namespace))?;
+            js_sys::Reflect::set(&obj, &"endKey".into(), &JsValue::from_str(&combo.end_key))?;
+            
+            // Convert path to JS array
+            let path_array = js_sys::Array::new();
+            for step in &combo.path {
+                path_array.push(&JsValue::from_str(step));
+            }
+            js_sys::Reflect::set(&obj, &"path".into(), &path_array)?;
+            
+            js_sys::Reflect::set(
+                &obj,
+                &"noveltyScore".into(),
+                &JsValue::from_f64(combo.novelty_score as f64),
+            )?;
+            js_array.push(&obj);
+        }
+        
+        Ok(js_array.into())
+    }
 }
 
 /// Handle for workspace-scoped operations
