@@ -601,10 +601,16 @@ impl KoruDeltaWasm {
         &self,
         namespace: &str,
         key: &str,
-        vector: Vec<f32>,
+        vector: &js_sys::Array,
         model: Option<String>,
     ) -> Result<(), JsValue> {
-        let vec = Vector::new(vector, model.as_deref().unwrap_or("default"));
+        // Convert JS Array to Vec<f32>
+        let vec_data: Vec<f32> = vector
+            .iter()
+            .map(|v| v.as_f64().unwrap_or(0.0) as f32)
+            .collect();
+        
+        let vec = Vector::new(vec_data, model.as_deref().unwrap_or("default"));
 
         self.db
             .embed(namespace, key, vec, None)
@@ -627,10 +633,16 @@ impl KoruDeltaWasm {
     pub async fn embed_search_js(
         &self,
         namespace: &str,
-        query: Vec<f32>,
+        query: &js_sys::Array,
         limit: Option<usize>,
     ) -> Result<JsValue, JsValue> {
-        let query_vec = Vector::new(query, "query");
+        // Convert JS Array to Vec<f32>
+        let query_data: Vec<f32> = query
+            .iter()
+            .map(|v| v.as_f64().unwrap_or(0.0) as f32)
+            .collect();
+        
+        let query_vec = Vector::new(query_data, "query");
 
         let options = VectorSearchOptions {
             top_k: limit.unwrap_or(10),
@@ -855,6 +867,8 @@ impl KoruDeltaWasm {
         display_name: Option<String>,
         bio: Option<String>,
     ) -> Result<JsValue, JsValue> {
+        use crate::auth::mine_identity;
+        
         let user_data = IdentityUserData {
             display_name,
             bio,
@@ -862,11 +876,10 @@ impl KoruDeltaWasm {
             metadata: std::collections::HashMap::new(),
         };
 
-        let (identity, secret_key) = self
-            .db
-            .auth()
-            .create_identity(user_data)
-            .map_err(|e| JsValue::from_str(&format!("Failed to create identity: {}", e)))?;
+        // Use async mine_identity for WASM
+        let mined = mine_identity(user_data, crate::auth::DEFAULT_DIFFICULTY).await;
+        let identity = mined.identity;
+        let secret_key = mined.secret_key;
 
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"id".into(), &JsValue::from_str(&identity.public_key))?;
@@ -942,6 +955,7 @@ impl KoruDeltaWasm {
     #[wasm_bindgen(js_name = workspace)]
     pub fn workspace_js(&self, name: &str) -> WorkspaceHandle {
         WorkspaceHandle {
+            db: self.db.clone(),
             namespace: name.to_string(),
         }
     }
@@ -1272,6 +1286,7 @@ impl KoruDeltaWasm {
 /// Handle for workspace-scoped operations
 #[wasm_bindgen]
 pub struct WorkspaceHandle {
+    db: KoruDelta,
     namespace: String,
 }
 
@@ -1284,10 +1299,41 @@ impl WorkspaceHandle {
     }
 
     /// Store a value in the workspace
-    ///
-    /// Note: This is a convenience method. In WASM bindings, you'll need to
-    /// use the main KoruDeltaWasm instance for actual storage operations.
-    /// This handle is primarily for API consistency with Python bindings.
+    #[wasm_bindgen(js_name = put)]
+    pub async fn put_js(&self, key: &str, value: JsValue) -> Result<JsValue, JsValue> {
+        let json_value: JsonValue = serde_wasm_bindgen::from_value(value)
+            .map_err(|e| JsValue::from_str(&format!("Invalid JSON value: {}", e)))?;
+        
+        let versioned = self.db.put(&self.namespace, key, json_value).await
+            .map_err(|e| JsValue::from_str(&format!("Failed to store value: {}", e)))?;
+        
+        versioned_to_js(&versioned)
+    }
+
+    /// Retrieve a value from the workspace
+    #[wasm_bindgen(js_name = get)]
+    pub async fn get_js(&self, key: &str) -> Result<JsValue, JsValue> {
+        let versioned = self.db.get(&self.namespace, key).await
+            .map_err(|e| JsValue::from_str(&format!("Failed to retrieve value: {}", e)))?;
+        
+        versioned_to_js(&versioned)
+    }
+
+    /// Delete a key from the workspace
+    #[wasm_bindgen(js_name = delete)]
+    pub async fn delete_js(&self, key: &str) -> Result<(), JsValue> {
+        self.db.delete(&self.namespace, key).await
+            .map_err(|e| JsValue::from_str(&format!("Failed to delete: {}", e)))?;
+        Ok(())
+    }
+
+    /// List all keys in the workspace
+    #[wasm_bindgen(js_name = listKeys)]
+    pub async fn list_keys_js(&self) -> Result<Vec<String>, JsValue> {
+        Ok(self.db.list_keys(&self.namespace).await)
+    }
+
+    /// String representation
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string_js(&self) -> String {
         format!("<Workspace '{}'>", self.namespace)

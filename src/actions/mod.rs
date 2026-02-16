@@ -80,10 +80,12 @@ pub enum KoruAction {
     /// Vector operations - embedding and similarity search.
     Vector(VectorAction),
     /// Lifecycle operations - memory tier transitions.
+    #[cfg(not(target_arch = "wasm32"))]
     Lifecycle(LifecycleAction),
     /// Session operations - authenticated session management.
     Session(SessionAction),
     /// Subscription operations - pub/sub change notifications.
+    #[cfg(not(target_arch = "wasm32"))]
     Subscription(SubscriptionAction),
     /// Process operations - background evolutionary processes.
     Process(ProcessAction),
@@ -127,8 +129,10 @@ impl KoruAction {
             KoruAction::Pulse(_) => "PULSE",
             KoruAction::Workspace(_) => "WORKSPACE",
             KoruAction::Vector(_) => "VECTOR",
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Lifecycle(_) => "LIFECYCLE",
             KoruAction::Session(_) => "SESSION",
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Subscription(_) => "SUBSCRIPTION",
             KoruAction::Process(_) => "PROCESS",
             KoruAction::Reconciliation(_) => "RECONCILIATION",
@@ -154,8 +158,10 @@ impl KoruAction {
             KoruAction::Pulse(action) => action.validate(),
             KoruAction::Workspace(action) => action.validate(),
             KoruAction::Vector(action) => action.validate(),
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Lifecycle(action) => action.validate(),
             KoruAction::Session(action) => action.validate(),
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Subscription(action) => action.validate(),
             KoruAction::Process(action) => action.validate(),
             KoruAction::Reconciliation(action) => action.validate(),
@@ -181,8 +187,10 @@ impl Canonicalizable for KoruAction {
             KoruAction::Pulse(action) => action.to_canonical_structure(engine),
             KoruAction::Workspace(action) => action.to_canonical_structure(engine),
             KoruAction::Vector(action) => action.to_canonical_structure(engine),
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Lifecycle(action) => action.to_canonical_structure(engine),
             KoruAction::Session(action) => action.to_canonical_structure(engine),
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Subscription(action) => action.to_canonical_structure(engine),
             KoruAction::Process(action) => action.to_canonical_structure(engine),
             KoruAction::Reconciliation(action) => action.to_canonical_structure(engine),
@@ -226,8 +234,10 @@ pub(crate) enum ActionSerializable {
     Pulse(PulseActionSerializable),
     Workspace(WorkspaceActionSerializable),
     Vector(VectorActionSerializable),
+    #[cfg(not(target_arch = "wasm32"))]
     Lifecycle(LifecycleActionSerializable),
     Session(SessionActionSerializable),
+    #[cfg(not(target_arch = "wasm32"))]
     Subscription(SubscriptionActionSerializable),
     Process(ProcessActionSerializable),
     Reconciliation(ReconciliationActionSerializable),
@@ -250,8 +260,10 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Pulse(a) => ActionSerializable::Pulse(a.into()),
             KoruAction::Workspace(a) => ActionSerializable::Workspace(a.into()),
             KoruAction::Vector(a) => ActionSerializable::Vector(a.into()),
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Lifecycle(a) => ActionSerializable::Lifecycle(a.into()),
             KoruAction::Session(a) => ActionSerializable::Session(a.into()),
+            #[cfg(not(target_arch = "wasm32"))]
             KoruAction::Subscription(a) => ActionSerializable::Subscription(a.into()),
             KoruAction::Process(a) => ActionSerializable::Process(a.into()),
             KoruAction::Reconciliation(a) => ActionSerializable::Reconciliation(a.into()),
@@ -1750,6 +1762,7 @@ impl Canonicalizable for VectorAction {
 ///
 /// The lifecycle agent manages memory tier transitions with LCA architecture.
 /// All lifecycle operations are synthesized into the unified field.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LifecycleAction {
     /// Evaluate access patterns for a distinction.
@@ -1794,6 +1807,7 @@ pub enum LifecycleAction {
 }
 
 /// Serializable version of LifecycleAction.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum LifecycleActionSerializable {
     EvaluateAccess { distinction_id: String, full_key: crate::types::FullKey },
@@ -1805,6 +1819,7 @@ pub(crate) enum LifecycleActionSerializable {
     ExtractGenome,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<&LifecycleAction> for LifecycleActionSerializable {
     fn from(action: &LifecycleAction) -> Self {
         match action {
@@ -1844,6 +1859,7 @@ impl From<&LifecycleAction> for LifecycleActionSerializable {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl LifecycleAction {
     /// Validate the lifecycle action.
     pub fn validate(&self) -> Result<(), String> {
@@ -1890,6 +1906,7 @@ impl LifecycleAction {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Canonicalizable for LifecycleAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
         let serializable = LifecycleActionSerializable::from(self);
@@ -2061,7 +2078,7 @@ impl Canonicalizable for SessionAction {
 }
 
 // ============================================================================
-// SUBSCRIPTION ACTIONS
+// SUBSCRIPTION ACTIONS (Non-WASM only)
 // ============================================================================
 
 /// Actions for subscription management agent.
@@ -2070,6 +2087,7 @@ impl Canonicalizable for SessionAction {
 /// - Each subscription operation synthesizes a new distinction
 /// - Subscriptions are content-addressed by their action history
 /// - All subscription state changes are causal distinctions
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum SubscriptionAction {
     /// Subscribe to changes.
@@ -2104,6 +2122,7 @@ pub enum SubscriptionAction {
 }
 
 /// Serializable version of SubscriptionAction.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum SubscriptionActionSerializable {
     Subscribe { subscription: crate::subscriptions::Subscription },
@@ -2114,6 +2133,7 @@ pub(crate) enum SubscriptionActionSerializable {
     GetSubscription { subscription_id: u64 },
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<&SubscriptionAction> for SubscriptionActionSerializable {
     fn from(action: &SubscriptionAction) -> Self {
         match action {
@@ -2148,6 +2168,7 @@ impl From<&SubscriptionAction> for SubscriptionActionSerializable {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl SubscriptionAction {
     /// Validate the subscription action.
     pub fn validate(&self) -> Result<(), String> {
@@ -2182,6 +2203,7 @@ impl SubscriptionAction {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Canonicalizable for SubscriptionAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
         let serializable = SubscriptionActionSerializable::from(self);

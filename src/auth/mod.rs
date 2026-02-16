@@ -114,9 +114,13 @@ pub use capability::{
     authorize, check_permission, create_capability, create_revocation, CapabilityManager,
 };
 pub use identity::{
-    estimate_hash_rate, estimate_mining_time_ms, mine_identity, mine_identity_sync, sign_message,
+    mine_identity, sign_message,
     sign_message_base58, verify_identity_pow, verify_signature, DEFAULT_DIFFICULTY, MAX_DIFFICULTY,
     MIN_DIFFICULTY,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use identity::{
+    estimate_hash_rate, estimate_mining_time_ms, mine_identity_sync,
 };
 pub use manager::{IdentityAgent, IdentityConfig, IdentityStats};
 pub use session::{

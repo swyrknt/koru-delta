@@ -106,7 +106,9 @@ mod types;
 // Foundation: canonical roots, actions, and shared engine
 pub mod actions;
 pub mod engine;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod network_agent;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod network_process;
 pub mod orchestrator;
 pub mod roots;

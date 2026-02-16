@@ -65,6 +65,7 @@ pub struct MinedIdentity {
 /// ```
 pub async fn mine_identity(user_data: IdentityUserData, difficulty: u8) -> MinedIdentity {
     let difficulty = difficulty.clamp(MIN_DIFFICULTY, MAX_DIFFICULTY);
+    #[cfg(not(target_arch = "wasm32"))]
     let start_time = std::time::Instant::now();
 
     // Generate Ed25519 keypair
@@ -95,7 +96,10 @@ pub async fn mine_identity(user_data: IdentityUserData, difficulty: u8) -> Mined
         }
     };
 
+    #[cfg(not(target_arch = "wasm32"))]
     let duration_ms = start_time.elapsed().as_millis() as u64;
+    #[cfg(target_arch = "wasm32")]
+    let duration_ms = 0; // Timing not available on WASM
 
     let identity = Identity {
         public_key,
@@ -115,6 +119,7 @@ pub async fn mine_identity(user_data: IdentityUserData, difficulty: u8) -> Mined
 }
 
 /// Synchronous version of identity mining for non-async contexts.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn mine_identity_sync(user_data: IdentityUserData, difficulty: u8) -> MinedIdentity {
     let difficulty = difficulty.clamp(MIN_DIFFICULTY, MAX_DIFFICULTY);
     let start_time = std::time::Instant::now();
@@ -227,6 +232,7 @@ pub fn verify_identity_pow(identity: &Identity) -> bool {
 
 /// Estimate mining time based on current hardware.
 /// Returns approximate hashes per second.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn estimate_hash_rate() -> u64 {
     let start = std::time::Instant::now();
     let test_iterations = 100_000;
@@ -243,6 +249,7 @@ pub fn estimate_hash_rate() -> u64 {
 
 /// Estimate time to mine at given difficulty.
 /// Returns approximate milliseconds.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn estimate_mining_time_ms(difficulty: u8) -> u64 {
     let hash_rate = estimate_hash_rate();
     let expected_hashes = 16u64.pow(difficulty as u32); // 16^n for hex

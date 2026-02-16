@@ -53,7 +53,7 @@ use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
 use tracing::{debug, error, info, trace, warn};
 #[cfg(target_arch = "wasm32")]
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 
 use crate::actions::StorageAction;
 use crate::auth::{IdentityAgent, IdentityConfig};
@@ -923,6 +923,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             return Ok(Vec::new());
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         let start = std::time::Instant::now();
         let count = items.len();
         trace!(count, "Starting batch put operation");
@@ -996,8 +997,12 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             });
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         let elapsed = start.elapsed();
+        #[cfg(not(target_arch = "wasm32"))]
         info!(count, ?elapsed, "Batch put operation completed");
+        #[cfg(target_arch = "wasm32")]
+        info!(count, "Batch put operation completed");
         Ok(versioned_values)
     }
 
@@ -2558,17 +2563,21 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let key = key.into();
         let full_key = FullKey::new(&namespace, &key);
 
-        // Check hot first
+        // Check hot first (but verify value is not null)
         {
             if let Some(hot) = self.hot.try_read() {
-                if hot.contains_key(&full_key) {
-                    return true;
+                if let Some(v) = hot.get(&full_key) {
+                    // Check if value is null (tombstone)
+                    return !v.value().is_null();
                 }
             }
         }
 
-        // Fallback to storage
-        self.storage.contains_key(&namespace, &key)
+        // Fallback to storage - check if key exists and value is not null
+        match self.storage.get(&namespace, &key) {
+            Ok(v) => !v.value().is_null(),
+            Err(_) => false,
+        }
     }
 
     /// Check if a key exists (alias for contains).

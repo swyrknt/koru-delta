@@ -29,13 +29,17 @@ use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
 
 use crate::actions::IdentityAction;
 use crate::auth::capability::{create_capability, create_revocation, CapabilityManager};
-use crate::auth::identity::{mine_identity_sync, verify_identity_pow};
+use crate::auth::identity::verify_identity_pow;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::auth::identity::mine_identity_sync;
 use crate::auth::session::{create_session_token, SessionAgent};
 use crate::auth::storage::AuthStorageAdapter;
 use crate::auth::types::{
-    AuthError, Capability, CapabilityRef, Identity, IdentityUserData, Permission, ResourcePattern,
+    AuthError, Capability, CapabilityRef, Identity, Permission, ResourcePattern,
     Revocation, Session,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::auth::types::IdentityUserData;
 use crate::auth::verification::{verify_challenge_response, ChallengeStore};
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::roots::RootType;
@@ -187,6 +191,7 @@ impl IdentityAgent {
     ///
     /// Mining synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔMineIdentity_Action`
     /// then the identity is synthesized into the identities distinction.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn create_identity(&self, user_data: IdentityUserData) -> Result<(Identity, Vec<u8>), AuthError> {
         // Synthesize mine identity action
         let pow_json = serde_json::json!({
