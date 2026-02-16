@@ -1,14 +1,18 @@
-//! WASM bindings for KoruDelta
+//! WASM bindings for KoruDelta - LCA Architecture v3.0.0
 //!
 //! This module provides JavaScript-friendly bindings for using KoruDelta
-//! in browser and edge compute environments.
+//! in browser and edge compute environments with the full LCA (Local Causal Agent)
+//! architecture.
 //!
 //! # Features
 //! - Full database operations (put, get, history, time-travel)
+//! - Semantic storage with auto-generated embeddings (put_similar, find_similar)
 //! - Namespace management
 //! - Vector embedding storage and similarity search
-//! - Query engine with filters and aggregation
-//! - Views for materialized queries
+//! - Query engine with filters, sort, and pagination
+//! - Materialized views
+//! - Identity management (create, verify)
+//! - Workspace abstraction
 //! - **IndexedDB persistence** for data survival across page reloads
 //!
 //! # Usage
@@ -23,12 +27,22 @@
 //! // Persistent database (data survives refresh)
 //! const db = await KoruDeltaWasm.newPersistent();
 //!
+//! // Basic operations
 //! await db.put('users', 'alice', { name: 'Alice', age: 30 });
 //! const user = await db.get('users', 'alice');
+//!
+//! // Semantic storage (auto-generated embeddings)
+//! await db.putSimilar('docs', 'doc1', 'Hello world', { type: 'greeting' });
+//! const results = await db.findSimilar('docs', 'hello query', 5);
+//!
+//! // Identity management
+//! const identity = await db.createIdentity('User Name', 'Bio');
+//! const valid = await db.verifyIdentity(identity.id);
 //! ```
 
 mod storage;
 
+use crate::auth::IdentityUserData;
 use crate::vector::{Vector, VectorSearchOptions};
 use crate::{DeltaError, HistoryEntry, KoruDelta, VersionedValue, ViewDefinition};
 use serde::Deserialize;
@@ -49,6 +63,21 @@ struct BatchItem {
     namespace: String,
     key: String,
     value: serde_json::Value,
+}
+
+/// Helper struct for namespace-scoped batch operations
+#[derive(Deserialize)]
+struct NsBatchItem {
+    key: String,
+    value: serde_json::Value,
+}
+
+/// Search result from semantic similarity search
+#[derive(Clone)]
+pub struct SearchResult {
+    pub namespace: String,
+    pub key: String,
+    pub score: f32,
 }
 
 #[wasm_bindgen]
@@ -219,7 +248,92 @@ impl KoruDeltaWasm {
         versioned_to_js(&versioned)
     }
 
-    /// Store multiple key-value pairs as a batch operation
+    /// Store content with automatic distinction-based embedding
+    ///
+    /// This is the simplified API for semantic storage. The embedding is
+    /// synthesized from the content structure using distinction calculus.
+    ///
+    /// # Arguments
+    /// * `namespace` - The namespace
+    /// * `key` - The key
+    /// * `content` - Content to store (will be embedded)
+    /// * `metadata` - Optional metadata (JavaScript object)
+    ///
+    /// # Example (JavaScript)
+    /// ```javascript
+    /// await db.putSimilar('docs', 'article1', 'Hello world', { author: 'Alice' });
+    /// ```
+    #[wasm_bindgen(js_name = putSimilar)]
+    pub async fn put_similar_js(
+        &self,
+        namespace: &str,
+        key: &str,
+        content: JsValue,
+        metadata: Option<JsValue>,
+    ) -> Result<(), JsValue> {
+        let json_content: JsonValue = serde_wasm_bindgen::from_value(content)
+            .map_err(|e| JsValue::from_str(&format!("Invalid content: {}", e)))?;
+
+        let meta = metadata
+            .and_then(|m| serde_wasm_bindgen::from_value(m).ok());
+
+        self.db
+            .put_similar(namespace, key, json_content, meta)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to store similar content: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Find similar content using semantic search
+    ///
+    /// Searches for content similar to the provided query using
+    /// distinction-based embeddings and cosine similarity.
+    ///
+    /// # Arguments
+    /// * `namespace` - Namespace to search (optional, pass null for all namespaces)
+    /// * `query` - Query content to search for
+    /// * `top_k` - Maximum number of results (default: 10)
+    ///
+    /// # Returns
+    /// Array of search results with namespace, key, and score
+    #[wasm_bindgen(js_name = findSimilar)]
+    pub async fn find_similar_js(
+        &self,
+        namespace: Option<String>,
+        query: JsValue,
+        top_k: Option<usize>,
+    ) -> Result<JsValue, JsValue> {
+        let json_query: JsonValue = serde_wasm_bindgen::from_value(query)
+            .map_err(|e| JsValue::from_str(&format!("Invalid query: {}", e)))?;
+
+        let results = self
+            .db
+            .find_similar(namespace.as_deref(), json_query, top_k.unwrap_or(10))
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to search: {}", e)))?;
+
+        let js_array = js_sys::Array::new();
+        for result in results {
+            let obj = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &obj,
+                &"namespace".into(),
+                &JsValue::from_str(&result.namespace),
+            )?;
+            js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&result.key))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"score".into(),
+                &JsValue::from_f64(result.score as f64),
+            )?;
+            js_array.push(&obj);
+        }
+
+        Ok(js_array.into())
+    }
+
+    /// Store multiple values as a batch operation
     ///
     /// This is significantly faster than calling put() multiple times, especially
     /// when persistence is enabled, as it performs a single fsync for all items.
@@ -274,6 +388,54 @@ impl KoruDeltaWasm {
         }
 
         Ok(array.into())
+    }
+
+    /// Store multiple values in a single namespace (simplified API)
+    ///
+    /// # Arguments
+    /// * `namespace` - The namespace to store all items in
+    /// * `items` - A JavaScript array of [key, value] pairs
+    ///
+    /// # Returns
+    /// Count of items stored
+    ///
+    /// # Example (JavaScript)
+    /// ```javascript
+    /// const items = [
+    ///     ['key1', { value: 1 }],
+    ///     ['key2', { value: 2 }]
+    /// ];
+    /// const count = await db.putBatchInNs('my_namespace', items);
+    /// ```
+    #[wasm_bindgen(js_name = putBatchInNs)]
+    pub async fn put_batch_in_ns_js(
+        &self,
+        namespace: &str,
+        items: JsValue,
+    ) -> Result<usize, JsValue> {
+        // Convert JavaScript array to Vec of namespace-scoped batch items
+        let batch_items: Vec<NsBatchItem> = serde_wasm_bindgen::from_value(items)
+            .map_err(|e| JsValue::from_str(&format!("Invalid batch items: {}", e)))?;
+
+        if batch_items.is_empty() {
+            return Ok(0);
+        }
+
+        // Convert to tuples for put_batch_in_ns
+        let tuples: Vec<(String, serde_json::Value)> = batch_items
+            .into_iter()
+            .map(|item| (item.key, item.value))
+            .collect();
+
+        let count = tuples.len();
+
+        // Perform the batch write
+        self.db
+            .put_batch_in_ns(namespace, tuples)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Batch write failed: {}", e)))?;
+
+        Ok(count)
     }
 
     /// Retrieve the current value for a key
@@ -349,9 +511,6 @@ impl KoruDeltaWasm {
                 DeltaError::KeyNotFound { .. } => {
                     JsValue::from_str(&format!("Key not found: {}/{}", namespace, key))
                 }
-                DeltaError::NoValueAtTimestamp { .. } => {
-                    JsValue::from_str("No value exists at that timestamp")
-                }
                 _ => JsValue::from_str(&format!("Failed to retrieve value: {}", e)),
             })?;
 
@@ -410,7 +569,7 @@ impl KoruDeltaWasm {
     /// Check if a key exists
     #[wasm_bindgen(js_name = contains)]
     pub async fn contains_js(&self, namespace: &str, key: &str) -> bool {
-        self.db.contains_key(namespace, key).await
+        self.db.contains(namespace, key).await
     }
 
     /// Get database statistics
@@ -680,6 +839,136 @@ impl KoruDeltaWasm {
         }
 
         Ok(js_array.into())
+    }
+
+    /// Create a new identity
+    ///
+    /// # Arguments
+    /// * `display_name` - Optional display name
+    /// * `bio` - Optional bio/description
+    ///
+    /// # Returns
+    /// Object with id, secretKey, and createdAt
+    #[wasm_bindgen(js_name = createIdentity)]
+    pub async fn create_identity_js(
+        &self,
+        display_name: Option<String>,
+        bio: Option<String>,
+    ) -> Result<JsValue, JsValue> {
+        let user_data = IdentityUserData {
+            display_name,
+            bio,
+            avatar_hash: None,
+            metadata: std::collections::HashMap::new(),
+        };
+
+        let (identity, secret_key) = self
+            .db
+            .auth()
+            .create_identity(user_data)
+            .map_err(|e| JsValue::from_str(&format!("Failed to create identity: {}", e)))?;
+
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"id".into(), &JsValue::from_str(&identity.public_key))?;
+        js_sys::Reflect::set(&obj, &"secretKey".into(), &JsValue::from_str(&hex::encode(&secret_key)))?;
+        js_sys::Reflect::set(
+            &obj,
+            &"createdAt".into(),
+            &JsValue::from_str(&identity.created_at.to_rfc3339()),
+        )?;
+
+        Ok(obj.into())
+    }
+
+    /// Verify an identity exists and is valid
+    ///
+    /// # Arguments
+    /// * `identity_id` - The identity public key
+    ///
+    /// # Returns
+    /// Boolean indicating if identity is valid
+    #[wasm_bindgen(js_name = verifyIdentity)]
+    pub async fn verify_identity_js(&self, identity_id: &str) -> Result<bool, JsValue> {
+        let valid = self
+            .db
+            .auth()
+            .verify_identity(identity_id)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to verify identity: {}", e)))?;
+
+        Ok(valid)
+    }
+
+    /// Get identity information
+    ///
+    /// # Arguments
+    /// * `identity_id` - The identity public key
+    ///
+    /// # Returns
+    /// Object with identity info, or null if not found
+    #[wasm_bindgen(js_name = getIdentity)]
+    pub async fn get_identity_js(&self, identity_id: &str) -> Result<JsValue, JsValue> {
+        match self.db.auth().get_identity(identity_id) {
+            Ok(Some(identity)) => {
+                let obj = js_sys::Object::new();
+                js_sys::Reflect::set(&obj, &"id".into(), &JsValue::from_str(&identity.public_key))?;
+                js_sys::Reflect::set(
+                    &obj,
+                    &"createdAt".into(),
+                    &JsValue::from_str(&identity.created_at.to_rfc3339()),
+                )?;
+                js_sys::Reflect::set(
+                    &obj,
+                    &"difficulty".into(),
+                    &JsValue::from_f64(identity.difficulty as f64),
+                )?;
+                Ok(obj.into())
+            }
+            Ok(None) => Ok(JsValue::NULL),
+            Err(e) => Err(JsValue::from_str(&format!(
+                "Failed to get identity: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Get a workspace handle
+    ///
+    /// # Arguments
+    /// * `name` - Workspace name
+    ///
+    /// # Returns
+    /// Workspace object for operations within that namespace
+    #[wasm_bindgen(js_name = workspace)]
+    pub fn workspace_js(&self, name: &str) -> WorkspaceHandle {
+        WorkspaceHandle {
+            namespace: name.to_string(),
+        }
+    }
+}
+
+/// Handle for workspace-scoped operations
+#[wasm_bindgen]
+pub struct WorkspaceHandle {
+    namespace: String,
+}
+
+#[wasm_bindgen]
+impl WorkspaceHandle {
+    /// Get the workspace namespace
+    #[wasm_bindgen(getter)]
+    pub fn namespace(&self) -> String {
+        self.namespace.clone()
+    }
+
+    /// Store a value in the workspace
+    ///
+    /// Note: This is a convenience method. In WASM bindings, you'll need to
+    /// use the main KoruDeltaWasm instance for actual storage operations.
+    /// This handle is primarily for API consistency with Python bindings.
+    #[wasm_bindgen(js_name = toString)]
+    pub fn to_string_js(&self) -> String {
+        format!("<Workspace '{}'>", self.namespace)
     }
 }
 
