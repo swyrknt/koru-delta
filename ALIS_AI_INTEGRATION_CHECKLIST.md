@@ -3,8 +3,18 @@
 **Purpose:** Track implementation of ALIS AI-specific features in KoruDelta  
 **Target:** Complete Delta Agent API for ALIS AI Memory Consciousness  
 **Architecture:** Local Causal Agent (LCA) pattern throughout  
-**Estimated Duration:** 3-5 days  
+**Estimated Duration:** 3-5 days (P0: 2-3 days)  
 **Status:** [ ] Not Started | [~] In Progress | [x] Complete
+
+**Revision History:**
+- v1.0 (2026-02-16): Initial checklist
+- v1.1 (2026-02-16): Updated with ALIS AI team feedback:
+  - Added `get_expired_predictions()` (P0 requirement)
+  - Simplified API: single-namespace focus for connectivity queries
+  - Added Duration support suggestion for TTL
+  - Removed `record_dream_synthesis()` - use standard storage with metadata tag
+  - Added algorithm optimization note for `find_similar_unconnected_pairs`
+  - Added Trimmed Priority section (P0/P1/P2)
 
 ---
 
@@ -59,6 +69,18 @@ This checklist tracks the implementation of graph-aware APIs needed for ALIS AI'
       ttl_ticks: u64,
   ) -> Result<(), DeltaError>
   ```
+- [ ] **ALIS Suggestion:** Consider also supporting Duration for flexibility:
+  ```rust
+  pub async fn put_similar_with_ttl_duration(
+      &self,
+      namespace: impl Into<String>,
+      key: impl Into<String>,
+      content: impl Into<serde_json::Value>,
+      metadata: Option<serde_json::Value>,
+      ttl: std::time::Duration,
+  ) -> Result<(), DeltaError>
+  // Internally: expires_at = now() + ttl
+  ```
 
 ### 1.2 TTL Cleanup
 
@@ -83,6 +105,12 @@ This checklist tracks the implementation of graph-aware APIs needed for ALIS AI'
 - [ ] Implement `list_expiring_soon()`:
   ```rust
   pub async fn list_expiring_soon(&self, within_ticks: u64) -> Vec<(String, String, u64)>
+  ```
+- [ ] **ALIS Requirement:** Implement `get_expired_predictions()` for surprise detection:
+  ```rust
+  pub async fn get_expired_predictions(&self) -> Result<Vec<(String, String)>, DeltaError>
+  // Returns (namespace, key) pairs that were predictions and expired
+  // Used in active inference for surprise detection
   ```
 
 ### 1.4 LCA Architecture Compliance
@@ -116,26 +144,27 @@ This checklist tracks the implementation of graph-aware APIs needed for ALIS AI'
 
 **File:** `src/core.rs`
 
+**ALIS Suggestion:** Single namespace focus (simpler API):
+
 - [ ] Implement `are_connected()`:
   ```rust
   pub async fn are_connected(
       &self,
-      namespace_a: &str,
+      namespace: &str,
       key_a: &str,
-      namespace_b: &str,
       key_b: &str,
   ) -> Result<bool, DeltaError>
   ```
 - [ ] Uses BFS through causal graph
 - [ ] Returns true if path exists between two distinctions
+- [ ] **Future:** Add `are_connected_cross(ns_a, key_a, ns_b, key_b)` if cross-namespace needed
 
 - [ ] Implement `get_connection_path()`:
   ```rust
   pub async fn get_connection_path(
       &self,
-      namespace_a: &str,
+      namespace: &str,
       key_a: &str,
-      namespace_b: &str,
       key_b: &str,
   ) -> Result<Option<Vec<String>>, DeltaError>
   ```
@@ -212,14 +241,31 @@ This checklist tracks the implementation of graph-aware APIs needed for ALIS AI'
   }
   ```
 
-### 3.2 Algorithm Steps
+### 3.2 Algorithm Steps (ALIS Optimized)
 
-1. Get all keys in namespace (or all namespaces)
-2. For each key, compute embedding
-3. Find similar keys (cosine similarity > threshold)
-4. Filter out pairs that are already connected (use `are_connected()`)
-5. Sort by similarity score
-6. Return top k pairs
+**⚠️ ALIS Optimization Note:** Use existing vector index to avoid O(n²):
+
+```rust
+pub async fn find_similar_unconnected_pairs(
+    &self,
+    namespace: Option<&str>,
+    k: usize,
+    similarity_threshold: f32,  // e.g., 0.7
+) -> Result<Vec<UnconnectedPair>, DeltaError> {
+    // 1. Use existing SNSW/HNSW index for similarity candidates
+    //    (avoids O(n²) pairwise comparison)
+    // 2. Only check connectivity for pairs above threshold
+    // 3. Target: < 100ms for 10k items
+}
+```
+
+Algorithm:
+1. Use existing vector index (HNSW) for fast similarity search
+2. For each distinction, find top-K similar candidates
+3. Filter out pairs that are already connected (use `are_connected()`)
+4. Sort by similarity score
+5. Return top k pairs
+6. **Target performance:** < 100ms for 10k items
 
 ### 3.3 Performance Optimization
 
@@ -285,14 +331,27 @@ This checklist tracks the implementation of graph-aware APIs needed for ALIS AI'
 
 **File:** `src/core.rs`
 
-- [ ] Implement `record_dream_synthesis()`:
-  ```rust
-  pub async fn record_dream_synthesis(
-      &self,
-      combination: &RandomCombination,
-  ) -> Result<(), DeltaError>
-  ```
-- [ ] Stores in special `dream_synthesis` namespace
+**✅ ALIS Suggestion:** Use standard storage with metadata tag (simpler):
+
+Instead of a separate `record_dream_synthesis()` API, ALIS will use:
+
+```rust
+// Use existing put_similar() with dream tag
+db.put_similar(
+    "alis_distinctions",
+    &dream_synthesis_key,
+    synthesized_content,
+    Some(json!({
+        "source": "dream_synthesis",
+        "start": combination.start_key,
+        "end": combination.end_key,
+        "novelty_score": combination.novelty_score,
+        "timestamp": Utc::now().to_rfc3339(),
+    })),
+).await?;
+```
+
+**No separate API needed** - just use standard storage with metadata tag.
 
 ### 4.4 LCA Architecture Compliance
 
@@ -498,6 +557,28 @@ pub enum SleepAction {
 
 ---
 
+## Trimmed Priority (ALIS Requirements)
+
+**If time-constrained, implement in this priority order:**
+
+| Priority | Feature | Reason | Phase |
+|----------|---------|--------|-------|
+| **P0** | `put_similar_with_ttl()` | Active inference predictions need expiration | 1.1 |
+| **P0** | `get_highly_connected()` | Expression agent candidate selection | 2.3 |
+| **P0** | `find_similar_unconnected_pairs()` | Consolidation agent proactive synthesis | 3 |
+| **P0** | `get_expired_predictions()` | Surprise detection in active inference | 1.3 |
+| **P1** | `are_connected()` | Tension detection (surprise calculation) | 2.2 |
+| **P1** | `cleanup_expired()` | Memory management | 1.2 |
+| **P2** | `random_walk_combinations()` | Dream phase (creative synthesis) | 4 |
+| **P2** | Python/WASM bindings | External interfaces | 5-6 |
+
+**Minimal ALIS Implementation (P0 only): ~2-3 days**
+- Can start with P0 features for basic ALIS functionality
+- Add P1 features for tension/surprise detection
+- Add P2 features for creative dream phase
+
+---
+
 ## Time Estimate
 
 | Phase | Duration | Complexity |
@@ -515,22 +596,24 @@ pub enum SleepAction {
 
 ## Success Criteria
 
-- [ ] All 4 missing APIs implemented
-- [ ] All bindings (Python, WASM/JS) updated
-- [ ] ALIS AI example demonstrates all features
+- [ ] All P0 APIs implemented (minimum ALIS requirements)
+- [ ] All P1 APIs implemented (tension/surprise detection)
+- [ ] All P2 APIs implemented (dream phase)
+- [ ] All bindings (Python, WASM/JS) updated for P0-P1 features
+- [ ] ALIS AI example demonstrates all P0 features
 - [ ] Zero compiler warnings
 - [ ] All existing tests pass (608)
 - [ ] New tests added for all features
 - [ ] Documentation complete
-- [ ] ALIS AI team confirms requirements met
+- [ ] **ALIS AI team confirms requirements met** ✅
 
 ---
 
 ## Next Steps
 
-1. **Review this checklist** with ALIS AI team
-2. **Confirm priority** (which features are must-have vs nice-to-have)
-3. **Begin implementation** starting with Phase 1 (TTL)
+1. ~~**Review this checklist** with ALIS AI team~~ ✅ Completed
+2. **Confirm start** - ALIS has confirmed P0/P1/P2 priority
+3. **Begin implementation** starting with Phase 1 P0 features
 4. **Daily check-ins** on progress
 
 ---
