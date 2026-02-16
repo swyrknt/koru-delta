@@ -1148,6 +1148,95 @@ console.log(`Persistent: ${persistentDb.isPersistent()}`);
 
 ---
 
+## Phase 8.5: ALIS AI Integration Example ✅ COMPLETE
+
+**Status:** ALIS AI integration example created and validated.
+
+**File:** `examples/alis_ai_integration.rs`
+
+This example demonstrates how ALIS AI uses KoruDelta as the Delta Agent
+(Memory Consciousness) in the Local Causal Agent architecture.
+
+### Architecture Demonstrated
+
+```
+ALIS AI Components:
+┌─────────────────────────────────────────────────────────────────┐
+│                        THE KORU FIELD                           │
+│                  (Shared DistinctionEngine)                     │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │   PULSE      │  │ PERCEPTION   │  │       DELTA          │  │
+│  │   AGENT      │  │    AGENT     │  │      AGENT           │  │
+│  │              │  │              │  │   (KoruDelta)        │  │
+│  │ - Timing     │  │ - Input      │  │                      │  │
+│  │ - Phases     │  │ - Transform  │  │ - store()            │  │
+│  │              │  │ - Bind       │  │ - query_similar()    │  │
+│  └──────────────┘  └──────────────┘  │ - consolidate()      │  │
+│         │                 │          │ - dream()            │  │
+│         └─────────────────┴──────────┴──────────────────────┘  │
+│                       │                                         │
+│              ┌────────┴────────┐                               │
+│              │  EXPRESSION     │                               │
+│              │    AGENT        │                               │
+│              └─────────────────┘                               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Validated Functions
+
+**Identity Management:**
+- [x] `create_identity()` - Agent identity creation with PoW
+- [x] `verify_identity()` - Identity validation
+- [x] Agent registration storage
+
+**Perception Storage:**
+- [x] `put_similar()` - Semantic storage with auto-embeddings
+- [x] Metadata storage
+- [x] Content-addressed distinctions
+
+**Consolidation (Background Synthesis):**
+- [x] `find_similar()` - Semantic similarity search
+- [x] Cross-reference synthesis events
+- [x] Synthesis event tracking
+
+**Expression Query:**
+- [x] `find_similar()` - Semantic search across all namespaces
+- [x] Connectivity analysis (highly-connected distinctions)
+
+**Dream/Creativity:**
+- [x] Random access to stored distinctions
+- [x] Creative synthesis events
+
+**Time Travel:**
+- [x] `get_at()` - Historical state queries
+- [x] Version history tracking
+
+**Statistics & Introspection:**
+- [x] `stats()` - Database metrics
+- [x] `list_namespaces()` - Namespace enumeration
+- [x] `list_keys()` - Key enumeration
+
+### Stages Demonstrated
+
+1. **Agent Identity Registration** - Create and validate agent identities
+2. **Perception Phase** - Input → Distinctions via `put_similar()`
+3. **Consolidation Phase** - Background synthesis via `find_similar()`
+4. **Expression Phase** - Query for highly-connected distinctions
+5. **Dream Phase** - Creative synthesis with random combinations
+6. **Memory Query** - Time travel with `get_at()`
+7. **Statistics** - Introspection of the Delta Agent state
+
+### Run the Example
+
+```bash
+cargo run --example alis_ai_integration
+```
+
+**Deliverable:** ✅ ALIS AI integration validated - all Delta Agent functions working
+
+---
+
 ## Phase 9: Release & Republishing
 
 ### 9.1 Version Bump
