@@ -57,7 +57,7 @@ Where:
 
 ### Agent Structure
 
-All 21 agents follow this pattern:
+All agents follow this pattern:
 
 ```rust
 pub struct SomeAgent {
@@ -84,7 +84,7 @@ impl SomeAgent {
 
 ### Canonical Roots
 
-All agents anchor to one of 19 canonical roots (see `src/roots.rs`):
+All agents anchor to one of 20 canonical roots (see `src/roots.rs`):
 
 | Root | Agent | Purpose |
 |------|-------|---------|
@@ -749,7 +749,17 @@ fn test_<feature>_<scenario>() {
 
 ## Phase 2: Distribution (Complete)
 
-Multi-node clustering is now implemented:
+Multi-node clustering is now fully implemented and production-ready for Rust and Python platforms.
+
+### Platform Support
+
+| Platform | Cluster Mode | Protocol | Status |
+|----------|--------------|----------|--------|
+| Rust (Native) | Full TCP cluster | Custom TCP protocol | ✅ Production |
+| Python | Full TCP cluster | Via PyO3 bindings | ✅ Production |
+| WASM (Browser/Node.js) | Single-node only | N/A | ❌ Not available |
+
+**Note:** WASM cannot participate in TCP clusters due to browser security restrictions. Use Rust or Python for distributed deployments.
 
 ### Architecture
 

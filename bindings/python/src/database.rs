@@ -18,6 +18,7 @@ use crate::to_python_error;
 use crate::types::{json_to_pyobject, pyobject_to_json};
 use koru_delta::vector::{Vector, VectorSearchOptions};
 use koru_delta::KoruDelta;
+use koru_delta::cluster::{ClusterConfig, ClusterNode};
 
 /// Python wrapper for KoruDelta database
 #[pyclass(name = "Database")]
@@ -999,6 +1000,16 @@ impl PyDatabase {
             })
         })
     }
+
+    /// Create a database with persistence at the given path
+    #[staticmethod]
+    fn create_with_path<'a>(py: Python<'a>, path: &'a str) -> PyResult<&'a PyAny> {
+        let path = std::path::PathBuf::from(path);
+        future_into_py(py, async move {
+            let db = KoruDelta::start_with_path(&path).await.map_err(to_python_error)?;
+            Ok(PyDatabase { db: Arc::new(db) })
+        })
+    }
 }
 
 /// Identity management for Python
@@ -1154,3 +1165,114 @@ impl PyWorkspace {
 }
 
 
+
+// ============================================================================
+// Cluster Support for Python Bindings
+// ============================================================================
+
+/// Python wrapper for Cluster Configuration
+#[pyclass(name = "ClusterConfig")]
+pub struct PyClusterConfig {
+    config: ClusterConfig,
+}
+
+#[pymethods]
+impl PyClusterConfig {
+    /// Create a new cluster configuration
+    #[new]
+    #[pyo3(signature = (bind_addr = None, join_addr = None))]
+    fn new(bind_addr: Option<String>, join_addr: Option<String>) -> PyResult<Self> {
+        let mut config = ClusterConfig::new();
+        
+        if let Some(addr) = bind_addr {
+            let socket_addr: std::net::SocketAddr = addr.parse()
+                .map_err(|e| PyValueError::new_err(format!("Invalid bind address: {}", e)))?;
+            config = config.bind_addr(socket_addr);
+        }
+        
+        if let Some(addr) = join_addr {
+            let socket_addr: std::net::SocketAddr = addr.parse()
+                .map_err(|e| PyValueError::new_err(format!("Invalid join address: {}", e)))?;
+            config = config.join(socket_addr);
+        }
+        
+        Ok(PyClusterConfig { config })
+    }
+}
+
+/// Python wrapper for Cluster Node
+#[pyclass(name = "ClusterNode")]
+pub struct PyClusterNode {
+    node: Arc<ClusterNode>,
+}
+
+#[pymethods]
+impl PyClusterNode {
+    /// Create and start a new cluster node with a new database
+    /// 
+    /// This is the recommended way to create a clustered database.
+    /// Returns a tuple of (ClusterNode, Database).
+    #[staticmethod]
+    #[pyo3(signature = (path, config))]
+    fn start_with_db<'a>(py: Python<'a>, path: &'a str, config: &'a PyClusterConfig) -> PyResult<&'a PyAny> {
+        let path = std::path::PathBuf::from(path);
+        let cluster_config = config.config.clone();
+        
+        future_into_py(py, async move {
+            // Create database first
+            let db = KoruDelta::start_with_path(&path).await.map_err(to_python_error)?;
+            
+            // Create cluster node attached to database
+            let node = Arc::new(ClusterNode::new(
+                db.storage().clone(),
+                db.engine().clone(),
+                cluster_config,
+            ));
+            
+            // Start the node
+            node.start().await.map_err(to_python_error)?;
+            
+            // Attach cluster to database
+            let db_with_cluster = db.with_cluster(node.clone());
+            
+            Python::with_gil(|py| {
+                let py_node = PyClusterNode { node };
+                let py_db = PyDatabase { db: Arc::new(db_with_cluster) };
+                let tuple = PyTuple::new(py, &[py_node.into_py(py), py_db.into_py(py)]);
+                Ok(tuple.to_object(py))
+            })
+        })
+    }
+    
+    /// Get the node ID
+    fn node_id(&self) -> String {
+        self.node.node_id().to_string()
+    }
+    
+    /// Get the bind address
+    fn bind_addr(&self) -> String {
+        self.node.bind_addr().to_string()
+    }
+    
+    /// Get list of peers
+    fn peers(&self) -> Vec<String> {
+        self.node.peers()
+            .into_iter()
+            .map(|p| format!("{}@{}", p.node_id, p.address))
+            .collect()
+    }
+    
+    /// Stop the cluster node
+    fn stop<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let node = self.node.clone();
+        future_into_py(py, async move {
+            node.stop().await.map_err(to_python_error)?;
+            Ok(())
+        })
+    }
+    
+    /// String representation
+    fn __repr__(&self) -> String {
+        format!("<ClusterNode {} @ {}>", self.node_id(), self.bind_addr())
+    }
+}

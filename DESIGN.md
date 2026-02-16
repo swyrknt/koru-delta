@@ -253,7 +253,7 @@ This preserves the simple `&self` API while following LCA internally.
 
 ### The Unified Field
 
-All 21 agents share one `DistinctionEngine` (the "field"):
+All agents share one `DistinctionEngine` (the "field"):
 
 ```
 ┌─────────────────────────────────────┐

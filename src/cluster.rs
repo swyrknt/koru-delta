@@ -418,11 +418,14 @@ impl ClusterNode {
     async fn join_cluster(&self, peer_addr: SocketAddr) -> DeltaResult<()> {
         let mut conn = Connection::connect(peer_addr).await?;
 
+        // Get actual bound address (not config which may have port 0)
+        let actual_addr = self.actual_addr().await.unwrap_or(self.config.bind_addr);
+
         // Send join request.
         let response = conn
             .request(&Message::Join {
                 node_id: self.node_id.clone(),
-                address: self.config.bind_addr,
+                address: actual_addr,
             })
             .await?;
 
@@ -520,7 +523,7 @@ impl ClusterNode {
             value: value.clone(),
         };
         let version_id = value.write_id.clone();
-
+        
         for peer in self.state.get_peers() {
             let _node_id = self.node_id.clone();
             let message = message.clone();
@@ -558,11 +561,7 @@ impl ClusterNode {
                                         && ack_key == key
                                         && ack_version == version_id
                                     {
-                                        tracing::trace!(
-                                            "Received ACK from {} for {}",
-                                            peer.node_id,
-                                            version_id
-                                        );
+                                        tracing::trace!("Received ACK from {} for {}", peer.node_id, version_id);
                                         return; // Success!
                                     }
                                 }

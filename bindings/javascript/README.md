@@ -308,9 +308,24 @@ const history: HistoryEntry[] = await db.history('users', 'alice');
 
 ## Limitations
 
-- **In-memory only**: Data persists only for the session (no filesystem in browser)
-- **Single-user**: No built-in multi-user synchronization (use the Rust version for that)
+- **Single-node**: Cluster/distributed mode is not available in WASM (use Rust or Python for multi-node)
+- **No native modules**: Lifecycle and Subscription agents require native runtime (not available in WASM)
 - **WASM overhead**: First load requires downloading the WASM binary
+- **IndexedDB limitations**: Subject to browser storage quotas and same-origin policies
+
+## Platform Support Matrix
+
+| Feature | WASM (Browser/Node.js) | Rust Native | Python |
+|---------|------------------------|-------------|--------|
+| Core Operations | ✅ Full | ✅ Full | ✅ Full |
+| Time Travel | ✅ Full | ✅ Full | ✅ Full |
+| Vector Search | ✅ Full | ✅ Full | ✅ Full |
+| Views | ✅ Full | ✅ Full | ✅ Full |
+| Identity/Auth | ✅ Full | ✅ Full | ✅ Full |
+| Workspaces | ✅ Full | ✅ Full | ✅ Full |
+| Cluster/Distributed | ❌ N/A | ✅ Full | ✅ Full |
+| Subscriptions | ❌ N/A | ✅ Full | ✅ Full |
+| Lifecycle Agent | ❌ N/A | ✅ Full | ✅ Full |
 
 ## Documentation
 

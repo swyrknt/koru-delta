@@ -1,5 +1,5 @@
 /// Cluster/Distributed Mode E2E Test
-/// Tests multi-node setup with gossip protocol
+/// Tests multi-node setup with gossip protocol and live write replication
 use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -7,8 +7,7 @@ use std::time::Duration;
 async fn main() -> anyhow::Result<()> {
     use colored::*;
     use koru_delta::cluster::{ClusterConfig, ClusterNode};
-    use koru_delta::storage::CausalStorage;
-    use koru_lambda_core::DistinctionEngine;
+    use koru_delta::{KoruDelta, CoreConfig};
     use serde_json::json;
     use std::sync::Arc;
 
@@ -32,22 +31,27 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // =================================================================
-    // PHASE 1: Create Two Cluster Nodes Directly
+    // PHASE 1: Create Two Database Instances with Cluster
     // =================================================================
-    println!("\n{}", "📦 PHASE 1: Creating Cluster Nodes".bold().yellow());
+    println!("\n{}", "📦 PHASE 1: Creating Cluster Nodes with Full DB".bold().yellow());
 
-    // Create storage and engine for node 1
-    let engine1 = Arc::new(DistinctionEngine::new());
-    let storage1 = Arc::new(CausalStorage::new(engine1.clone()));
+    let db_path1 = tempfile::tempdir()?.path().to_path_buf();
+    let db_path2 = tempfile::tempdir()?.path().to_path_buf();
+
+    // Create database 1
+    let db1 = KoruDelta::start_with_path(&db_path1).await?;
 
     let addr1 = std::net::SocketAddr::new(
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
         0, // Let OS assign port
     );
-    let config1 = ClusterConfig::new().bind_addr(addr1);
-    let node1 = ClusterNode::new(storage1.clone(), engine1, config1);
-
-    println!("   ✓ Node 1 created");
+    let cluster_config1 = ClusterConfig::new().bind_addr(addr1);
+    let node1 = Arc::new(ClusterNode::new(
+        db1.storage().clone(),
+        db1.engine().clone(),
+        cluster_config1,
+    ));
+    let db1 = db1.with_cluster(node1.clone());
 
     // Start node 1
     node1.start().await?;
@@ -55,16 +59,20 @@ async fn main() -> anyhow::Result<()> {
     let actual_addr1 = node1.bind_addr();
     println!("   ✓ Node 1 started on {}", actual_addr1);
 
-    // Create storage and engine for node 2
-    let engine2 = Arc::new(DistinctionEngine::new());
-    let storage2 = Arc::new(CausalStorage::new(engine2.clone()));
+    // Create database 2
+    let db2 = KoruDelta::start_with_path(&db_path2).await?;
 
     let addr2 = std::net::SocketAddr::new(
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
         0,
     );
-    let config2 = ClusterConfig::new().bind_addr(addr2).join(actual_addr1);
-    let node2 = ClusterNode::new(storage2.clone(), engine2, config2);
+    let cluster_config2 = ClusterConfig::new().bind_addr(addr2).join(actual_addr1);
+    let node2 = Arc::new(ClusterNode::new(
+        db2.storage().clone(),
+        db2.engine().clone(),
+        cluster_config2,
+    ));
+    let db2 = db2.with_cluster(node2.clone());
 
     println!("   ✓ Node 2 created (will join Node 1)");
 
@@ -73,14 +81,14 @@ async fn main() -> anyhow::Result<()> {
     // =================================================================
     println!("\n{}", "📝 PHASE 2: Pre-Join Data Storage".bold().yellow());
 
-    storage1.put(
+    db1.put(
         "sync-test",
         "pre-join-key",
         json!({
             "message": "Data stored before node 2 joined",
             "timestamp": chrono::Utc::now().to_rfc3339()
         }),
-    )?;
+    ).await?;
     println!("   ✓ Data stored on Node 1 before Node 2 joins");
 
     // =================================================================
@@ -118,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Check if pre-join data was synced to node 2
-    match storage2.get("sync-test", "pre-join-key") {
+    match db2.get("sync-test", "pre-join-key").await {
         Ok(value) => {
             let msg = value
                 .value()
@@ -132,22 +140,23 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Store new data on node 1 after join
-    storage1.put(
+    // Store new data on node 1 after join - THIS SHOULD BROADCAST
+    db1.put(
         "sync-test",
         "post-join-key",
         json!({
             "message": "Data stored after node 2 joined",
             "timestamp": chrono::Utc::now().to_rfc3339()
         }),
-    )?;
-    println!("   ✓ Post-join data stored on Node 1");
+    ).await?;
+    println!("   ✓ Post-join data stored on Node 1 (should broadcast)");
 
-    // Wait for sync
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    // Wait for broadcast replication
+    println!("   Waiting for broadcast replication (3 seconds)...");
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     // Check if post-join data reached node 2
-    match storage2.get("sync-test", "post-join-key") {
+    match db2.get("sync-test", "post-join-key").await {
         Ok(value) => {
             let msg = value
                 .value()
@@ -157,7 +166,8 @@ async fn main() -> anyhow::Result<()> {
             println!("   ✓ Post-join data replicated to Node 2: {}", msg.green());
         }
         Err(_) => {
-            println!("   ⚠ Post-join data not yet synced");
+            println!("   ✗ Post-join data NOT synced - broadcast may have failed");
+            return Err(anyhow::anyhow!("Live replication test failed"));
         }
     }
 
@@ -167,7 +177,7 @@ async fn main() -> anyhow::Result<()> {
     println!("\n{}", "⚔️  PHASE 5: Concurrent Write Test".bold().yellow());
 
     // Both nodes write to same key
-    let write1 = storage1.put(
+    let write1 = db1.put(
         "conflict-test",
         "concurrent",
         json!({
@@ -177,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
         }),
     );
 
-    let write2 = storage2.put(
+    let write2 = db2.put(
         "conflict-test",
         "concurrent",
         json!({
@@ -187,17 +197,17 @@ async fn main() -> anyhow::Result<()> {
         }),
     );
 
-    let (r1, r2) = tokio::join!(async { write1 }, async { write2 });
+    let (r1, r2) = tokio::join!(write1, write2);
     r1?;
     r2?;
     println!("   ✓ Both nodes wrote concurrently to same key");
 
     // Wait for sync
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     // Both should see the same value (causal ordering)
-    let val1 = storage1.get("conflict-test", "concurrent")?;
-    let val2 = storage2.get("conflict-test", "concurrent")?;
+    let val1 = db1.get("conflict-test", "concurrent").await?;
+    let val2 = db2.get("conflict-test", "concurrent").await?;
 
     let node1_sees = val1
         .value()
@@ -251,20 +261,43 @@ async fn main() -> anyhow::Result<()> {
     node2.stop().await?;
     println!("   ✓ Node 2 stopped gracefully");
 
-    println!("\n{}", "✅ CLUSTER E2E TEST PASSED!".bold().green());
-    println!("{}", "   Validated:".green());
+    // =================================================================
+    // TEST PASSED
+    // =================================================================
+    println!(
+        "\n{}",
+        "╔═══════════════════════════════════════════════════════════════╗"
+            .bold()
+            .green()
+    );
+    println!(
+        "{}",
+        "║  ✅ CLUSTER E2E TEST PASSED!                                  ║"
+            .bold()
+            .green()
+    );
+    println!(
+        "{}",
+        "╚═══════════════════════════════════════════════════════════════╝"
+            .bold()
+            .green()
+    );
+    println!();
+    println!("   Validated:");
     println!("   • Multi-node cluster formation via gossip");
     println!("   • Peer discovery and connection");
-    println!("   • Cross-node data replication");
+    println!("   • Cross-node data replication (initial sync)");
+    println!("   • Live write broadcast replication");
     println!("   • Concurrent write handling");
     println!("   • Causal consistency");
     println!("   • Graceful node shutdown");
     println!("   • Cluster status reporting");
+    println!();
 
     Ok(())
 }
 
 #[cfg(target_arch = "wasm32")]
 fn main() {
-    println!("This example requires native features.");
+    println!("Cluster test not supported on WASM");
 }

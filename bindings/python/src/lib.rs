@@ -10,7 +10,7 @@ use pyo3::create_exception;
 mod database;
 mod types;
 
-use database::{PyDatabase, PyIdentityManager, PyWorkspace};
+use database::{PyDatabase, PyIdentityManager, PyWorkspace, PyClusterConfig, PyClusterNode};
 
 /// Convert Rust DeltaError to appropriate Python exception
 fn to_python_error(e: koru_delta::DeltaError) -> PyErr {
@@ -59,6 +59,10 @@ fn _internal(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyDatabase>()?;
     m.add_class::<PyIdentityManager>()?;
     m.add_class::<PyWorkspace>()?;
+    
+    // Cluster classes
+    m.add_class::<PyClusterConfig>()?;
+    m.add_class::<PyClusterNode>()?;
     
     // Exceptions
     m.add("KoruDeltaError", _py.get_type::<KoruDeltaError>())?;

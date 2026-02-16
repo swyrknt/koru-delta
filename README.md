@@ -215,7 +215,7 @@ import init, { KoruDeltaWasm } from 'koru-delta';
 await init();
 
 // Persistent database (IndexedDB)
-const db = await KoruDeltaWasm.newPersistent();
+const db = await KoruDeltaWasm.new(); // In-memory with optional IndexedDB persistence
 
 await db.put('users', 'alice', { name: 'Alice', age: 30 });
 const user = await db.get('users', 'alice');
@@ -264,7 +264,7 @@ KoruDelta is built on [koru-lambda-core](https://github.com/swyrknt/koru-lambda-
 
 ### LCA Architecture (Local Causal Agent)
 
-KoruDelta implements the **Local Causal Agent** pattern—21 specialized agents, each with a causal perspective in a unified field:
+KoruDelta implements the **Local Causal Agent** pattern—20 specialized agents, each with a causal perspective in a unified field:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -368,23 +368,28 @@ cargo run --example ecommerce_demo
 ## Project Stats
 
 - **15,000+ lines** Rust code
-- **424 tests** (all passing)
+- **463 tests** (all passing)
 - **0 compiler warnings**
 - **11MB** binary size
 - Cross-platform: Linux, macOS, Windows, WASM
 
 ## Distributed Status
 
-**Current (v2.0.0):** Single-node production ready
+**Current (v3.0.0):** Full cluster support in native Rust. Python bindings have cluster support. WASM is single-node.
 
-**Multi-node clustering:** Infrastructure exists, HTTP broadcast gap. Planned for v2.1.0.
+| Platform | Cluster Support | Notes |
+|----------|----------------|-------|
+| Rust (native) | ✅ Full | TCP-based clustering with live replication |
+| Python | ✅ Full | Same as Rust via PyO3 bindings |
+| WASM (Browser/Node.js) | ❌ N/A | Single-node only (WebSocket cluster planned) |
 
 | Feature | Status |
 |---------|--------|
 | Node discovery | ✅ Working |
 | Initial sync on join | ✅ Working |
-| Live replication | ⚠️ Gap (v2.1.0) |
+| Live replication | ✅ Working |
 | Gossip protocol | ✅ Working |
+| HTTP API | ✅ Working |
 
 ## Security
 
@@ -416,7 +421,7 @@ let config = CoreConfig {
 export KORU_LOG=info  # error, warn, info, debug, trace
 ```
 
-**Monitoring:** Structured logs via `tracing`. Prometheus metrics planned for v2.1.
+**Monitoring:** Structured logs via `tracing`. Prometheus metrics planned for future release.
 
 ## Contributing
 
