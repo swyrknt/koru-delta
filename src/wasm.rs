@@ -1083,21 +1083,17 @@ impl KoruDeltaWasm {
     /// Returns an array of objects with namespace, key, and secondsRemaining.
     #[wasm_bindgen(js_name = listExpiringSoon)]
     pub async fn list_expiring_soon_js(&self, within_seconds: u64) -> Result<JsValue, JsValue> {
-        let expiring = self
-            .db
-            .list_expiring_soon(within_seconds)
-            .await
-            .map_err(|e| JsValue::from_str(&format!("Failed to list expiring: {}", e)))?;
+        let expiring = self.db.list_expiring_soon(within_seconds).await;
         
         let js_array = js_sys::Array::new();
-        for (ns, key, remaining) in expiring {
+        for item in expiring {
             let obj = js_sys::Object::new();
-            js_sys::Reflect::set(&obj, &"namespace".into(), &JsValue::from_str(&ns))?;
-            js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&key))?;
+            js_sys::Reflect::set(&obj, &"namespace".into(), &JsValue::from_str(&item.0))?;
+            js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&item.1))?;
             js_sys::Reflect::set(
                 &obj,
                 &"secondsRemaining".into(),
-                &JsValue::from_f64(remaining as f64),
+                &JsValue::from_f64(item.2 as f64),
             )?;
             js_array.push(&obj);
         }
