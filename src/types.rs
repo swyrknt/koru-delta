@@ -387,6 +387,130 @@ pub struct ConnectedDistinction {
     pub children: Vec<String>,
 }
 
+/// A pair of similar but causally unconnected distinctions.
+///
+/// Returned by `find_similar_unconnected_pairs()` for the Consolidation
+/// agent to identify potential synthesis opportunities. These are
+/// distinctions that are semantically similar (via vector similarity)
+/// but have no causal connection (no path in the causal graph).
+///
+/// # Fields
+///
+/// * `namespace_a` - First distinction's namespace
+/// * `key_a` - First distinction's key
+/// * `namespace_b` - Second distinction's namespace
+/// * `key_b` - Second distinction's key
+/// * `similarity_score` - Cosine similarity score (0.0 to 1.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnconnectedPair {
+    /// First distinction's namespace
+    pub namespace_a: String,
+    /// First distinction's key
+    pub key_a: String,
+    /// Second distinction's namespace
+    pub namespace_b: String,
+    /// Second distinction's key
+    pub key_b: String,
+    /// Cosine similarity score (0.0 to 1.0)
+    pub similarity_score: f32,
+}
+
+impl UnconnectedPair {
+    /// Create a new unconnected pair.
+    pub fn new(
+        namespace_a: impl Into<String>,
+        key_a: impl Into<String>,
+        namespace_b: impl Into<String>,
+        key_b: impl Into<String>,
+        similarity_score: f32,
+    ) -> Self {
+        Self {
+            namespace_a: namespace_a.into(),
+            key_a: key_a.into(),
+            namespace_b: namespace_b.into(),
+            key_b: key_b.into(),
+            similarity_score,
+        }
+    }
+
+    /// Get the canonical ID for this pair (for content addressing).
+    /// Format: "namespace_a:key_a::namespace_b:key_b"
+    pub fn pair_id(&self) -> String {
+        format!("{}:{}::{}:{}", self.namespace_a, self.key_a, self.namespace_b, self.key_b)
+    }
+
+    /// Get the reverse pair ID (for deduplication).
+    pub fn reverse_pair_id(&self) -> String {
+        format!("{}:{}::{}:{}", self.namespace_b, self.key_b, self.namespace_a, self.key_a)
+    }
+}
+
+/// A random combination discovered through dream-phase random walks.
+///
+/// Used by the Sleep agent during REM phase to explore the causal graph
+/// and discover novel distinction combinations. Each combination
+/// represents a path from a starting distinction to an ending distinction
+/// via causal connections.
+///
+/// # Fields
+///
+/// * `start_namespace` - Starting distinction's namespace
+/// * `start_key` - Starting distinction's key
+/// * `end_namespace` - Ending distinction's namespace
+/// * `end_key` - Ending distinction's key
+/// * `path` - Intermediate distinction IDs in the walk
+/// * `novelty_score` - Distance metric indicating how novel this combination is
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RandomCombination {
+    /// Starting distinction's namespace
+    pub start_namespace: String,
+    /// Starting distinction's key
+    pub start_key: String,
+    /// Ending distinction's namespace
+    pub end_namespace: String,
+    /// Ending distinction's key
+    pub end_key: String,
+    /// Intermediate distinction IDs in the walk
+    pub path: Vec<String>,
+    /// Novelty score - higher means more distant/interesting (0.0 to 1.0)
+    pub novelty_score: f32,
+}
+
+impl RandomCombination {
+    /// Create a new random combination.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        start_namespace: impl Into<String>,
+        start_key: impl Into<String>,
+        end_namespace: impl Into<String>,
+        end_key: impl Into<String>,
+        path: Vec<String>,
+        novelty_score: f32,
+    ) -> Self {
+        Self {
+            start_namespace: start_namespace.into(),
+            start_key: start_key.into(),
+            end_namespace: end_namespace.into(),
+            end_key: end_key.into(),
+            path,
+            novelty_score,
+        }
+    }
+
+    /// Get the full path including start and end.
+    pub fn full_path(&self) -> Vec<String> {
+        let mut full = vec![format!("{}:{}", self.start_namespace, self.start_key)];
+        full.extend(self.path.clone());
+        full.push(format!("{}:{}", self.end_namespace, self.end_key));
+        full
+    }
+
+    /// Get the path length (number of steps).
+    pub fn path_length(&self) -> usize {
+        self.path.len().saturating_add(1) // +1 for start->first or last->end
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

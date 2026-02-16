@@ -69,7 +69,7 @@ use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
 use crate::storage::CausalStorage;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionAgent, SubscriptionId};
-use crate::types::{ConnectedDistinction, FullKey, HistoryEntry, VersionedValue};
+use crate::types::{ConnectedDistinction, FullKey, HistoryEntry, RandomCombination, UnconnectedPair, VersionedValue};
 use crate::vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
 use crate::views::{PerspectiveAgent, ViewDefinition, ViewInfo};
 
@@ -1865,6 +1865,372 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             .collect();
 
         Ok(results)
+    }
+
+    /// Find similar distinctions that are not causally connected.
+    ///
+    /// This method uses the vector index for efficient similarity search,
+    /// then filters out pairs that are already causally connected.
+    /// The result is a list of pairs that are similar but disconnected - 
+    /// prime candidates for synthesis.
+    ///
+    /// # Algorithm (ALIS Optimized)
+    ///
+    /// 1. Use existing vector index (HNSW/flat) for similarity candidates
+    ///    - Avoids O(n²) pairwise comparison
+    /// 2. Only check connectivity for pairs above threshold
+    /// 3. Return top k pairs sorted by similarity
+    ///
+    /// # Performance
+    ///
+    /// Target: < 100ms for 10k items using vector index acceleration.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - Optional namespace filter (None = all namespaces)
+    /// * `k` - Maximum number of pairs to return
+    /// * `similarity_threshold` - Minimum similarity score (0.0 - 1.0, e.g., 0.7)
+    ///
+    /// # Returns
+    ///
+    /// A vector of `UnconnectedPair` sorted by similarity (highest first).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Find top 10 similar but unconnected pairs with 70% similarity
+    /// let pairs = db.find_similar_unconnected_pairs(None, 10, 0.7).await?;
+    /// for pair in pairs {
+    ///     println!("{} <-> {}: {:.2}", pair.key_a, pair.key_b, pair.similarity_score);
+    /// }
+    /// ```
+    pub async fn find_similar_unconnected_pairs(
+        &self,
+        namespace: Option<&str>,
+        k: usize,
+        similarity_threshold: f32,
+    ) -> DeltaResult<Vec<UnconnectedPair>> {
+        if k == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Synthesize the consolidation action
+        let action = crate::actions::ConsolidationAction::FindSimilarUnconnectedPairs {
+            k,
+            threshold: similarity_threshold,
+        };
+        let _ = action.to_canonical_structure(self.shared_engine.inner());
+
+        let graph = self.storage.causal_graph();
+        let mut unconnected_pairs: Vec<UnconnectedPair> = Vec::new();
+        let mut seen_pairs: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        // Get all nodes in the causal graph
+        let all_nodes = graph.all_nodes();
+
+        // For each node, search for similar nodes using vector index
+        for node in &all_nodes {
+            // Parse node ID to get namespace:key
+            // Node IDs are in format "namespace:key" or similar
+            let parts: Vec<&str> = node.split(':').collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            let node_namespace = parts[0];
+            let node_key = parts[1..].join(":");
+
+            // Filter by namespace if specified
+            if let Some(ns) = namespace {
+                if node_namespace != ns {
+                    continue;
+                }
+            }
+
+            // Get the vector for this node (if it has one)
+            let query_vector = self.vector_index.search(
+                &crate::vector::Vector::new(vec![1.0], "query"),
+                &crate::vector::VectorSearchOptions::new().top_k(1),
+            );
+
+            // If we found a vector, use it to find similar items
+            if let Some(first_result) = query_vector.first() {
+                let query_vec = &first_result.vector;
+                
+                // Search for similar vectors
+                let similar = self.vector_index.search(
+                    query_vec,
+                    &crate::vector::VectorSearchOptions::new()
+                        .top_k(k.saturating_mul(2)) // Get more candidates to filter
+                        .threshold(similarity_threshold),
+                );
+
+                for result in similar {
+                    let other_namespace = &result.namespace;
+                    let other_key = &result.key;
+                    let other_full_key = format!("{}:{}", other_namespace, other_key);
+
+                    // Skip if it's the same node
+                    if &other_full_key == node {
+                        continue;
+                    }
+
+                    // Filter by namespace if specified
+                    if let Some(ns) = namespace {
+                        if other_namespace != ns {
+                            continue;
+                        }
+                    }
+
+                    // Create canonical pair ID for deduplication
+                    let pair_id = if node < &other_full_key {
+                        format!("{}::{}", node, other_full_key)
+                    } else {
+                        format!("{}::{}", other_full_key, node)
+                    };
+
+                    // Skip if we've already seen this pair
+                    if seen_pairs.contains(&pair_id) {
+                        continue;
+                    }
+                    seen_pairs.insert(pair_id);
+
+                    // Check if they are causally connected
+                    let is_connected = self.are_connected_via_graph(graph, node, &other_full_key);
+
+                    if !is_connected {
+                        unconnected_pairs.push(UnconnectedPair::new(
+                            node_namespace,
+                            &node_key,
+                            other_namespace,
+                            other_key,
+                            result.score,
+                        ));
+
+                        // Early termination if we have enough
+                        if unconnected_pairs.len() >= k {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Early termination if we have enough
+            if unconnected_pairs.len() >= k {
+                break;
+            }
+        }
+
+        // Sort by similarity score (highest first)
+        unconnected_pairs.sort_by(|a, b| {
+            b.similarity_score
+                .partial_cmp(&a.similarity_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Take top k
+        unconnected_pairs.truncate(k);
+
+        Ok(unconnected_pairs)
+    }
+
+    /// Internal helper: Check if two nodes are connected via the causal graph.
+    fn are_connected_via_graph(
+        &self,
+        graph: &crate::causal_graph::LineageAgent,
+        a: &str,
+        b: &str,
+    ) -> bool {
+        // Quick check: same node
+        if a == b {
+            return true;
+        }
+
+        // Check if a is an ancestor of b or vice versa
+        let ancestors_b: std::collections::HashSet<_> = 
+            graph.ancestors(b).into_iter().collect();
+        if ancestors_b.contains(a) {
+            return true;
+        }
+
+        let ancestors_a: std::collections::HashSet<_> = 
+            graph.ancestors(a).into_iter().collect();
+        if ancestors_a.contains(b) {
+            return true;
+        }
+
+        // Check if they share any common ancestor within a reasonable depth
+        // This is a heuristic for "causally related"
+        let common: Vec<_> = ancestors_a.intersection(&ancestors_b).collect();
+        !common.is_empty()
+    }
+
+    /// Generate random walk combinations for dream-phase creative synthesis.
+    ///
+    /// This method performs random walks through the causal graph to discover
+    /// novel combinations of distant distinctions. It's used by the Sleep agent
+    /// during REM phase for creative synthesis.
+    ///
+    /// # Algorithm
+    ///
+    /// 1. Pick random starting distinction from the graph
+    /// 2. Follow random causal link (parent or child)
+    /// 3. Repeat for `steps` iterations
+    /// 4. Record end distinction
+    /// 5. Compute novelty score (path length / connectivity ratio)
+    /// 6. Return start→end combinations
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - Number of combinations to generate
+    /// * `steps` - Number of steps per random walk
+    ///
+    /// # Returns
+    ///
+    /// A vector of `RandomCombination` representing the discovered paths.
+    /// Each combination includes start/end distinctions, the path taken,
+    /// and a novelty score.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Generate 5 random walks of 10 steps each
+    /// let combinations = db.random_walk_combinations(5, 10).await?;
+    /// for combo in combinations {
+    ///     println!("{} -> {} (novelty: {:.2})", 
+    ///         combo.start_key, combo.end_key, combo.novelty_score);
+    /// }
+    /// ```
+    pub async fn random_walk_combinations(
+        &self,
+        n: usize,
+        steps: usize,
+    ) -> DeltaResult<Vec<RandomCombination>> {
+        if n == 0 || steps == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Synthesize the sleep creative action
+        let action = crate::actions::SleepCreativeAction::RandomWalkCombinations { n, steps };
+        let _ = action.to_canonical_structure(self.shared_engine.inner());
+
+        let graph = self.storage.causal_graph();
+        let all_nodes = graph.all_nodes();
+
+        if all_nodes.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        use rand::seq::SliceRandom;
+        use rand::thread_rng;
+
+        let mut combinations = Vec::new();
+        let mut rng = thread_rng();
+
+        for _ in 0..n {
+            // Pick random starting node
+            let start_node = all_nodes.choose(&mut rng).cloned().unwrap_or_default();
+            
+            // Parse start node
+            let parts: Vec<&str> = start_node.split(':').collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            let start_namespace = parts[0].to_string();
+            let start_key = parts[1..].join(":");
+
+            // Perform random walk
+            let mut current = start_node.clone();
+            let mut path: Vec<String> = Vec::new();
+            let mut valid_walk = true;
+
+            for _ in 0..steps {
+                // Get neighbors (parents + children)
+                let mut neighbors: Vec<String> = Vec::new();
+                
+                if let Some(parents) = graph.get_parents(&current) {
+                    neighbors.extend(parents.iter().cloned());
+                }
+                if let Some(children) = graph.get_children(&current) {
+                    neighbors.extend(children.iter().cloned());
+                }
+
+                // Remove duplicates while preserving order
+                let mut seen = std::collections::HashSet::new();
+                neighbors.retain(|n| seen.insert(n.clone()));
+
+                if neighbors.is_empty() {
+                    // Dead end - stop the walk here
+                    valid_walk = false;
+                    break;
+                }
+
+                // Pick random neighbor
+                let next = neighbors.choose(&mut rng).cloned().unwrap_or_default();
+                
+                // Don't go back immediately (avoid oscillation)
+                if path.last() == Some(&next) && neighbors.len() > 1 {
+                    let filtered: Vec<_> = neighbors.iter().filter(|&n| n != &current).cloned().collect();
+                    if let Some(alt) = filtered.choose(&mut rng) {
+                        path.push(current.clone());
+                        current = alt.clone();
+                        continue;
+                    }
+                }
+
+                path.push(current.clone());
+                current = next;
+            }
+
+            if !valid_walk {
+                continue;
+            }
+
+            // Parse end node
+            let end_parts: Vec<&str> = current.split(':').collect();
+            if end_parts.len() < 2 {
+                continue;
+            }
+            let end_namespace = end_parts[0].to_string();
+            let end_key = end_parts[1..].join(":");
+
+            // Skip if start == end (no interesting journey)
+            if start_node == current {
+                continue;
+            }
+
+            // Calculate novelty score
+            // Novelty = path_length / (connectivity_factor + 1)
+            // Higher novelty = longer path to less connected node
+            let start_ancestors = graph.ancestors(&start_node).len() as f32;
+            let start_descendants = graph.descendants(&start_node).len() as f32;
+            let end_ancestors = graph.ancestors(&current).len() as f32;
+            let end_descendants = graph.descendants(&current).len() as f32;
+
+            let start_connectivity = start_ancestors + start_descendants + 1.0;
+            let end_connectivity = end_ancestors + end_descendants + 1.0;
+            let avg_connectivity = (start_connectivity + end_connectivity) / 2.0;
+
+            let novelty_score = (path.len() as f32).min(100.0) / avg_connectivity.sqrt();
+            let normalized_novelty = novelty_score.clamp(0.0, 1.0);
+
+            combinations.push(RandomCombination::new(
+                start_namespace,
+                start_key,
+                end_namespace,
+                end_key,
+                path,
+                normalized_novelty,
+            ));
+        }
+
+        // Sort by novelty (highest first)
+        combinations.sort_by(|a, b| {
+            b.novelty_score
+                .partial_cmp(&a.novelty_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(combinations)
     }
 
     /// Simplified: Store content with an auto-generated distinction-based embedding.

@@ -396,6 +396,30 @@ impl LineageAgent {
         self.nodes.iter().map(|n| n.key().clone()).collect()
     }
 
+    /// Get the parents (causal predecessors) of a distinction.
+    ///
+    /// Returns `None` if the distinction doesn't exist in the graph.
+    /// Returns `Some(empty Vec)` if the distinction has no parents (it's a root).
+    pub fn get_parents(&self, id: impl AsRef<str>) -> Option<Vec<DistinctionId>> {
+        let id = id.as_ref();
+        if !self.nodes.contains(id) {
+            return None;
+        }
+        self.parents.get(id).map(|p| p.clone())
+    }
+
+    /// Get the children (causal successors) of a distinction.
+    ///
+    /// Returns `None` if the distinction doesn't exist in the graph.
+    /// Returns `Some(empty Vec)` if the distinction has no children (it's a leaf).
+    pub fn get_children(&self, id: impl AsRef<str>) -> Option<Vec<DistinctionId>> {
+        let id = id.as_ref();
+        if !self.nodes.contains(id) {
+            return None;
+        }
+        self.children.get(id).map(|c| c.clone())
+    }
+
     /// Increment the epoch (for garbage collection).
     pub fn increment_epoch(&self) -> u64 {
         self.epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
