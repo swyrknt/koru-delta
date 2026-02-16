@@ -35,7 +35,7 @@
 use dashmap::DashMap;
 use std::collections::HashSet;
 
-use crate::causal_graph::{CausalGraph, DistinctionId};
+use crate::causal_graph::{LineageAgent, DistinctionId};
 
 /// The reference graph tracking which distinctions reference which.
 ///
@@ -161,7 +161,7 @@ impl ReferenceGraph {
     /// # Returns
     ///
     /// A vector of distinction IDs that can be garbage collected.
-    pub fn find_garbage(&self, causal_graph: &CausalGraph) -> Vec<DistinctionId> {
+    pub fn find_garbage(&self, causal_graph: &LineageAgent) -> Vec<DistinctionId> {
         let frontier: HashSet<_> = causal_graph.frontier().into_iter().collect();
         let roots: HashSet<_> = causal_graph.roots().into_iter().collect();
 
@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn test_find_garbage() {
         let ref_graph = ReferenceGraph::new();
-        let causal_graph = CausalGraph::new(&crate::engine::SharedEngine::new());
+        let causal_graph = LineageAgent::new(&crate::engine::SharedEngine::new());
 
         // Setup causal graph:
         // root -> orphan -> current

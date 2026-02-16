@@ -324,8 +324,7 @@ impl LocalCausalAgent for SessionAgent {
     }
 }
 
-// Backward-compatible type alias
-pub type SessionManager = SessionAgent;
+
 
 impl Default for SessionAgent {
     fn default() -> Self {
@@ -462,7 +461,7 @@ mod tests {
     fn test_session_manager() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SessionManager::new(&field);
+        let manager = SessionAgent::new(&field);
         let identity_key = "test_identity";
         let challenge = "test_challenge";
 
@@ -493,7 +492,7 @@ mod tests {
     fn test_session_expiration() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SessionManager::with_ttl(&field, 0); // 0 second TTL
+        let manager = SessionAgent::with_ttl(&field, 0); // 0 second TTL
         let identity_key = "test_identity";
         let challenge = "test_challenge";
 
@@ -512,7 +511,7 @@ mod tests {
     fn test_cleanup_expired() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SessionManager::with_ttl(&field, 0);
+        let manager = SessionAgent::with_ttl(&field, 0);
 
         // Create several sessions
         for i in 0..5 {
@@ -534,7 +533,7 @@ mod tests {
     fn test_revoke_all_identity_sessions() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SessionManager::new(&field);
+        let manager = SessionAgent::new(&field);
         let identity_key = "test_identity";
 
         // Create multiple sessions for same identity

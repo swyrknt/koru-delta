@@ -40,13 +40,13 @@ pub mod hot;
 pub mod warm;
 pub mod workspace;
 
-pub use cold::{ColdConfig, ColdMemory, ColdStats, ConsolidationResult, Pattern};
+pub use cold::{ArchiveAgent, ArchiveConfig, ArchiveStats, ConsolidationResult, Pattern};
 pub use deep::{
-    CausalTopology, DeepConfig, DeepMemory, DeepStats, EpochSummary, ExpressionResult, Genome,
-    ReferencePattern,
+    CausalTopology, EssenceAgent, EssenceConfig, EssenceStats, EpochSummary, ExpressionResult,
+    Genome, ReferencePattern,
 };
-pub use hot::{Evicted, HotConfig, HotMemory, HotStats};
-pub use warm::{WarmConfig, WarmMemory, WarmStats};
+pub use hot::{Evicted, TemperatureAgent, TemperatureConfig, TemperatureStats};
+pub use warm::{ChronicleAgent, ChronicleConfig, ChronicleStats};
 pub use workspace::{
     AgentContext, ConsolidationSummary, MemoryPattern, SearchOptions, Workspace, WorkspaceItem,
     WorkspaceSearchResult, WorkspaceStats,

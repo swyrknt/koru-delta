@@ -33,7 +33,7 @@
 ///       └──►D (conflict)  ├──►D (branch 1)
 ///                       └──►E (branch 2)
 /// ```
-use crate::causal_graph::CausalGraph;
+use crate::causal_graph::LineageAgent;
 use crate::reconciliation::{MerkleTree, SyncStrategy};
 use std::collections::HashSet;
 
@@ -88,7 +88,7 @@ pub struct Conflict {
 /// High-level world reconciliation manager.
 pub struct WorldReconciliation {
     /// Our causal graph.
-    local_graph: CausalGraph,
+    local_graph: LineageAgent,
     /// Sync strategy.
     #[allow(dead_code)]
     strategy: SyncStrategy,
@@ -113,7 +113,7 @@ pub struct ReconciliationStats {
 
 impl WorldReconciliation {
     /// Create a new world reconciliation manager.
-    pub fn new(local_graph: CausalGraph) -> Self {
+    pub fn new(local_graph: LineageAgent) -> Self {
         Self {
             local_graph,
             strategy: SyncStrategy::default(),
@@ -122,7 +122,7 @@ impl WorldReconciliation {
     }
 
     /// Create with specific strategy.
-    pub fn with_strategy(local_graph: CausalGraph, strategy: SyncStrategy) -> Self {
+    pub fn with_strategy(local_graph: LineageAgent, strategy: SyncStrategy) -> Self {
         Self {
             local_graph,
             strategy,
@@ -243,7 +243,7 @@ impl WorldReconciliation {
     /// Merge two causal graphs.
     ///
     /// Combines remote graph into local, handling conflicts as branches.
-    pub fn merge_graphs(&mut self, remote_graph: &CausalGraph) -> MergeResult {
+    pub fn merge_graphs(&mut self, remote_graph: &LineageAgent) -> MergeResult {
         let local_nodes: HashSet<_> = self.local_graph.all_nodes().into_iter().collect();
         let remote_nodes: HashSet<_> = remote_graph.all_nodes().into_iter().collect();
 
@@ -328,12 +328,12 @@ impl WorldReconciliation {
     }
 
     /// Get the local causal graph.
-    pub fn graph(&self) -> &CausalGraph {
+    pub fn graph(&self) -> &LineageAgent {
         &self.local_graph
     }
 
     /// Get mutable access to local graph.
-    pub fn graph_mut(&mut self) -> &mut CausalGraph {
+    pub fn graph_mut(&mut self) -> &mut LineageAgent {
         &mut self.local_graph
     }
 }
@@ -391,7 +391,7 @@ pub struct World {
     /// World identifier.
     pub id: String,
     /// Causal graph.
-    pub graph: CausalGraph,
+    pub graph: LineageAgent,
 }
 
 impl World {
@@ -399,7 +399,7 @@ impl World {
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
-            graph: CausalGraph::new(&crate::engine::SharedEngine::new()),
+            graph: LineageAgent::new(&crate::engine::SharedEngine::new()),
         }
     }
 

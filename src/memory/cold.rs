@@ -483,14 +483,9 @@ pub struct ArchiveStats {
     pub total_distinctions: usize,
 }
 
-/// Backward-compatible type alias for existing code.
-pub type ColdMemory = ArchiveAgent;
 
-/// Backward-compatible type alias for existing code.
-pub type ColdConfig = ArchiveConfig;
 
-/// Backward-compatible type alias for existing code.
-pub type ColdStats = ArchiveStats;
+
 
 #[cfg(test)]
 mod tests {
@@ -699,14 +694,4 @@ mod tests {
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
 
-    #[test]
-    fn test_backward_compatible_aliases() {
-        // Ensure backward compatibility works
-        let engine = create_test_engine();
-        let _cold_memory: ColdMemory = ArchiveAgent::new(&engine);
-        let _config: ColdConfig = ArchiveConfig::default();
-        let engine2 = create_test_engine();
-        let agent = ArchiveAgent::with_config(_config, &engine2);
-        let _stats: ColdStats = agent.stats();
-    }
 }

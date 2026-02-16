@@ -17,8 +17,8 @@
 /// - Mutation rate (how fast system changes)
 /// - Recovery requirements (how much data loss is acceptable)
 /// - Storage constraints (how many genomes to keep)
-use crate::causal_graph::CausalGraph;
-use crate::memory::{DeepMemory, Genome};
+use crate::causal_graph::LineageAgent;
+use crate::memory::{EssenceAgent, Genome};
 use chrono::Utc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -73,8 +73,8 @@ impl GenomeUpdateProcess {
     /// Extracts current genome and stores in Deep memory.
     pub fn update(
         &self,
-        deep: &DeepMemory,
-        causal_graph: &CausalGraph,
+        deep: &EssenceAgent,
+        causal_graph: &LineageAgent,
         epoch_number: usize,
         distinction_count: usize,
     ) -> Option<Genome> {
@@ -93,7 +93,7 @@ impl GenomeUpdateProcess {
     /// Restore from latest genome.
     ///
     /// Expresses the most recent genome to restore system state.
-    pub fn restore_latest(&self, deep: &DeepMemory) -> Option<crate::memory::ExpressionResult> {
+    pub fn restore_latest(&self, deep: &EssenceAgent) -> Option<crate::memory::ExpressionResult> {
         let genome = deep.latest_genome()?;
         Some(deep.express_genome(&genome))
     }
@@ -101,7 +101,7 @@ impl GenomeUpdateProcess {
     /// Restore from specific genome.
     pub fn restore(
         &self,
-        deep: &DeepMemory,
+        deep: &EssenceAgent,
         genome_id: &str,
     ) -> Option<crate::memory::ExpressionResult> {
         let genome = deep.get_genome(genome_id)?;
@@ -109,21 +109,21 @@ impl GenomeUpdateProcess {
     }
 
     /// Export genome to bytes.
-    pub fn export_genome(deep: &DeepMemory, genome_id: &str) -> Option<Vec<u8>> {
+    pub fn export_genome(deep: &EssenceAgent, genome_id: &str) -> Option<Vec<u8>> {
         let genome = deep.get_genome(genome_id)?;
-        DeepMemory::serialize_genome(&genome).ok()
+        EssenceAgent::serialize_genome(&genome).ok()
     }
 
     /// Import genome from bytes.
-    pub fn import_genome(deep: &DeepMemory, bytes: &[u8]) -> Option<Genome> {
-        let genome = DeepMemory::deserialize_genome(bytes).ok()?;
+    pub fn import_genome(deep: &EssenceAgent, bytes: &[u8]) -> Option<Genome> {
+        let genome = EssenceAgent::deserialize_genome(bytes).ok()?;
         let id = format!("imported_{}", Utc::now().timestamp());
         deep.genome().insert(id, genome.clone());
         Some(genome)
     }
 
     /// Cleanup old genomes beyond max_genomes limit.
-    fn cleanup_old_genomes(&self, deep: &DeepMemory) {
+    fn cleanup_old_genomes(&self, deep: &EssenceAgent) {
         let count = deep.genome_count();
 
         if count > self.config.max_genomes {
@@ -207,9 +207,9 @@ pub struct GenomeUpdateStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::causal_graph::CausalGraph;
+    use crate::causal_graph::LineageAgent;
     use crate::engine::SharedEngine;
-    use crate::memory::DeepMemory;
+    use crate::memory::EssenceAgent;
 
     fn create_test_engine() -> SharedEngine {
         SharedEngine::new()
@@ -219,8 +219,8 @@ mod tests {
     fn test_update() {
         let process = GenomeUpdateProcess::new();
         let engine = create_test_engine();
-        let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let deep = EssenceAgent::new(&engine);
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -235,8 +235,8 @@ mod tests {
     fn test_restore_latest() {
         let process = GenomeUpdateProcess::new();
         let engine = create_test_engine();
-        let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let deep = EssenceAgent::new(&engine);
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -255,8 +255,8 @@ mod tests {
         };
         let process = GenomeUpdateProcess::with_config(config);
         let engine = create_test_engine();
-        let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let deep = EssenceAgent::new(&engine);
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -288,8 +288,8 @@ mod tests {
     fn test_stats() {
         let process = GenomeUpdateProcess::new();
         let engine = create_test_engine();
-        let deep = DeepMemory::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let deep = EssenceAgent::new(&engine);
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 

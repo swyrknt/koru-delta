@@ -56,22 +56,22 @@ use tracing::{debug, error, info, trace, warn};
 use tracing::{debug, info, trace};
 
 use crate::actions::StorageAction;
-use crate::auth::{AuthConfig, AuthManager};
+use crate::auth::{IdentityAgent, IdentityConfig};
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::error::DeltaResult;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::lifecycle::{LifecycleConfig, LifecycleManager};
-use crate::memory::{ColdMemory, DeepMemory, HotConfig, HotMemory, WarmMemory};
+use crate::lifecycle::{LifecycleAgent, LifecycleConfig};
+use crate::memory::{ArchiveAgent, ChronicleAgent, EssenceAgent, TemperatureAgent, TemperatureConfig};
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
 use crate::roots::RootType;
 use crate::runtime::sync::RwLock;
 use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
 use crate::storage::CausalStorage;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionId, SubscriptionManager};
+use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionAgent, SubscriptionId};
 use crate::types::{FullKey, HistoryEntry, VersionedValue};
 use crate::vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
-use crate::views::{ViewDefinition, ViewInfo, ViewManager};
+use crate::views::{PerspectiveAgent, ViewDefinition, ViewInfo};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::cluster::ClusterNode;
@@ -84,7 +84,7 @@ pub struct CoreConfig {
     /// Process configuration
     pub processes: ProcessConfig,
     /// Auth configuration
-    pub auth: AuthConfig,
+    pub auth: IdentityConfig,
     /// Reconciliation configuration
     pub reconciliation: ReconciliationConfig,
     /// Resource limits (memory, disk)
@@ -221,20 +221,20 @@ pub struct KoruDeltaGeneric<R: Runtime> {
     /// Local causal root - this agent's perspective (Root: STORAGE)
     local_root: Distinction,
     /// View manager for materialized views
-    views: Arc<ViewManager>,
+    views: Arc<PerspectiveAgent>,
     /// Subscription manager for change notifications (non-WASM only)
     #[cfg(not(target_arch = "wasm32"))]
-    subscriptions: Arc<SubscriptionManager>,
+    subscriptions: Arc<SubscriptionAgent>,
     /// Memory tiers
-    hot: Arc<RwLock<HotMemory>>,
-    warm: Arc<RwLock<WarmMemory>>,
-    cold: Arc<RwLock<ColdMemory>>,
-    deep: Arc<RwLock<DeepMemory>>,
+    hot: Arc<RwLock<TemperatureAgent>>,
+    warm: Arc<RwLock<ChronicleAgent>>,
+    cold: Arc<RwLock<ArchiveAgent>>,
+    deep: Arc<RwLock<EssenceAgent>>,
     /// Auth manager (LCA Identity Agent)
-    auth: Arc<AuthManager>,
+    auth: Arc<IdentityAgent>,
     /// Lifecycle manager for memory consolidation (non-WASM only)
     #[cfg(not(target_arch = "wasm32"))]
-    lifecycle: Arc<LifecycleManager>,
+    lifecycle: Arc<LifecycleAgent>,
     /// Vector index for similarity search
     vector_index: VectorIndex,
     /// Cluster node for distributed operation (optional)
@@ -324,35 +324,35 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let storage = Arc::new(storage);
 
         // Initialize memory tiers with LCA agents
-        let hot = Arc::new(RwLock::new(HotMemory::with_config(
-            HotConfig {
+        let hot = Arc::new(RwLock::new(TemperatureAgent::with_config(
+            TemperatureConfig {
                 capacity: config.memory.hot_capacity,
                 promote_threshold: 2,
             },
             &shared_engine,
         )));
 
-        let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
-        let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
-        let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
+        let warm = Arc::new(RwLock::new(ChronicleAgent::new(&shared_engine)));
+        let cold = Arc::new(RwLock::new(ArchiveAgent::new(&shared_engine)));
+        let deep = Arc::new(RwLock::new(EssenceAgent::new(&shared_engine)));
 
         // Initialize auth with LCA identity agent
-        let auth = Arc::new(AuthManager::with_config(
+        let auth = Arc::new(IdentityAgent::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
             &shared_engine,
         ));
 
         // Initialize views with LCA perspective agent
-        let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
+        let views = Arc::new(PerspectiveAgent::new(Arc::clone(&storage), &shared_engine));
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let subscriptions = Arc::new(SubscriptionManager::new(&shared_engine));
+        let subscriptions = Arc::new(SubscriptionAgent::new(&shared_engine));
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleManager::with_config(&shared_engine, LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleAgent::with_config(&shared_engine, LifecycleConfig::default()));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -410,35 +410,35 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
 
         // Initialize memory tiers with LCA agents
-        let hot = Arc::new(RwLock::new(HotMemory::with_config(
-            HotConfig {
+        let hot = Arc::new(RwLock::new(TemperatureAgent::with_config(
+            TemperatureConfig {
                 capacity: config.memory.hot_capacity,
                 promote_threshold: 2,
             },
             &shared_engine,
         )));
 
-        let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
-        let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
-        let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
+        let warm = Arc::new(RwLock::new(ChronicleAgent::new(&shared_engine)));
+        let cold = Arc::new(RwLock::new(ArchiveAgent::new(&shared_engine)));
+        let deep = Arc::new(RwLock::new(EssenceAgent::new(&shared_engine)));
 
         // Initialize auth with LCA identity agent
-        let auth = Arc::new(AuthManager::with_config(
+        let auth = Arc::new(IdentityAgent::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
             &shared_engine,
         ));
 
         // Initialize views with LCA perspective agent
-        let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
+        let views = Arc::new(PerspectiveAgent::new(Arc::clone(&storage), &shared_engine));
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let subscriptions = Arc::new(SubscriptionManager::new(&shared_engine));
+        let subscriptions = Arc::new(SubscriptionAgent::new(&shared_engine));
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleManager::with_config(&shared_engine, LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleAgent::with_config(&shared_engine, LifecycleConfig::default()));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -586,13 +586,13 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// moves data based on temperature (access patterns).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     async fn run_consolidation(
-        hot: &Arc<RwLock<HotMemory>>,
-        warm: &Arc<RwLock<WarmMemory>>,
-        cold: &Arc<RwLock<ColdMemory>>,
-        _deep: &Arc<RwLock<DeepMemory>>,
+        hot: &Arc<RwLock<TemperatureAgent>>,
+        warm: &Arc<RwLock<ChronicleAgent>>,
+        cold: &Arc<RwLock<ArchiveAgent>>,
+        _deep: &Arc<RwLock<EssenceAgent>>,
         _storage: &Arc<CausalStorage>,
     ) {
-        // Check HotMemory utilization
+        // Check TemperatureAgent utilization
         let hot_util = {
             let hot = hot.read().await;
             let stats = hot.stats();
@@ -609,7 +609,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             // Hot memory is getting full - natural eviction will handle it
         }
 
-        // Check WarmMemory utilization and find demotion candidates
+        // Check ChronicleAgent utilization and find demotion candidates
         let demotion_candidates = {
             let warm = warm.read().await;
             warm.find_demotion_candidates(10)
@@ -627,7 +627,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             }
         }
 
-        // Rotate ColdMemory epochs periodically
+        // Rotate ArchiveAgent epochs periodically
         {
             let cold = cold.write().await;
             // Rotate if current epoch is getting large
@@ -641,9 +641,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// low-fitness (noise) gets marked for garbage collection.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     async fn run_distillation(
-        _hot: &Arc<RwLock<HotMemory>>,
-        warm: &Arc<RwLock<WarmMemory>>,
-        cold: &Arc<RwLock<ColdMemory>>,
+        _hot: &Arc<RwLock<TemperatureAgent>>,
+        warm: &Arc<RwLock<ChronicleAgent>>,
+        cold: &Arc<RwLock<ArchiveAgent>>,
         _storage: &Arc<CausalStorage>,
     ) {
         // Find promotion candidates (high fitness) in warm
@@ -672,7 +672,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// Creates a minimal "DNA" representation of the causal graph
     /// that can regenerate the full system state.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    async fn run_genome_update(deep: &Arc<RwLock<DeepMemory>>) {
+    async fn run_genome_update(deep: &Arc<RwLock<EssenceAgent>>) {
         // Extract genome using the genome update process
         // This captures the causal topology (structure, not content)
         let genome = crate::processes::GenomeUpdateProcess::new().extract_genome();
@@ -713,35 +713,35 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let local_root = shared_engine.root(RootType::Storage).clone();
 
         // Initialize memory tiers with LCA agents
-        let hot = Arc::new(RwLock::new(HotMemory::with_config(
-            HotConfig {
+        let hot = Arc::new(RwLock::new(TemperatureAgent::with_config(
+            TemperatureConfig {
                 capacity: config.memory.hot_capacity,
                 promote_threshold: 2,
             },
             &shared_engine,
         )));
 
-        let warm = Arc::new(RwLock::new(WarmMemory::new(&shared_engine)));
-        let cold = Arc::new(RwLock::new(ColdMemory::new(&shared_engine)));
-        let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
+        let warm = Arc::new(RwLock::new(ChronicleAgent::new(&shared_engine)));
+        let cold = Arc::new(RwLock::new(ArchiveAgent::new(&shared_engine)));
+        let deep = Arc::new(RwLock::new(EssenceAgent::new(&shared_engine)));
 
         // Initialize auth with LCA identity agent
-        let auth = Arc::new(AuthManager::with_config(
+        let auth = Arc::new(IdentityAgent::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
             &shared_engine,
         ));
 
         // Initialize views with LCA perspective agent
-        let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
+        let views = Arc::new(PerspectiveAgent::new(Arc::clone(&storage), &shared_engine));
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let subscriptions = Arc::new(SubscriptionManager::new(&shared_engine));
+        let subscriptions = Arc::new(SubscriptionAgent::new(&shared_engine));
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleManager::with_config(&shared_engine, LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleAgent::with_config(&shared_engine, LifecycleConfig::default()));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -1448,7 +1448,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     }
 
     /// Get auth manager.
-    pub fn auth(&self) -> Arc<AuthManager> {
+    pub fn auth(&self) -> Arc<IdentityAgent> {
         Arc::clone(&self.auth)
     }
 
@@ -1457,7 +1457,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// The lifecycle manager handles automatic Hot→Warm→Cold→Deep
     /// transitions based on access patterns and importance scores.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn lifecycle(&self) -> &LifecycleManager {
+    pub fn lifecycle(&self) -> &LifecycleAgent {
         &self.lifecycle
     }
 
@@ -1507,7 +1507,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let info = self.views.create_view(definition.clone())?;
 
         // Persist the view definition to WAL via normal put (ensures durability)
-        // ViewManager already stored it in storage, but we need WAL persistence
+        // PerspectiveAgent already stored it in storage, but we need WAL persistence
         #[cfg(not(target_arch = "wasm32"))]
         if self.db_path.is_some() {
             use crate::views::VIEW_NAMESPACE;
@@ -1550,7 +1550,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     }
 
     /// Get view manager.
-    pub fn view_manager(&self) -> &Arc<ViewManager> {
+    pub fn view_manager(&self) -> &Arc<PerspectiveAgent> {
         &self.views
     }
 
@@ -1584,7 +1584,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
     /// Get subscription manager.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn subscription_manager(&self) -> &Arc<SubscriptionManager> {
+    pub fn subscription_manager(&self) -> &Arc<SubscriptionAgent> {
         &self.subscriptions
     }
 

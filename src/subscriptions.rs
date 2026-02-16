@@ -530,8 +530,7 @@ impl LocalCausalAgent for SubscriptionAgent {
     }
 }
 
-// Backward-compatible type alias
-pub type SubscriptionManager = SubscriptionAgent;
+
 
 impl Default for SubscriptionAgent {
     fn default() -> Self {
@@ -546,14 +545,14 @@ impl Default for SubscriptionAgent {
 /// notifying subscribers.
 pub struct SubscribableStorage {
     storage: Arc<crate::storage::CausalStorage>,
-    subscriptions: Arc<SubscriptionManager>,
+    subscriptions: Arc<SubscriptionAgent>,
 }
 
 impl SubscribableStorage {
     /// Create a new subscribable storage wrapper.
     pub fn new(
         storage: Arc<crate::storage::CausalStorage>,
-        subscriptions: Arc<SubscriptionManager>,
+        subscriptions: Arc<SubscriptionAgent>,
     ) -> Self {
         Self {
             storage,
@@ -567,7 +566,7 @@ impl SubscribableStorage {
     }
 
     /// Get the subscription manager.
-    pub fn subscriptions(&self) -> &Arc<SubscriptionManager> {
+    pub fn subscriptions(&self) -> &Arc<SubscriptionAgent> {
         &self.subscriptions
     }
 
@@ -715,7 +714,7 @@ mod tests {
     async fn test_subscription_manager_basic() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SubscriptionManager::new(&field);
+        let manager = SubscriptionAgent::new(&field);
 
         let (id, mut rx) = manager.subscribe(Subscription::collection("users"));
 
@@ -745,7 +744,7 @@ mod tests {
     async fn test_subscription_filtering() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SubscriptionManager::new(&field);
+        let manager = SubscriptionAgent::new(&field);
 
         // Subscribe only to users collection.
         let (_id, mut rx) = manager.subscribe(Subscription::collection("users"));
@@ -774,7 +773,7 @@ mod tests {
     async fn test_multiple_subscribers() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SubscriptionManager::new(&field);
+        let manager = SubscriptionAgent::new(&field);
 
         let (_id1, mut rx1) = manager.subscribe(Subscription::all());
         let (_id2, mut rx2) = manager.subscribe(Subscription::all());
@@ -794,7 +793,7 @@ mod tests {
     fn test_subscription_info() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SubscriptionManager::new(&field);
+        let manager = SubscriptionAgent::new(&field);
 
         let (id, _rx) =
             manager.subscribe(Subscription::collection("users").with_name("user_watcher"));
@@ -809,7 +808,7 @@ mod tests {
     fn test_subscription_list() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SubscriptionManager::new(&field);
+        let manager = SubscriptionAgent::new(&field);
 
         let (_id1, _rx1) = manager.subscribe(Subscription::collection("users"));
         let (_id2, _rx2) = manager.subscribe(Subscription::collection("products"));
@@ -823,7 +822,7 @@ mod tests {
     fn test_events_delivered_counter() {
         use crate::engine::SharedEngine;
         let field = SharedEngine::new();
-        let manager = SubscriptionManager::new(&field);
+        let manager = SubscriptionAgent::new(&field);
 
         let (id, _rx) = manager.subscribe(Subscription::all());
 
@@ -846,7 +845,7 @@ mod tests {
         let engine = Arc::new(DistinctionEngine::new());
         let storage = Arc::new(CausalStorage::new(engine));
         let field = SharedEngine::new();
-        let subs = Arc::new(SubscriptionManager::new(&field));
+        let subs = Arc::new(SubscriptionAgent::new(&field));
 
         let subscribable = SubscribableStorage::new(storage, subs.clone());
 

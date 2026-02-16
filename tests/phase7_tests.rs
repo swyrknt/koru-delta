@@ -76,7 +76,7 @@ async fn test_background_processes_start() {
 /// Test genome storage in deep memory
 #[tokio::test]
 async fn test_genome_storage() {
-    use koru_delta::memory::DeepMemory;
+    use koru_delta::memory::EssenceAgent;
     use koru_delta::processes::GenomeUpdateProcess;
 
     let process = GenomeUpdateProcess::new();
@@ -86,7 +86,7 @@ async fn test_genome_storage() {
 
     // Store in deep memory
     let shared_engine = SharedEngine::new();
-    let deep = DeepMemory::new(&shared_engine);
+    let deep = EssenceAgent::new(&shared_engine);
     deep.store_genome("test_genome", genome.clone());
 
     // Retrieve it

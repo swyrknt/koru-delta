@@ -27,9 +27,9 @@
 /// 3. Keep fit distinctions in working memory
 /// 4. Archive unfit to Deep (or discard if truly unimportant)
 use crate::actions::EvolutionAction;
-use crate::causal_graph::CausalGraph;
+use crate::causal_graph::LineageAgent;
 use crate::engine::{FieldHandle, SharedEngine};
-use crate::memory::{ColdMemory, DeepMemory};
+use crate::memory::{ArchiveAgent, EssenceAgent};
 use crate::reference_graph::ReferenceGraph;
 use crate::roots::RootType;
 use chrono::{DateTime, Duration, Utc};
@@ -138,7 +138,7 @@ impl EvolutionAgent {
         &self,
         distinction_id: &str,
         reference_graph: &ReferenceGraph,
-        causal_graph: &CausalGraph,
+        causal_graph: &LineageAgent,
         timestamp: DateTime<Utc>,
     ) -> Fitness {
         // Synthesize evaluate fitness action
@@ -180,7 +180,7 @@ impl EvolutionAgent {
         &self,
         distinctions: &[(String, DateTime<Utc>)], // (id, timestamp)
         reference_graph: &ReferenceGraph,
-        causal_graph: &CausalGraph,
+        causal_graph: &LineageAgent,
     ) -> Classification {
         let ids: Vec<String> = distinctions.iter().map(|(id, _)| id.clone()).collect();
 
@@ -215,11 +215,11 @@ impl EvolutionAgent {
     /// and `ΔNew = ΔLocal_Root ⊕ ΔArchive_Action` for unfit
     pub fn evolve_epoch(
         &self,
-        _cold: &ColdMemory,
-        deep: &DeepMemory,
+        _cold: &ArchiveAgent,
+        deep: &EssenceAgent,
         epoch_num: usize,
         _reference_graph: &ReferenceGraph,
-        _causal_graph: &CausalGraph,
+        _causal_graph: &LineageAgent,
     ) -> EvolutionResult {
         // TODO: In real implementation, would iterate over epoch's distinctions
         // For now, placeholder
@@ -379,22 +379,16 @@ pub struct EvolutionStats {
     pub preservation_rate: f64,
 }
 
-/// Backward-compatible type alias for existing code.
-pub type DistillationProcess = EvolutionAgent;
 
-/// Backward-compatible type alias for existing code.
-pub type DistillationConfig = EvolutionConfig;
 
-/// Backward-compatible type alias for existing code.
-pub type DistillationResult = EvolutionResult;
 
-/// Backward-compatible type alias for existing code.
-pub type DistillationStats = EvolutionStats;
+
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::causal_graph::CausalGraph;
+    use crate::causal_graph::LineageAgent;
     use crate::engine::SharedEngine;
     use crate::reference_graph::ReferenceGraph;
 
@@ -407,7 +401,7 @@ mod tests {
         let engine = create_test_engine();
         let evolution = EvolutionAgent::new(&engine);
         let ref_graph = ReferenceGraph::new();
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         // Add node with no references
         ref_graph.add_node("test".to_string());
@@ -429,7 +423,7 @@ mod tests {
         let engine = create_test_engine();
         let evolution = EvolutionAgent::new(&engine);
         let ref_graph = ReferenceGraph::new();
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         // Setup: test2 references test1
         ref_graph.add_node("test1".to_string());
@@ -456,7 +450,7 @@ mod tests {
             &engine,
         );
         let ref_graph = ReferenceGraph::new();
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         // Setup distinctions
         let distinctions = vec![
@@ -490,7 +484,7 @@ mod tests {
         let engine = create_test_engine();
         let evolution = EvolutionAgent::new(&engine);
         let ref_graph = ReferenceGraph::new();
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         ref_graph.add_node("old".to_string());
         causal_graph.add_node("old".to_string());
@@ -512,7 +506,7 @@ mod tests {
 
         // Simulate some evaluations
         let ref_graph = ReferenceGraph::new();
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         for i in 0..10 {
             let id = format!("test{}", i);
@@ -570,11 +564,4 @@ mod tests {
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
 
-    #[test]
-    fn test_backward_compatible_aliases() {
-        // Ensure backward compatibility works
-        let engine = create_test_engine();
-        let _distillation: DistillationProcess = EvolutionAgent::new(&engine);
-        let _config: DistillationConfig = EvolutionConfig::default();
-    }
 }

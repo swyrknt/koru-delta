@@ -30,7 +30,7 @@ use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
 use crate::actions::IdentityAction;
 use crate::auth::capability::{create_capability, create_revocation, CapabilityManager};
 use crate::auth::identity::{mine_identity_sync, verify_identity_pow};
-use crate::auth::session::{create_session_token, SessionManager};
+use crate::auth::session::{create_session_token, SessionAgent};
 use crate::auth::storage::AuthStorageAdapter;
 use crate::auth::types::{
     AuthError, Capability, CapabilityRef, Identity, IdentityUserData, Permission, ResourcePattern,
@@ -92,7 +92,7 @@ pub struct IdentityAgent {
     challenges: ChallengeStore,
 
     /// In-memory session manager
-    sessions: SessionManager,
+    sessions: SessionAgent,
 
     /// Capability manager (caches capabilities from storage)
     capabilities: RwLock<CapabilityManager>,
@@ -149,7 +149,7 @@ impl IdentityAgent {
         Self {
             storage: AuthStorageAdapter::new(storage),
             challenges: ChallengeStore::with_ttl(config.challenge_ttl_seconds),
-            sessions: SessionManager::with_ttl(shared_engine, config.session_ttl_seconds),
+            sessions: SessionAgent::with_ttl(shared_engine, config.session_ttl_seconds),
             capabilities: RwLock::new(CapabilityManager::new()),
             config,
             local_root: RwLock::new(local_root),
@@ -597,18 +597,6 @@ impl IdentityAgent {
 // on the public API. The architecture is followed; the trait is omitted.
 
 // ============================================================================
-// Backward-Compatible Type Aliases
-// ============================================================================
-
-/// Backward-compatible type alias for existing code.
-pub type AuthManager = IdentityAgent;
-
-/// Backward-compatible type alias for existing code.
-pub type AuthConfig = IdentityConfig;
-
-/// Backward-compatible type alias for existing code.
-pub type AuthStats = IdentityStats;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -845,16 +833,6 @@ mod tests {
 
         let result = manager.create_challenge("nonexistent_identity");
         assert!(matches!(result, Err(AuthError::IdentityNotFound(_))));
-    }
-
-    #[test]
-    fn test_backward_compatible_aliases() {
-        let shared_engine = SharedEngine::new();
-        let storage = Arc::new(CausalStorage::new(Arc::clone(shared_engine.inner())));
-
-        // Ensure backward compatibility works
-        let _auth_manager: AuthManager = IdentityAgent::new(storage, &shared_engine);
-        let _config: AuthConfig = IdentityConfig::default();
     }
 
     #[test]

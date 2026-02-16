@@ -563,8 +563,7 @@ impl LocalCausalAgent for LifecycleAgent {
     }
 }
 
-// Backward-compatible type alias
-pub type LifecycleManager = LifecycleAgent;
+
 
 #[cfg(test)]
 mod lca_tests {

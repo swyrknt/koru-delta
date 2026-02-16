@@ -41,7 +41,7 @@
 /// A genome is ~1KB. A full database might be 1TB.
 /// But from the genome, you can regenerate the whole.
 use crate::actions::EssenceAction;
-use crate::causal_graph::{CausalGraph, DistinctionId};
+use crate::causal_graph::{LineageAgent, DistinctionId};
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::roots::RootType;
 use chrono::{DateTime, Utc};
@@ -203,7 +203,7 @@ impl EssenceAgent {
     /// Extraction synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔExtractTopology_Action`
     pub fn extract_genome(
         &self,
-        causal_graph: &CausalGraph,
+        causal_graph: &LineageAgent,
         epoch_number: usize,
         distinction_count: usize,
     ) -> Genome {
@@ -367,12 +367,12 @@ impl EssenceAgent {
     }
 
     /// Find root distinctions (no parents).
-    fn find_roots(&self, causal_graph: &CausalGraph) -> Vec<DistinctionId> {
+    fn find_roots(&self, causal_graph: &LineageAgent) -> Vec<DistinctionId> {
         causal_graph.roots()
     }
 
     /// Capture causal topology.
-    fn capture_topology(&self, _causal_graph: &CausalGraph) -> CausalTopology {
+    fn capture_topology(&self, _causal_graph: &LineageAgent) -> CausalTopology {
         // TODO: Implement proper topology capture
         // For now, return empty
         CausalTopology {
@@ -453,19 +453,14 @@ pub struct EssenceStats {
     pub total_archive_size: usize,
 }
 
-/// Backward-compatible type alias for existing code.
-pub type DeepMemory = EssenceAgent;
 
-/// Backward-compatible type alias for existing code.
-pub type DeepConfig = EssenceConfig;
 
-/// Backward-compatible type alias for existing code.
-pub type DeepStats = EssenceStats;
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::causal_graph::CausalGraph;
+    use crate::causal_graph::LineageAgent;
 
     fn create_test_engine() -> SharedEngine {
         SharedEngine::new()
@@ -484,7 +479,7 @@ mod tests {
     fn test_extract_genome() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         // Add some nodes
         causal_graph.add_node("root1".to_string());
@@ -507,7 +502,7 @@ mod tests {
     fn test_express_genome() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -537,7 +532,7 @@ mod tests {
     fn test_get_latest_genome() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -557,7 +552,7 @@ mod tests {
     fn test_serialize_deserialize() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -587,7 +582,7 @@ mod tests {
         let engine = create_test_engine();
         let essence = EssenceAgent::with_config(config, &engine);
 
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
         let genome = essence.extract_genome(&causal_graph, 0, 100);
 
         // Should still work with custom config
@@ -599,7 +594,7 @@ mod tests {
     fn test_stats() {
         let engine = create_test_engine();
         let essence = EssenceAgent::new(&engine);
-        let causal_graph = CausalGraph::new(&create_test_engine());
+        let causal_graph = LineageAgent::new(&create_test_engine());
 
         causal_graph.add_node("root".to_string());
 
@@ -641,14 +636,4 @@ mod tests {
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
 
-    #[test]
-    fn test_backward_compatible_aliases() {
-        // Ensure backward compatibility works
-        let engine = create_test_engine();
-        let _deep_memory: DeepMemory = EssenceAgent::new(&engine);
-        let _config: DeepConfig = EssenceConfig::default();
-        let engine2 = create_test_engine();
-        let agent = EssenceAgent::with_config(_config, &engine2);
-        let _stats: DeepStats = agent.stats();
-    }
 }

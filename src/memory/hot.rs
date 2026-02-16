@@ -439,14 +439,9 @@ impl TemperatureStats {
     }
 }
 
-/// Backward-compatible type alias for existing code.
-pub type HotMemory = TemperatureAgent;
 
-/// Backward-compatible type alias for existing code.
-pub type HotConfig = TemperatureConfig;
 
-/// Backward-compatible type alias for existing code.
-pub type HotStats = TemperatureStats;
+
 
 #[cfg(test)]
 mod tests {
@@ -632,14 +627,4 @@ mod tests {
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
 
-    #[test]
-    fn test_backward_compatible_aliases() {
-        // Ensure backward compatibility works
-        let engine = create_test_engine();
-        let _hot_memory: HotMemory = TemperatureAgent::new(&engine);
-        let _config: HotConfig = TemperatureConfig::default();
-        let engine2 = create_test_engine();
-        let agent = TemperatureAgent::with_config(_config, &engine2);
-        let _stats: HotStats = agent.stats();
-    }
 }

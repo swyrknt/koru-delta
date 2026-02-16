@@ -19,7 +19,7 @@
 //! - Time travel: Full history preserved via synthesis chain
 
 use crate::actions::StorageAction;
-use crate::causal_graph::CausalGraph;
+use crate::causal_graph::LineageAgent;
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
@@ -49,7 +49,7 @@ pub struct StorageAgent {
     engine: Arc<DistinctionEngine>,
 
     /// Causal graph: tracks how distinctions emerge from one another
-    causal_graph: CausalGraph,
+    causal_graph: LineageAgent,
 
     /// Reference graph: tracks what distinctions reference what
     reference_graph: ReferenceGraph,
@@ -88,7 +88,7 @@ impl StorageAgent {
             local_root,
             _field,
             engine,
-            causal_graph: CausalGraph::new(shared_engine),
+            causal_graph: LineageAgent::new(shared_engine),
             reference_graph: ReferenceGraph::new(),
             current_state: DashMap::new(),
             version_store: DashMap::new(),
@@ -312,7 +312,7 @@ impl StorageAgent {
     }
 
     /// Get reference to causal graph.
-    pub fn causal_graph(&self) -> &CausalGraph {
+    pub fn causal_graph(&self) -> &LineageAgent {
         &self.causal_graph
     }
 
@@ -562,8 +562,7 @@ impl LocalCausalAgent for StorageAgent {
 // BACKWARD COMPATIBILITY
 // ============================================================================
 
-/// Backward-compatible type alias.
-pub type CausalStorage = StorageAgent;
+
 
 #[cfg(test)]
 mod tests {

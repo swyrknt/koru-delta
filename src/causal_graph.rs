@@ -461,8 +461,7 @@ impl LocalCausalAgent for LineageAgent {
     }
 }
 
-/// Backward-compatible type alias for existing code.
-pub type CausalGraph = LineageAgent;
+
 
 #[cfg(test)]
 mod tests {
@@ -650,10 +649,4 @@ mod tests {
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
 
-    #[test]
-    fn test_backward_compatible_alias() {
-        // Ensure backward compatibility works
-        let engine = create_test_engine();
-        let _causal_graph: CausalGraph = LineageAgent::new(&engine);
-    }
 }

@@ -176,7 +176,7 @@ pub use query::{
 };
 
 // Views exports
-pub use views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
+pub use views::{PerspectiveAgent, ViewData, ViewDefinition, ViewInfo};
 
 // Vector exports
 pub use vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
@@ -191,7 +191,7 @@ pub use memory::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use subscriptions::{
     ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionId, SubscriptionInfo,
-    SubscriptionManager,
+    SubscriptionAgent,
 };
 
 // Cluster exports (non-WASM only)
@@ -242,7 +242,7 @@ pub mod prelude {
     };
 
     // Views types
-    pub use crate::views::{ViewData, ViewDefinition, ViewInfo, ViewManager};
+    pub use crate::views::{PerspectiveAgent, ViewData, ViewDefinition, ViewInfo};
 
     // Vector types
     pub use crate::vector::{Vector, VectorSearchOptions, VectorSearchResult};
@@ -256,7 +256,7 @@ pub mod prelude {
     #[cfg(not(target_arch = "wasm32"))]
     pub use crate::subscriptions::{
         ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionId,
-        SubscriptionInfo, SubscriptionManager,
+        SubscriptionAgent, SubscriptionInfo,
     };
 
     // Cluster types (non-WASM only)

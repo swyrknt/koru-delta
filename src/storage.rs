@@ -10,7 +10,7 @@
 /// - Time-travel queries traverse the causal graph
 ///
 /// The storage layer is thread-safe and uses DashMap for lock-free concurrent access.
-use crate::causal_graph::CausalGraph;
+use crate::causal_graph::LineageAgent;
 use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
 use crate::reference_graph::ReferenceGraph;
@@ -50,7 +50,7 @@ pub struct CausalStorage {
 
     /// Causal graph: tracks how distinctions emerge from one another
     /// Captured from emergent behavior of put() operations
-    causal_graph: CausalGraph,
+    causal_graph: LineageAgent,
 
     /// Reference graph: tracks what distinctions reference what
     /// Captured from emergent relationships in values
@@ -88,7 +88,7 @@ impl CausalStorage {
         
         Self {
             engine,
-            causal_graph: CausalGraph::new(&shared_engine),
+            causal_graph: LineageAgent::new(&shared_engine),
             reference_graph: ReferenceGraph::new(),
             current_state: DashMap::new(),
             version_store: DashMap::new(),
@@ -775,7 +775,7 @@ impl CausalStorage {
     }
 
     /// Access the causal graph (for advanced operations).
-    pub fn causal_graph(&self) -> &CausalGraph {
+    pub fn causal_graph(&self) -> &LineageAgent {
         &self.causal_graph
     }
 

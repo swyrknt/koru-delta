@@ -38,7 +38,7 @@ pub use merkle::{MerkleNode, MerkleTree};
 pub use world::{SyncResult, WorldReconciliation};
 
 use crate::actions::{ConflictResolution, ReconciliationAction};
-use crate::causal_graph::CausalGraph;
+use crate::causal_graph::LineageAgent;
 use crate::engine::SharedEngine;
 use crate::roots::KoruRoots;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
@@ -244,7 +244,7 @@ impl ReconciliationAgent {
     /// Reconcile with a causal graph.
     ///
     /// Returns distinctions in our graph that are missing from the remote graph.
-    pub fn reconcile_with_graph(&self, remote_graph: &CausalGraph) -> Vec<String> {
+    pub fn reconcile_with_graph(&self, remote_graph: &LineageAgent) -> Vec<String> {
         // Get all distinctions from remote graph
         let remote_distinctions: HashSet<_> = remote_graph.all_nodes().into_iter().collect();
 
@@ -343,8 +343,7 @@ impl LocalCausalAgent for ReconciliationAgent {
     }
 }
 
-// Backward-compatible type alias
-pub type ReconciliationManager = ReconciliationAgent;
+
 
 impl Default for ReconciliationAgent {
     fn default() -> Self {
@@ -381,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_manager_basic() {
-        let mut manager = ReconciliationManager::new();
+        let mut manager = ReconciliationAgent::new();
         assert!(manager.is_empty());
 
         manager.add_local_distinction("dist_1".to_string());
@@ -394,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_merkle_root() {
-        let mut manager = ReconciliationManager::new();
+        let mut manager = ReconciliationAgent::new();
 
         let root1 = manager.merkle_root();
         assert_eq!(root1, [0; 32]); // Empty
@@ -406,8 +405,8 @@ mod tests {
 
     #[test]
     fn test_deterministic_root() {
-        let mut manager1 = ReconciliationManager::new();
-        let mut manager2 = ReconciliationManager::new();
+        let mut manager1 = ReconciliationAgent::new();
+        let mut manager2 = ReconciliationAgent::new();
 
         for i in 0..10 {
             manager1.add_local_distinction(format!("dist_{}", i));
@@ -419,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_bloom_filter() {
-        let mut manager = ReconciliationManager::new();
+        let mut manager = ReconciliationAgent::new();
         for i in 0..100 {
             manager.add_local_distinction(format!("dist_{}", i));
         }

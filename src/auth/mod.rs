@@ -50,7 +50,7 @@
 //! # Example Usage
 //!
 //! ```rust,ignore
-//! use koru_delta::auth::{AuthManager, AuthConfig, IdentityUserData};
+//! use koru_delta::auth::{IdentityAgent, IdentityConfig, IdentityUserData};
 //! use koru_delta::storage::CausalStorage;
 //! use std::sync::Arc;
 //!
@@ -61,7 +61,7 @@
 //! ));
 //!
 //! // Create auth manager
-//! let auth = AuthManager::new(storage);
+//! let auth = IdentityAgent::new(storage);
 //!
 //! // Create identity
 //! let user_data = IdentityUserData {
@@ -118,9 +118,9 @@ pub use identity::{
     sign_message_base58, verify_identity_pow, verify_signature, DEFAULT_DIFFICULTY, MAX_DIFFICULTY,
     MIN_DIFFICULTY,
 };
-pub use manager::{AuthConfig, AuthManager, AuthStats, IdentityAgent, IdentityConfig, IdentityStats};
+pub use manager::{IdentityAgent, IdentityConfig, IdentityStats};
 pub use session::{
-    create_session_token, derive_session_keys, validate_session_token, SessionManager,
+    create_session_token, derive_session_keys, validate_session_token, SessionAgent,
     DEFAULT_SESSION_TTL_SECONDS, MAX_SESSION_TTL_SECONDS,
 };
 pub use storage::{AuthStorageAdapter, AUTH_NAMESPACE};
@@ -281,7 +281,7 @@ mod integration_tests {
         let auth1 = init(storage.clone(), &shared_engine);
         let auth2 = init_with_config(
             storage,
-            AuthConfig {
+            IdentityConfig {
                 identity_difficulty: 3,
                 ..Default::default()
             },

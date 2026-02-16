@@ -19,8 +19,8 @@ use crate::roots::KoruRoots;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::sync::Arc;
 
-pub use consolidation::{ConsolidationConfig, ConsolidationProcess, ConsolidationResult};
-pub use distillation::{DistillationConfig, DistillationProcess, DistillationResult, Fitness};
+pub use consolidation::{ConsolidationResult, SleepAgent, SleepConfig};
+pub use distillation::{EvolutionAgent, EvolutionConfig, EvolutionResult, EvolutionStats, Fitness};
 pub use genome_update::{GenomeUpdateConfig, GenomeUpdateProcess};
 
 /// Process agent implementing LocalCausalAgent trait.
@@ -39,10 +39,10 @@ pub struct ProcessAgent {
     engine: Arc<DistinctionEngine>,
 
     /// Consolidation process
-    consolidation: ConsolidationProcess,
+    consolidation: SleepAgent,
 
     /// Distillation process
-    distillation: DistillationProcess,
+    distillation: EvolutionAgent,
 
     /// Genome update process
     genome_update: GenomeUpdateProcess,
@@ -62,16 +62,16 @@ impl ProcessAgent {
             local_root,
             _field: shared_engine.clone(),
             engine,
-            consolidation: ConsolidationProcess::new(shared_engine),
-            distillation: DistillationProcess::new(shared_engine),
+            consolidation: SleepAgent::new(shared_engine),
+            distillation: EvolutionAgent::new(shared_engine),
             genome_update: GenomeUpdateProcess::new(),
         }
     }
 
     /// Create with custom configurations.
     pub fn with_config(
-        consolidation: ConsolidationConfig,
-        distillation: DistillationConfig,
+        consolidation: SleepConfig,
+        distillation: EvolutionConfig,
         genome: GenomeUpdateConfig,
         shared_engine: &SharedEngine,
     ) -> Self {
@@ -83,8 +83,8 @@ impl ProcessAgent {
             local_root,
             _field: shared_engine.clone(),
             engine,
-            consolidation: ConsolidationProcess::with_config(consolidation, shared_engine),
-            distillation: DistillationProcess::with_config(distillation, shared_engine),
+            consolidation: SleepAgent::with_config(consolidation, shared_engine),
+            distillation: EvolutionAgent::with_config(distillation, shared_engine),
             genome_update: GenomeUpdateProcess::with_config(genome),
         }
     }
@@ -106,12 +106,12 @@ impl ProcessAgent {
     }
 
     /// Get the consolidation process.
-    pub fn consolidation(&self) -> &ConsolidationProcess {
+    pub fn consolidation(&self) -> &SleepAgent {
         &self.consolidation
     }
 
     /// Get the distillation process.
-    pub fn distillation(&self) -> &DistillationProcess {
+    pub fn distillation(&self) -> &EvolutionAgent {
         &self.distillation
     }
 
@@ -192,8 +192,7 @@ impl LocalCausalAgent for ProcessAgent {
     }
 }
 
-// Backward-compatible type alias
-pub type ProcessRunner = ProcessAgent;
+
 
 impl Default for ProcessAgent {
     fn default() -> Self {
@@ -213,7 +212,7 @@ mod tests {
     #[test]
     fn test_process_runner_new() {
         let engine = create_test_engine();
-        let runner = ProcessRunner::new(&engine);
+        let runner = ProcessAgent::new(&engine);
 
         // Should have all three processes
         assert_eq!(runner.consolidation().cycle_count(), 0);
@@ -224,14 +223,14 @@ mod tests {
     #[test]
     fn test_process_runner_with_config() {
         let engine = create_test_engine();
-        let config = ProcessRunner::with_config(
-            ConsolidationConfig {
+        let config = ProcessAgent::with_config(
+            SleepConfig {
                 interval_secs: 3600,
                 batch_size: 100,
                 demotion_idle_threshold: std::time::Duration::from_secs(600),
                 consolidation_ratio: 0.5,
             },
-            DistillationConfig {
+            EvolutionConfig {
                 interval_secs: 7200,
                 fitness_threshold: 3,
                 ..Default::default()

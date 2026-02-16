@@ -454,14 +454,9 @@ impl ChronicleStats {
     }
 }
 
-/// Backward-compatible type alias for existing code.
-pub type WarmMemory = ChronicleAgent;
 
-/// Backward-compatible type alias for existing code.
-pub type WarmConfig = ChronicleConfig;
 
-/// Backward-compatible type alias for existing code.
-pub type WarmStats = ChronicleStats;
+
 
 #[cfg(test)]
 mod tests {
@@ -662,14 +657,4 @@ mod tests {
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
 
-    #[test]
-    fn test_backward_compatible_aliases() {
-        // Ensure backward compatibility works
-        let engine = create_test_engine();
-        let _warm_memory: WarmMemory = ChronicleAgent::new(&engine);
-        let _config: WarmConfig = ChronicleConfig::default();
-        let engine2 = create_test_engine();
-        let agent = ChronicleAgent::with_config(_config, &engine2);
-        let _stats: WarmStats = agent.stats();
-    }
 }

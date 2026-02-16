@@ -27,9 +27,9 @@
 //!
 //! ```rust,ignore
 //! use koru_delta::auth::http::{auth_routes, auth_middleware};
-//! use koru_delta::auth::AuthManager;
+//! use koru_delta::auth::IdentityAgent;
 //!
-//! let auth_manager = AuthManager::new(storage);
+//! let auth_manager = IdentityAgent::new(storage);
 //! let app = Router::new()
 //!     .merge(auth_routes(auth_manager.clone()))
 //!     .route_layer(auth_middleware(auth_manager));
@@ -46,7 +46,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::auth::manager::AuthManager;
+use crate::auth::manager::IdentityAgent;
 use crate::auth::types::{
     AuthError, Capability, Identity, IdentityUserData, Permission, ResourcePattern, Session,
 };
@@ -252,7 +252,7 @@ pub struct AuthErrorResponse {
 // ============================================================================
 
 /// Create auth routes.
-pub fn auth_routes(auth: Arc<RwLock<AuthManager>>) -> Router {
+pub fn auth_routes(auth: Arc<RwLock<IdentityAgent>>) -> Router {
     Router::new()
         // Identity management
         .route("/api/v1/auth/register", post(handle_register))
@@ -270,7 +270,7 @@ pub fn auth_routes(auth: Arc<RwLock<AuthManager>>) -> Router {
 }
 
 /// Create protected routes that require authentication.
-pub fn protected_routes(auth: Arc<RwLock<AuthManager>>) -> Router {
+pub fn protected_routes(auth: Arc<RwLock<IdentityAgent>>) -> Router {
     Router::new()
         // Session management
         .route("/api/v1/auth/session/revoke", post(handle_revoke_session))
@@ -301,7 +301,7 @@ pub fn protected_routes(auth: Arc<RwLock<AuthManager>>) -> Router {
 ///     .route("/protected", get(protected_handler))
 ///     .layer(auth_layer(auth_manager));
 /// ```
-pub fn auth_layer(auth: Arc<RwLock<AuthManager>>) -> axum::Extension<Arc<RwLock<AuthManager>>> {
+pub fn auth_layer(auth: Arc<RwLock<IdentityAgent>>) -> axum::Extension<Arc<RwLock<IdentityAgent>>> {
     axum::Extension(auth)
 }
 
@@ -311,7 +311,7 @@ pub fn auth_layer(auth: Arc<RwLock<AuthManager>>) -> axum::Extension<Arc<RwLock<
 /// ```rust,ignore
 /// async fn handler(
 ///     headers: axum::http::HeaderMap,
-///     State(auth): State<Arc<RwLock<AuthManager>>>,
+///     State(auth): State<Arc<RwLock<IdentityAgent>>>,
 /// ) -> Result<Response, StatusCode> {
 ///     let ctx = extract_auth_context(&headers, &auth).await?;
 ///     // Use ctx...
@@ -319,7 +319,7 @@ pub fn auth_layer(auth: Arc<RwLock<AuthManager>>) -> axum::Extension<Arc<RwLock<
 /// ```
 pub async fn extract_auth_context(
     headers: &axum::http::HeaderMap,
-    auth: &AuthManager,
+    auth: &IdentityAgent,
 ) -> Result<AuthContext, StatusCode> {
     let session_id = headers
         .get("authorization")
@@ -344,7 +344,7 @@ pub async fn extract_auth_context(
 /// Require authentication from headers.
 pub async fn require_auth_context(
     headers: &axum::http::HeaderMap,
-    auth: &AuthManager,
+    auth: &IdentityAgent,
 ) -> Result<(Identity, Session), StatusCode> {
     let session_id = headers
         .get("authorization")
@@ -369,7 +369,7 @@ pub async fn require_auth_context(
 
 /// Handle identity registration.
 async fn handle_register(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     // For now, we mine the identity server-side
@@ -387,7 +387,7 @@ async fn handle_register(
 
 /// Handle challenge request.
 async fn handle_challenge(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     Json(request): Json<ChallengeRequest>,
 ) -> Result<Json<ChallengeResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;
@@ -403,7 +403,7 @@ async fn handle_challenge(
 
 /// Handle challenge verification and session creation.
 async fn handle_verify(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     Json(request): Json<VerifyRequest>,
 ) -> Result<Json<SessionResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;
@@ -420,7 +420,7 @@ async fn handle_verify(
 
 /// Handle session validation.
 async fn handle_validate_session(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     Json(request): Json<ValidateSessionRequest>,
 ) -> Json<ValidateSessionResponse> {
     let auth_guard = auth.read().await;
@@ -442,7 +442,7 @@ async fn handle_validate_session(
 
 /// Handle session revocation.
 async fn handle_revoke_session(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     headers: axum::http::HeaderMap,
     Json(request): Json<ValidateSessionRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
@@ -467,7 +467,7 @@ async fn handle_revoke_session(
 
 /// Handle capability grant.
 async fn handle_grant_capability(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     headers: axum::http::HeaderMap,
     Json(request): Json<GrantCapabilityRequest>,
 ) -> Result<Json<CapabilityResponse>, (StatusCode, Json<AuthErrorResponse>)> {
@@ -518,7 +518,7 @@ async fn handle_grant_capability(
 
 /// Handle capability revocation.
 async fn handle_revoke_capability(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     headers: axum::http::HeaderMap,
     Json(_request): Json<RevokeCapabilityRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
@@ -547,7 +547,7 @@ async fn handle_revoke_capability(
 
 /// Handle authorization check.
 async fn handle_authorize(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     headers: axum::http::HeaderMap,
     Json(request): Json<AuthorizeRequest>,
 ) -> Result<Json<AuthorizeResponse>, (StatusCode, Json<AuthErrorResponse>)> {
@@ -579,7 +579,7 @@ async fn handle_authorize(
 
 /// Handle listing capabilities.
 async fn handle_list_capabilities(
-    State(auth): State<Arc<RwLock<AuthManager>>>,
+    State(auth): State<Arc<RwLock<IdentityAgent>>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<Capability>>, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;

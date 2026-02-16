@@ -28,7 +28,7 @@
 use crate::actions::{SleepAction, SleepPhase};
 use crate::causal_graph::DistinctionId;
 use crate::engine::{FieldHandle, SharedEngine};
-use crate::memory::{ColdMemory, HotMemory, WarmMemory};
+use crate::memory::{ArchiveAgent, ChronicleAgent, TemperatureAgent};
 use crate::roots::RootType;
 use crate::types::{FullKey, VectorClock, VersionedValue};
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
@@ -174,12 +174,12 @@ impl SleepAgent {
 
     /// Handle eviction from Hot memory - move to Warm.
     ///
-    /// Called when HotMemory evicts a value.
+    /// Called when TemperatureAgent evicts a value.
     ///
     /// # LCA Pattern
     ///
     /// Consolidation synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔConsolidate_Action`
-    pub fn handle_hot_eviction(&self, warm: &WarmMemory, key: FullKey, versioned: VersionedValue) {
+    pub fn handle_hot_eviction(&self, warm: &ChronicleAgent, key: FullKey, versioned: VersionedValue) {
         // Synthesize consolidate action
         let action = SleepAction::Consolidate {
             from_tier: "hot".to_string(),
@@ -196,8 +196,8 @@ impl SleepAgent {
     /// Finds idle distinctions in Warm and moves them to Cold.
     pub fn consolidate_warm_to_cold(
         &self,
-        warm: &WarmMemory,
-        cold: &ColdMemory,
+        warm: &ChronicleAgent,
+        cold: &ArchiveAgent,
         reference_counts: &std::collections::HashMap<DistinctionId, usize>,
     ) -> ConsolidationResult {
         // Enter deep sleep phase for this consolidation
@@ -260,8 +260,8 @@ impl SleepAgent {
     /// Called to bring hot candidates back into fast memory.
     pub fn promote_to_hot(
         &self,
-        warm: &WarmMemory,
-        hot: &HotMemory,
+        warm: &ChronicleAgent,
+        hot: &TemperatureAgent,
         _epoch_num: usize,
         limit: usize,
     ) -> usize {
@@ -289,7 +289,7 @@ impl SleepAgent {
     /// Run a full consolidation cycle.
     ///
     /// Cycles through sleep phases and performs consolidation.
-    pub fn run_cycle(&self, warm: &WarmMemory, cold: &ColdMemory) {
+    pub fn run_cycle(&self, warm: &ChronicleAgent, cold: &ArchiveAgent) {
         self.cycle_count.fetch_add(1, Ordering::Relaxed);
 
         // Light sleep: quick consolidation
@@ -381,17 +381,13 @@ pub struct ConsolidationStats {
     pub warm_to_cold: u64,
 }
 
-/// Backward-compatible type alias for existing code.
-pub type ConsolidationProcess = SleepAgent;
 
-/// Backward-compatible type alias for existing code.
-pub type ConsolidationConfig = SleepConfig;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::engine::SharedEngine;
-    use crate::memory::WarmMemory;
+    use crate::memory::ChronicleAgent;
     use serde_json::json;
     use std::sync::Arc;
 
@@ -443,7 +439,7 @@ mod tests {
     fn test_handle_hot_eviction() {
         let engine = create_test_engine();
         let sleep = SleepAgent::new(&engine);
-        let warm = WarmMemory::new(&engine);
+        let warm = ChronicleAgent::new(&engine);
         let key = crate::types::FullKey::new("ns", "key1");
         let versioned = create_versioned("v1");
 
@@ -457,7 +453,7 @@ mod tests {
     fn test_consolidation_stats() {
         let engine = create_test_engine();
         let sleep = SleepAgent::new(&engine);
-        let warm = WarmMemory::new(&engine);
+        let warm = ChronicleAgent::new(&engine);
 
         // Simulate some evictions
         for i in 0..5 {
@@ -501,8 +497,8 @@ mod tests {
     fn test_run_cycle() {
         let engine = create_test_engine();
         let sleep = SleepAgent::new(&engine);
-        let warm = WarmMemory::new(&engine);
-        let cold = ColdMemory::new(&engine);
+        let warm = ChronicleAgent::new(&engine);
+        let cold = ArchiveAgent::new(&engine);
 
         assert_eq!(sleep.cycle_count(), 0);
 
@@ -536,11 +532,4 @@ mod tests {
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
 
-    #[test]
-    fn test_backward_compatible_aliases() {
-        // Ensure backward compatibility works
-        let engine = create_test_engine();
-        let _consolidation: ConsolidationProcess = SleepAgent::new(&engine);
-        let _config: ConsolidationConfig = SleepConfig::default();
-    }
 }
