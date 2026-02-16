@@ -231,6 +231,32 @@ impl IdentityAgent {
         self.storage.get_identity(public_key)
     }
 
+    /// Verify that an identity exists and has valid proof-of-work.
+    ///
+    /// This is a convenience method for checking identity validity.
+    /// Returns true if the identity exists and passes verification.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - The public key of the identity to verify
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// if auth.verify_identity("C4nCw...").await? {
+    ///     println!("Identity is valid");
+    /// }
+    /// ```
+    pub async fn verify_identity(&self, public_key: &str) -> Result<bool, AuthError> {
+        match self.get_identity(public_key)? {
+            Some(identity) => {
+                // Verify the proof-of-work is still valid
+                Ok(verify_identity_pow(&identity))
+            }
+            None => Ok(false),
+        }
+    }
+
     /// Update an identity's user data.
     pub fn update_identity(
         &self,

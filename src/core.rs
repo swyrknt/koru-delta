@@ -864,6 +864,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// ];
     /// let results = db.put_batch(items).await?;
     /// ```
+    /// 
+    /// For simpler usage with owned strings, see `put_batch_values`.
     pub async fn put_batch<T: Serialize>(
         &self,
         items: Vec<(impl Into<String>, impl Into<String>, T)>,
@@ -948,6 +950,45 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let elapsed = start.elapsed();
         info!(count, ?elapsed, "Batch put operation completed");
         Ok(versioned_values)
+    }
+
+    /// Simplified batch put using pre-serialized values.
+    ///
+    /// This is easier to use than `put_batch` when you have owned strings
+    /// and serde_json::Value already prepared.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace for all items
+    /// * `items` - Vector of (key, value) pairs
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let items = vec![
+    ///     ("key1".to_string(), json!({"data": 1})),
+    ///     ("key2".to_string(), json!({"data": 2})),
+    /// ];
+    /// db.put_batch_in_ns("myns", items).await?;
+    /// ```
+    pub async fn put_batch_in_ns(
+        &self,
+        namespace: impl Into<String>,
+        items: Vec<(String, serde_json::Value)>,
+    ) -> DeltaResult<Vec<VersionedValue>> {
+        let namespace = namespace.into();
+        let batch: Vec<(String, String, serde_json::Value)> = items
+            .into_iter()
+            .map(|(key, value)| (namespace.clone(), key, value))
+            .collect();
+        
+        // Convert to the format expected by storage
+        let mut converted = Vec::with_capacity(batch.len());
+        for (ns, key, value) in batch {
+            converted.push((ns, key, value));
+        }
+        
+        self.storage.put_batch(converted)
     }
 
     /// Get the current value for a key.
@@ -1223,6 +1264,77 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         debug!(results = results.len(), "Vector search completed");
         Ok(results)
+    }
+
+    /// Simplified: Store content with an auto-generated distinction-based embedding.
+    ///
+    /// This is the high-level convenience method for semantic storage.
+    /// The embedding is synthesized from the content's structure in distinction space.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace to store in
+    /// * `key` - The key for this content
+    /// * `content` - The content to store and embed
+    /// * `metadata` - Optional metadata to store with the embedding
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// db.put_similar("docs", "article1", json!({"text": "AI is powerful"}), None).await?;
+    /// ```
+    pub async fn put_similar(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        content: impl Serialize,
+        metadata: Option<serde_json::Value>,
+    ) -> DeltaResult<VersionedValue> {
+        let namespace = namespace.into();
+        let key = key.into();
+        
+        // Serialize content for embedding generation
+        let content_json = serde_json::to_value(&content)?;
+        
+        // Synthesize distinction-based embedding
+        let vector = crate::vector::Vector::synthesize(&content_json, 128);
+        
+        // Store using the underlying embed method
+        self.embed(&namespace, &key, vector, metadata).await
+    }
+
+    /// Simplified: Search for content similar to the given text/content.
+    ///
+    /// This generates an embedding from the query content and finds similar items.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - Optional namespace to search (None = all)
+    /// * `query_content` - The content to find similar items to
+    /// * `top_k` - Maximum number of results
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let results = db.find_similar(
+    ///     Some("docs"),
+    ///     json!({"text": "artificial intelligence"}),
+    ///     5
+    /// ).await?;
+    /// ```
+    pub async fn find_similar(
+        &self,
+        namespace: Option<&str>,
+        query_content: impl Serialize,
+        top_k: usize,
+    ) -> DeltaResult<Vec<crate::vector::VectorSearchResult>> {
+        let query_json = serde_json::to_value(&query_content)?;
+        let query_vector = crate::vector::Vector::synthesize(&query_json, 128);
+        
+        let options = crate::vector::VectorSearchOptions::new()
+            .top_k(top_k);
+        
+        self.embed_search(namespace, &query_vector, options).await
     }
 
     /// Search for similar vectors at a specific point in time.
