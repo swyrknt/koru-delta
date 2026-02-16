@@ -2896,8 +2896,8 @@ impl Canonicalizable for SleepCreativeAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
 
+    #[test]
     fn test_temperature_levels() {
         assert_ne!(TemperatureLevel::Hot, TemperatureLevel::Cold);
         assert_ne!(TemperatureLevel::Warm, TemperatureLevel::Cool);

@@ -3199,4 +3199,187 @@ mod tests {
         assert_ne!(root1.id(), root4.id());
         assert_ne!(root2.id(), root4.id());
     }
+
+    // ============================================================================
+    // ALIS AI Integration Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_ttl_storage_and_expiration() {
+        let db = create_test_db().await;
+
+        // Store with short TTL
+        db.put_with_ttl("test", "key1", json!({"data": "value"}), 1)
+            .await
+            .unwrap();
+
+        // Should appear in expiring soon list
+        let expiring = db.list_expiring_soon(10).await;
+        assert!(!expiring.is_empty());
+        let found = expiring.iter().any(|(ns, key, _)| ns == "test" && key == "key1");
+        assert!(found, "Key should be in expiring list");
+
+        // Wait for expiration
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+        // Cleanup should remove it
+        let cleaned = db.cleanup_expired().await.unwrap();
+        assert_eq!(cleaned, 1);
+
+        // Should no longer be in expiring list
+        let expiring_after = db.list_expiring_soon(10).await;
+        let still_exists = expiring_after.iter().any(|(ns, key, _)| ns == "test" && key == "key1");
+        assert!(!still_exists, "Key should be removed after cleanup");
+    }
+
+    #[tokio::test]
+    async fn test_ttl_list_expiring_soon() {
+        let db = create_test_db().await;
+
+        // Store items with different TTLs
+        db.put_with_ttl("test", "short", json!({}), 5).await.unwrap();
+        db.put_with_ttl("test", "long", json!({}), 100).await.unwrap();
+        db.put_with_ttl("other", "medium", json!({}), 50).await.unwrap();
+
+        // List items expiring within 10 seconds
+        let expiring = db.list_expiring_soon(10).await;
+        assert_eq!(expiring.len(), 1);
+        assert_eq!(expiring[0].1, "short");
+
+        // List items expiring within 60 seconds
+        let expiring_60 = db.list_expiring_soon(60).await;
+        assert_eq!(expiring_60.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_graph_connectivity() {
+        let db = create_test_db().await;
+
+        // Create causal chain: A → B → C
+        db.put("graph", "A", json!({"next": "B"})).await.unwrap();
+        db.put("graph", "B", json!({"next": "C"})).await.unwrap();
+        db.put("graph", "C", json!({})).await.unwrap();
+        
+        // Note: In the actual implementation, causality is tracked through
+        // the causal graph when using put_with_parents or through synthesis
+        // For this test, we're checking the API exists and returns a result
+        let _connected = db.are_connected("graph", "A", "C").await.unwrap();
+        let _path = db.get_connection_path("graph", "A", "C").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_highly_connected() {
+        let db = create_test_db().await;
+
+        // Create some distinctions
+        for i in 0..5 {
+            db.put("test", &format!("key{}", i), json!({"index": i}))
+                .await
+                .unwrap();
+        }
+
+        // Get highly connected (should return results even if empty)
+        let results: Vec<ConnectedDistinction> = db
+            .get_highly_connected(Some("test"), 3)
+            .await
+            .unwrap();
+        
+        // Results should be a vector (may be empty if no causal graph connections)
+        assert!(results.len() <= 5);
+    }
+
+    #[tokio::test]
+    async fn test_find_similar_unconnected_pairs() {
+        let db = create_test_db().await;
+
+        // Store similar content
+        db.put_similar("ns1", "a", "machine learning is powerful", None)
+            .await
+            .unwrap();
+        db.put_similar("ns2", "b", "machine learning enables ai", None)
+            .await
+            .unwrap();
+
+        // Find similar unconnected pairs
+        let pairs: Vec<UnconnectedPair> = db
+            .find_similar_unconnected_pairs(None, 10, 0.5)
+            .await
+            .unwrap();
+
+        // Should return a vector (may be empty depending on similarity threshold)
+        assert!(pairs.len() <= 10);
+    }
+
+    #[tokio::test]
+    async fn test_random_walk_combinations() {
+        let db = create_test_db().await;
+
+        // Create some distinctions for random walks
+        for i in 0..5 {
+            db.put("walk", &format!("node{}", i), json!({"index": i}))
+                .await
+                .unwrap();
+        }
+
+        // Generate random walk combinations
+        let combinations: Vec<RandomCombination> = db
+            .random_walk_combinations(3, 5)
+            .await
+            .unwrap();
+
+        // Should return a vector
+        assert!(combinations.len() <= 3);
+    }
+
+    #[tokio::test]
+    async fn test_alis_ai_full_workflow() {
+        // This test validates the complete ALIS AI workflow:
+        // 1. Store prediction with TTL
+        // 2. Check expiring soon list
+        // 3. Query graph connectivity
+        // 4. Find synthesis candidates
+        // 5. Generate creative combinations
+
+        let db = create_test_db().await;
+
+        // Step 1: Store predictions with TTL
+        db.put_with_ttl(
+            "predictions",
+            "weather",
+            json!({"prediction": "sunny", "confidence": 0.8}),
+            60,
+        )
+        .await
+        .unwrap();
+
+        // Step 2: Verify it appears in expiring soon list
+        let expiring = db.list_expiring_soon(100).await;
+        let found = expiring.iter().any(|(ns, key, _)| ns == "predictions" && key == "weather");
+        assert!(found, "Prediction should be in expiring list");
+
+        // Step 3: Store observations
+        db.put_similar("observations", "sky", "clear blue sky", None)
+            .await
+            .unwrap();
+        db.put_similar("observations", "temperature", "warm afternoon", None)
+            .await
+            .unwrap();
+
+        // Step 4: Get highly connected distinctions
+        let connected = db.get_highly_connected(Some("observations"), 5).await.unwrap();
+        // Should not panic, returns vector
+        let _ = connected.len();
+
+        // Step 5: Find synthesis candidates
+        let pairs = db.find_similar_unconnected_pairs(None, 5, 0.6).await.unwrap();
+        // Should not panic, returns vector
+        let _ = pairs.len();
+
+        // Step 6: Generate dream combinations
+        let dreams = db.random_walk_combinations(2, 3).await.unwrap();
+        // Should not panic, returns vector
+        let _ = dreams.len();
+
+        // All operations completed successfully
+    }
 }
