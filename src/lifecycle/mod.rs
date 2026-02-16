@@ -30,7 +30,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::RwLock;
 use tokio::time::interval;
-use tracing::{info, trace, warn};
+use tracing::{info, trace};
 
 use crate::causal_graph::DistinctionId;
 use crate::types::FullKey;
@@ -140,9 +140,9 @@ impl ImportanceScorer {
         &mut self,
         tracker: &AccessTracker,
     ) -> HashMap<DistinctionId, ImportanceScore> {
-        if self.ml_enabled && self.model.is_some() {
+        if let Some(model) = self.model.as_ref().filter(|_| self.ml_enabled) {
             // Use ML model for scoring
-            self.model.as_ref().unwrap().predict_all(tracker)
+            model.predict_all(tracker)
         } else {
             // Use heuristic scoring
             self.heuristic_score_all(tracker)
