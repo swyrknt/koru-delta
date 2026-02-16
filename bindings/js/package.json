@@ -1,6 +1,6 @@
 {
   "name": "koru-delta",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "The invisible database: causal, consistent, and everywhere—without configuration",
   "author": "Sawyer Kent <sawyerkent.me@gmail.com>",
   "license": "MIT OR Apache-2.0",
