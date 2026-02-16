@@ -81,6 +81,8 @@ pub enum KoruAction {
     Vector(VectorAction),
     /// Lifecycle operations - memory tier transitions.
     Lifecycle(LifecycleAction),
+    /// Session operations - authenticated session management.
+    Session(SessionAction),
 }
 
 impl From<PulseAction> for KoruAction {
@@ -120,6 +122,7 @@ impl KoruAction {
             KoruAction::Workspace(_) => "WORKSPACE",
             KoruAction::Vector(_) => "VECTOR",
             KoruAction::Lifecycle(_) => "LIFECYCLE",
+            KoruAction::Session(_) => "SESSION",
         }
     }
 
@@ -143,6 +146,7 @@ impl KoruAction {
             KoruAction::Workspace(action) => action.validate(),
             KoruAction::Vector(action) => action.validate(),
             KoruAction::Lifecycle(action) => action.validate(),
+            KoruAction::Session(action) => action.validate(),
         }
     }
 }
@@ -166,6 +170,7 @@ impl Canonicalizable for KoruAction {
             KoruAction::Workspace(action) => action.to_canonical_structure(engine),
             KoruAction::Vector(action) => action.to_canonical_structure(engine),
             KoruAction::Lifecycle(action) => action.to_canonical_structure(engine),
+            KoruAction::Session(action) => action.to_canonical_structure(engine),
         }
     }
 }
@@ -207,6 +212,7 @@ pub(crate) enum ActionSerializable {
     Workspace(WorkspaceActionSerializable),
     Vector(VectorActionSerializable),
     Lifecycle(LifecycleActionSerializable),
+    Session(SessionActionSerializable),
 }
 
 impl From<&KoruAction> for ActionSerializable {
@@ -227,6 +233,7 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Workspace(a) => ActionSerializable::Workspace(a.into()),
             KoruAction::Vector(a) => ActionSerializable::Vector(a.into()),
             KoruAction::Lifecycle(a) => ActionSerializable::Lifecycle(a.into()),
+            KoruAction::Session(a) => ActionSerializable::Session(a.into()),
         }
     }
 }
@@ -1865,6 +1872,166 @@ impl LifecycleAction {
 impl Canonicalizable for LifecycleAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
         let serializable = LifecycleActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+// ============================================================================
+// SESSION ACTIONS
+// ============================================================================
+
+/// Actions for session management agent.
+///
+/// Session operations follow the LCA pattern:
+/// - Each session operation synthesizes a new distinction
+/// - Sessions are content-addressed by their action history
+/// - All session state changes are causal distinctions
+#[derive(Debug, Clone, PartialEq)]
+pub enum SessionAction {
+    /// Create a new session after successful authentication.
+    CreateSession {
+        /// Identity public key.
+        identity_key: String,
+        /// Challenge used for authentication.
+        challenge: String,
+        /// Capabilities granted to this session.
+        capabilities: Vec<crate::auth::types::CapabilityRef>,
+    },
+    /// Validate a session (check if it exists and is not expired).
+    ValidateSession {
+        /// Session ID to validate.
+        session_id: String,
+    },
+    /// Refresh a session to extend its expiry.
+    RefreshSession {
+        /// Session ID to refresh.
+        session_id: String,
+    },
+    /// Invalidate (revoke) a session.
+    InvalidateSession {
+        /// Session ID to invalidate.
+        session_id: String,
+    },
+    /// Rotate session keys.
+    RotateKeys {
+        /// Session ID to rotate keys for.
+        session_id: String,
+    },
+    /// Clean up expired sessions.
+    CleanupExpired,
+    /// Revoke all sessions for an identity.
+    RevokeAllForIdentity {
+        /// Identity public key.
+        identity_key: String,
+    },
+}
+
+/// Serializable version of SessionAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum SessionActionSerializable {
+    CreateSession { identity_key: String, challenge: String, capabilities: Vec<crate::auth::types::CapabilityRef> },
+    ValidateSession { session_id: String },
+    RefreshSession { session_id: String },
+    InvalidateSession { session_id: String },
+    RotateKeys { session_id: String },
+    CleanupExpired,
+    RevokeAllForIdentity { identity_key: String },
+}
+
+impl From<&SessionAction> for SessionActionSerializable {
+    fn from(action: &SessionAction) -> Self {
+        match action {
+            SessionAction::CreateSession { identity_key, challenge, capabilities } => {
+                SessionActionSerializable::CreateSession {
+                    identity_key: identity_key.clone(),
+                    challenge: challenge.clone(),
+                    capabilities: capabilities.clone(),
+                }
+            }
+            SessionAction::ValidateSession { session_id } => {
+                SessionActionSerializable::ValidateSession {
+                    session_id: session_id.clone(),
+                }
+            }
+            SessionAction::RefreshSession { session_id } => {
+                SessionActionSerializable::RefreshSession {
+                    session_id: session_id.clone(),
+                }
+            }
+            SessionAction::InvalidateSession { session_id } => {
+                SessionActionSerializable::InvalidateSession {
+                    session_id: session_id.clone(),
+                }
+            }
+            SessionAction::RotateKeys { session_id } => {
+                SessionActionSerializable::RotateKeys {
+                    session_id: session_id.clone(),
+                }
+            }
+            SessionAction::CleanupExpired => SessionActionSerializable::CleanupExpired,
+            SessionAction::RevokeAllForIdentity { identity_key } => {
+                SessionActionSerializable::RevokeAllForIdentity {
+                    identity_key: identity_key.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl SessionAction {
+    /// Validate the session action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            SessionAction::CreateSession { identity_key, challenge, .. } => {
+                if identity_key.is_empty() {
+                    return Err("SessionAction::CreateSession: identity_key is empty".to_string());
+                }
+                if challenge.is_empty() {
+                    return Err("SessionAction::CreateSession: challenge is empty".to_string());
+                }
+                Ok(())
+            }
+            SessionAction::ValidateSession { session_id } => {
+                if session_id.is_empty() {
+                    return Err("SessionAction::ValidateSession: session_id is empty".to_string());
+                }
+                Ok(())
+            }
+            SessionAction::RefreshSession { session_id } => {
+                if session_id.is_empty() {
+                    return Err("SessionAction::RefreshSession: session_id is empty".to_string());
+                }
+                Ok(())
+            }
+            SessionAction::InvalidateSession { session_id } => {
+                if session_id.is_empty() {
+                    return Err("SessionAction::InvalidateSession: session_id is empty".to_string());
+                }
+                Ok(())
+            }
+            SessionAction::RotateKeys { session_id } => {
+                if session_id.is_empty() {
+                    return Err("SessionAction::RotateKeys: session_id is empty".to_string());
+                }
+                Ok(())
+            }
+            SessionAction::CleanupExpired => Ok(()),
+            SessionAction::RevokeAllForIdentity { identity_key } => {
+                if identity_key.is_empty() {
+                    return Err("SessionAction::RevokeAllForIdentity: identity_key is empty".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Canonicalizable for SessionAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = SessionActionSerializable::from(self);
         match bincode::serialize(&serializable) {
             Ok(bytes) => bytes_to_distinction(&bytes, engine),
             Err(_) => engine.d0().clone(),

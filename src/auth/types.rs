@@ -159,7 +159,7 @@ impl Session {
 }
 
 /// Reference to a capability within a session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CapabilityRef {
     /// Storage key of the capability distinction
     pub capability_key: String,

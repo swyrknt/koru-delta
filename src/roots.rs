@@ -144,6 +144,12 @@ pub struct KoruRoots {
     /// Anchors all lifecycle operations. Tier transitions are
     /// synthesized from this root with lifecycle actions.
     pub lifecycle: Distinction,
+
+    /// Session root - perspective of authenticated sessions (Root: SESSION).
+    ///
+    /// Anchors all session operations. Sessions are synthesized
+    /// from this root with session actions.
+    pub session: Distinction,
 }
 
 impl KoruRoots {
@@ -189,6 +195,7 @@ impl KoruRoots {
         let workspace = Self::synthesize_agent_root(engine, &d1, b"WORKSPACE");
         let vector = Self::synthesize_agent_root(engine, &d1, b"VECTOR");
         let lifecycle = Self::synthesize_agent_root(engine, &d1, b"LIFECYCLE");
+        let session = Self::synthesize_agent_root(engine, &d1, b"SESSION");
 
         // The field root is the synthesis of all agent roots
         // This represents the unified consciousness field
@@ -211,6 +218,7 @@ impl KoruRoots {
                 &workspace,
                 &vector,
                 &lifecycle,
+                &session,
             ],
         );
 
@@ -231,6 +239,7 @@ impl KoruRoots {
             workspace,
             vector,
             lifecycle,
+            session,
         }
     }
 
@@ -293,6 +302,7 @@ impl KoruRoots {
             RootType::Workspace => &self.workspace,
             RootType::Vector => &self.vector,
             RootType::Lifecycle => &self.lifecycle,
+            RootType::Session => &self.session,
         }
     }
 }
@@ -332,6 +342,8 @@ pub enum RootType {
     Vector,
     /// Lifecycle root.
     Lifecycle,
+    /// Session root.
+    Session,
 }
 
 impl RootType {
@@ -354,6 +366,7 @@ impl RootType {
             RootType::Workspace => "WORKSPACE",
             RootType::Vector => "VECTOR",
             RootType::Lifecycle => "LIFECYCLE",
+            RootType::Session => "SESSION",
         }
     }
 }

@@ -149,7 +149,7 @@ impl IdentityAgent {
         Self {
             storage: AuthStorageAdapter::new(storage),
             challenges: ChallengeStore::with_ttl(config.challenge_ttl_seconds),
-            sessions: SessionManager::with_ttl(config.session_ttl_seconds),
+            sessions: SessionManager::with_ttl(shared_engine, config.session_ttl_seconds),
             capabilities: RwLock::new(CapabilityManager::new()),
             config,
             local_root: RwLock::new(local_root),

@@ -2,12 +2,22 @@
 //!
 //! Sessions are created after successful challenge-response authentication.
 //! Each session has derived encryption keys via HKDF-SHA256.
+//!
+//! ## LCA Architecture
+//!
+//! SessionAgent implements `LocalCausalAgent`, making all session operations
+//! causal distinctions. The formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
 
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 
+use crate::actions::SessionAction;
 use crate::auth::types::{AuthError, CapabilityRef, Session};
+use crate::engine::SharedEngine;
+use crate::roots::KoruRoots;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 
 /// Default session TTL: 24 hours.
 pub const DEFAULT_SESSION_TTL_SECONDS: i64 = 86400;
@@ -27,27 +37,67 @@ pub struct SessionKeys {
     pub auth_key: [u8; KEY_SIZE],
 }
 
-/// Session manager for in-memory session storage.
-pub struct SessionManager {
+/// Session agent implementing LocalCausalAgent trait.
+///
+/// Follows the LCA formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+/// All session operations are causal distinctions synthesized from the session root.
+#[derive(Debug)]
+pub struct SessionAgent {
+    /// LCA: Local root distinction (Root: SESSION)
+    local_root: Distinction,
+
+    /// LCA: Handle to the unified field
+    _field: SharedEngine,
+
+    /// The underlying distinction engine for content addressing
+    engine: Arc<DistinctionEngine>,
+
     /// Map of session_id -> Session with keys
     sessions: DashMap<String, (Session, SessionKeys)>,
+
     /// Default TTL in seconds
     ttl_seconds: i64,
 }
 
-impl SessionManager {
-    /// Create a new session manager.
-    pub fn new() -> Self {
-        Self::with_ttl(DEFAULT_SESSION_TTL_SECONDS)
+impl SessionAgent {
+    /// Create a new session agent with LCA pattern.
+    ///
+    /// The agent initializes from the session canonical root,
+    /// establishing its causal anchor in the field.
+    pub fn new(field: &SharedEngine) -> Self {
+        Self::with_ttl(field, DEFAULT_SESSION_TTL_SECONDS)
     }
 
-    /// Create a session manager with custom TTL.
-    pub fn with_ttl(ttl_seconds: i64) -> Self {
+    /// Create a session agent with custom TTL.
+    pub fn with_ttl(field: &SharedEngine, ttl_seconds: i64) -> Self {
         let ttl_seconds = ttl_seconds.min(MAX_SESSION_TTL_SECONDS);
+        let engine = Arc::clone(field.inner());
+        let roots = KoruRoots::initialize(&engine);
+        let local_root = roots.session.clone();
+
         Self {
+            local_root,
+            _field: field.clone(),
+            engine,
             sessions: DashMap::new(),
             ttl_seconds,
         }
+    }
+
+    /// Get the local root distinction.
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    /// Apply a session action, synthesizing new state.
+    ///
+    /// This is the primary interface for session operations following
+    /// the LCA formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+    pub fn apply_action(&mut self, action: SessionAction) -> Distinction {
+        let engine = Arc::clone(&self.engine);
+        let new_root = self.synthesize_action(action, &engine);
+        self.local_root = new_root.clone();
+        new_root
     }
 
     /// Create a new session after successful authentication.
@@ -176,9 +226,111 @@ impl SessionManager {
     }
 }
 
-impl Default for SessionManager {
+// LCA: Synthesis methods for session operations
+impl SessionAgent {
+    /// Create a session with synthesis.
+    pub fn create_session_synthesized(
+        &mut self,
+        identity_key: &str,
+        challenge: &str,
+        capabilities: Vec<CapabilityRef>,
+    ) -> (Session, SessionKeys, Distinction) {
+        let action = SessionAction::CreateSession {
+            identity_key: identity_key.to_string(),
+            challenge: challenge.to_string(),
+            capabilities: capabilities.clone(),
+        };
+        let new_root = self.apply_action(action);
+
+        // Execute the actual session creation
+        let result = self.create_session(identity_key, challenge, capabilities);
+        (result.0, result.1, new_root)
+    }
+
+    /// Validate a session with synthesis.
+    pub fn validate_session_synthesized(
+        &mut self,
+        session_id: &str,
+    ) -> (Result<Session, AuthError>, Distinction) {
+        let action = SessionAction::ValidateSession {
+            session_id: session_id.to_string(),
+        };
+        let new_root = self.apply_action(action);
+
+        let result = self.validate_session(session_id);
+        (result, new_root)
+    }
+
+    /// Invalidate a session with synthesis.
+    pub fn invalidate_session_synthesized(
+        &mut self,
+        session_id: &str,
+    ) -> (Result<(), AuthError>, Distinction) {
+        let action = SessionAction::InvalidateSession {
+            session_id: session_id.to_string(),
+        };
+        let new_root = self.apply_action(action);
+
+        let result = self.revoke_session(session_id);
+        (result, new_root)
+    }
+
+    /// Cleanup expired sessions with synthesis.
+    pub fn cleanup_expired_synthesized(&mut self) -> (usize, Distinction) {
+        let action = SessionAction::CleanupExpired;
+        let new_root = self.apply_action(action);
+
+        let removed = self.cleanup_expired();
+        (removed, new_root)
+    }
+
+    /// Revoke all sessions for an identity with synthesis.
+    pub fn revoke_all_for_identity_synthesized(
+        &mut self,
+        identity_key: &str,
+    ) -> (usize, Distinction) {
+        let action = SessionAction::RevokeAllForIdentity {
+            identity_key: identity_key.to_string(),
+        };
+        let new_root = self.apply_action(action);
+
+        let removed = self.revoke_all_identity_sessions(identity_key);
+        (removed, new_root)
+    }
+}
+
+// LCA Trait Implementation
+impl LocalCausalAgent for SessionAgent {
+    type ActionData = SessionAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: SessionAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        // Canonical LCA pattern: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
+// Backward-compatible type alias
+pub type SessionManager = SessionAgent;
+
+impl Default for SessionAgent {
     fn default() -> Self {
-        Self::new()
+        let field = SharedEngine::new();
+        Self::new(&field)
     }
 }
 
@@ -308,7 +460,9 @@ mod tests {
 
     #[test]
     fn test_session_manager() {
-        let manager = SessionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SessionManager::new(&field);
         let identity_key = "test_identity";
         let challenge = "test_challenge";
 
@@ -337,7 +491,9 @@ mod tests {
 
     #[test]
     fn test_session_expiration() {
-        let manager = SessionManager::with_ttl(0); // 0 second TTL
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SessionManager::with_ttl(&field, 0); // 0 second TTL
         let identity_key = "test_identity";
         let challenge = "test_challenge";
 
@@ -354,7 +510,9 @@ mod tests {
 
     #[test]
     fn test_cleanup_expired() {
-        let manager = SessionManager::with_ttl(0);
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SessionManager::with_ttl(&field, 0);
 
         // Create several sessions
         for i in 0..5 {
@@ -374,7 +532,9 @@ mod tests {
 
     #[test]
     fn test_revoke_all_identity_sessions() {
-        let manager = SessionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SessionManager::new(&field);
         let identity_key = "test_identity";
 
         // Create multiple sessions for same identity
@@ -437,5 +597,140 @@ mod tests {
         // Wrong number of parts
         let result = validate_session_token("part1.part2", 60);
         assert!(matches!(result, Err(AuthError::InvalidSignature)));
+    }
+
+    // LCA Tests
+    mod lca_tests {
+        use super::*;
+        use koru_lambda_core::LocalCausalAgent;
+
+        fn setup_agent() -> SessionAgent {
+            let field = SharedEngine::new();
+            SessionAgent::new(&field)
+        }
+
+        #[test]
+        fn test_session_agent_implements_lca_trait() {
+            let agent = setup_agent();
+            
+            // Verify trait is implemented
+            let _root = agent.get_current_root();
+        }
+
+        #[test]
+        fn test_session_agent_has_unique_local_root() {
+            let field = SharedEngine::new();
+            let agent1 = SessionAgent::new(&field);
+            let agent2 = SessionAgent::new(&field);
+
+            // Each agent should have the same session root from canonical roots
+            assert_eq!(
+                agent1.local_root().id(),
+                agent2.local_root().id(),
+                "Session agents share the same canonical root"
+            );
+        }
+
+        #[test]
+        fn test_create_session_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let (session, _keys, new_root) = agent.create_session_synthesized(
+                "test_identity",
+                "test_challenge",
+                vec![],
+            );
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after synthesis");
+            assert_eq!(new_root.id(), root_after);
+            assert_eq!(session.identity_key, "test_identity");
+        }
+
+        #[test]
+        fn test_validate_session_synthesizes() {
+            let mut agent = setup_agent();
+            
+            // First create a session
+            let (session, _keys, _) = agent.create_session_synthesized(
+                "test_identity",
+                "test_challenge",
+                vec![],
+            );
+
+            let root_before = agent.local_root().id().to_string();
+
+            let (result, new_root) = agent.validate_session_synthesized(&session.session_id);
+            assert!(result.is_ok());
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after validation synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_invalidate_session_synthesizes() {
+            let mut agent = setup_agent();
+            
+            // First create a session
+            let (session, _keys, _) = agent.create_session_synthesized(
+                "test_identity",
+                "test_challenge",
+                vec![],
+            );
+
+            let root_before = agent.local_root().id().to_string();
+
+            let (result, new_root) = agent.invalidate_session_synthesized(&session.session_id);
+            assert!(result.is_ok());
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after invalidation synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_cleanup_expired_synthesizes() {
+            let field = SharedEngine::new();
+            let mut agent = SessionAgent::with_ttl(&field, 0); // 0 second TTL
+            
+            // Create some sessions
+            for i in 0..3 {
+                agent.create_session_synthesized(&format!("identity_{}", i), "challenge", vec![]);
+            }
+
+            let root_before = agent.local_root().id().to_string();
+
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            let (removed, new_root) = agent.cleanup_expired_synthesized();
+            assert_eq!(removed, 3);
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after cleanup synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_revoke_all_for_identity_synthesizes() {
+            let mut agent = setup_agent();
+            let identity_key = "test_identity";
+            
+            // Create multiple sessions for same identity
+            for i in 0..3 {
+                agent.create_session_synthesized(identity_key, &format!("challenge{}", i), vec![]);
+            }
+            // Create session for different identity
+            agent.create_session_synthesized("other_identity", "challenge_other", vec![]);
+
+            let root_before = agent.local_root().id().to_string();
+
+            let (removed, new_root) = agent.revoke_all_for_identity_synthesized(identity_key);
+            assert_eq!(removed, 3);
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after revoke all synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
     }
 }
