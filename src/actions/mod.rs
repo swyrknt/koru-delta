@@ -87,6 +87,8 @@ pub enum KoruAction {
     Subscription(SubscriptionAction),
     /// Process operations - background evolutionary processes.
     Process(ProcessAction),
+    /// Reconciliation operations - distributed set synchronization.
+    Reconciliation(ReconciliationAction),
 }
 
 impl From<PulseAction> for KoruAction {
@@ -129,6 +131,7 @@ impl KoruAction {
             KoruAction::Session(_) => "SESSION",
             KoruAction::Subscription(_) => "SUBSCRIPTION",
             KoruAction::Process(_) => "PROCESS",
+            KoruAction::Reconciliation(_) => "RECONCILIATION",
         }
     }
 
@@ -155,6 +158,7 @@ impl KoruAction {
             KoruAction::Session(action) => action.validate(),
             KoruAction::Subscription(action) => action.validate(),
             KoruAction::Process(action) => action.validate(),
+            KoruAction::Reconciliation(action) => action.validate(),
         }
     }
 }
@@ -181,6 +185,7 @@ impl Canonicalizable for KoruAction {
             KoruAction::Session(action) => action.to_canonical_structure(engine),
             KoruAction::Subscription(action) => action.to_canonical_structure(engine),
             KoruAction::Process(action) => action.to_canonical_structure(engine),
+            KoruAction::Reconciliation(action) => action.to_canonical_structure(engine),
         }
     }
 }
@@ -225,6 +230,7 @@ pub(crate) enum ActionSerializable {
     Session(SessionActionSerializable),
     Subscription(SubscriptionActionSerializable),
     Process(ProcessActionSerializable),
+    Reconciliation(ReconciliationActionSerializable),
 }
 
 impl From<&KoruAction> for ActionSerializable {
@@ -248,6 +254,7 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Session(a) => ActionSerializable::Session(a.into()),
             KoruAction::Subscription(a) => ActionSerializable::Subscription(a.into()),
             KoruAction::Process(a) => ActionSerializable::Process(a.into()),
+            KoruAction::Reconciliation(a) => ActionSerializable::Reconciliation(a.into()),
         }
     }
 }
@@ -2366,6 +2373,168 @@ impl ProcessAction {
 impl Canonicalizable for ProcessAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
         let serializable = ProcessActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+// ============================================================================
+// RECONCILIATION ACTIONS
+// ============================================================================
+
+/// Actions for distributed reconciliation agent.
+///
+/// Reconciliation operations follow the LCA pattern:
+/// - Each sync operation synthesizes a new distinction
+/// - Set reconciliation is content-addressed by action history
+/// - All sync state changes are causal distinctions
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReconciliationAction {
+    /// Start synchronization with a peer.
+    StartSync {
+        /// Peer ID to sync with.
+        peer_id: String,
+    },
+    /// Exchange Merkle roots with peer.
+    ExchangeRoots {
+        /// Remote peer's frontier/root hash.
+        peer_frontier: [u8; 32],
+    },
+    /// Request differences at divergence point.
+    RequestDifferences {
+        /// Point where trees diverge.
+        divergence_point: String,
+    },
+    /// Apply received changes.
+    ApplyDelta {
+        /// Changes to apply.
+        changes: Vec<String>,
+    },
+    /// Resolve a conflict.
+    ResolveConflict {
+        /// Conflict ID.
+        conflict_id: String,
+        /// Resolution strategy.
+        resolution: ConflictResolution,
+    },
+    /// Complete synchronization.
+    CompleteSync {
+        /// Peer ID that sync completed with.
+        peer_id: String,
+    },
+    /// Get sync status.
+    GetSyncStatus,
+}
+
+/// Conflict resolution strategies.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ConflictResolution {
+    /// Prefer local version.
+    PreferLocal,
+    /// Prefer remote version.
+    PreferRemote,
+    /// Merge both versions.
+    Merge,
+    /// Manual resolution required.
+    Manual,
+}
+
+/// Serializable version of ReconciliationAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum ReconciliationActionSerializable {
+    StartSync { peer_id: String },
+    ExchangeRoots { peer_frontier: [u8; 32] },
+    RequestDifferences { divergence_point: String },
+    ApplyDelta { changes: Vec<String> },
+    ResolveConflict { conflict_id: String, resolution: ConflictResolution },
+    CompleteSync { peer_id: String },
+    GetSyncStatus,
+}
+
+impl From<&ReconciliationAction> for ReconciliationActionSerializable {
+    fn from(action: &ReconciliationAction) -> Self {
+        match action {
+            ReconciliationAction::StartSync { peer_id } => {
+                ReconciliationActionSerializable::StartSync {
+                    peer_id: peer_id.clone(),
+                }
+            }
+            ReconciliationAction::ExchangeRoots { peer_frontier } => {
+                ReconciliationActionSerializable::ExchangeRoots {
+                    peer_frontier: *peer_frontier,
+                }
+            }
+            ReconciliationAction::RequestDifferences { divergence_point } => {
+                ReconciliationActionSerializable::RequestDifferences {
+                    divergence_point: divergence_point.clone(),
+                }
+            }
+            ReconciliationAction::ApplyDelta { changes } => {
+                ReconciliationActionSerializable::ApplyDelta {
+                    changes: changes.clone(),
+                }
+            }
+            ReconciliationAction::ResolveConflict { conflict_id, resolution } => {
+                ReconciliationActionSerializable::ResolveConflict {
+                    conflict_id: conflict_id.clone(),
+                    resolution: *resolution,
+                }
+            }
+            ReconciliationAction::CompleteSync { peer_id } => {
+                ReconciliationActionSerializable::CompleteSync {
+                    peer_id: peer_id.clone(),
+                }
+            }
+            ReconciliationAction::GetSyncStatus => ReconciliationActionSerializable::GetSyncStatus,
+        }
+    }
+}
+
+impl ReconciliationAction {
+    /// Validate the reconciliation action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            ReconciliationAction::StartSync { peer_id } => {
+                if peer_id.is_empty() {
+                    return Err("ReconciliationAction::StartSync: peer_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ReconciliationAction::ExchangeRoots { .. } => Ok(()),
+            ReconciliationAction::RequestDifferences { divergence_point } => {
+                if divergence_point.is_empty() {
+                    return Err("ReconciliationAction::RequestDifferences: divergence_point is empty".to_string());
+                }
+                Ok(())
+            }
+            ReconciliationAction::ApplyDelta { changes } => {
+                if changes.is_empty() {
+                    return Err("ReconciliationAction::ApplyDelta: changes is empty".to_string());
+                }
+                Ok(())
+            }
+            ReconciliationAction::ResolveConflict { conflict_id, .. } => {
+                if conflict_id.is_empty() {
+                    return Err("ReconciliationAction::ResolveConflict: conflict_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ReconciliationAction::CompleteSync { peer_id } => {
+                if peer_id.is_empty() {
+                    return Err("ReconciliationAction::CompleteSync: peer_id is empty".to_string());
+                }
+                Ok(())
+            }
+            ReconciliationAction::GetSyncStatus => Ok(()),
+        }
+    }
+}
+
+impl Canonicalizable for ReconciliationAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = ReconciliationActionSerializable::from(self);
         match bincode::serialize(&serializable) {
             Ok(bytes) => bytes_to_distinction(&bytes, engine),
             Err(_) => engine.d0().clone(),

@@ -162,6 +162,12 @@ pub struct KoruRoots {
     /// Anchors all process operations. Background processes are synthesized
     /// from this root with process actions.
     pub process: Distinction,
+
+    /// Reconciliation root - perspective of distributed sync (Root: RECONCILIATION).
+    ///
+    /// Anchors all reconciliation operations. Set reconciliation is synthesized
+    /// from this root with reconciliation actions.
+    pub reconciliation: Distinction,
 }
 
 impl KoruRoots {
@@ -210,6 +216,7 @@ impl KoruRoots {
         let session = Self::synthesize_agent_root(engine, &d1, b"SESSION");
         let subscription = Self::synthesize_agent_root(engine, &d1, b"SUBSCRIPTION");
         let process = Self::synthesize_agent_root(engine, &d1, b"PROCESS");
+        let reconciliation = Self::synthesize_agent_root(engine, &d1, b"RECONCILIATION");
 
         // The field root is the synthesis of all agent roots
         // This represents the unified consciousness field
@@ -235,6 +242,7 @@ impl KoruRoots {
                 &session,
                 &subscription,
                 &process,
+                &reconciliation,
             ],
         );
 
@@ -258,6 +266,7 @@ impl KoruRoots {
             session,
             subscription,
             process,
+            reconciliation,
         }
     }
 
@@ -323,6 +332,7 @@ impl KoruRoots {
             RootType::Session => &self.session,
             RootType::Subscription => &self.subscription,
             RootType::Process => &self.process,
+            RootType::Reconciliation => &self.reconciliation,
         }
     }
 }
@@ -368,6 +378,8 @@ pub enum RootType {
     Subscription,
     /// Process root.
     Process,
+    /// Reconciliation root.
+    Reconciliation,
 }
 
 impl RootType {
@@ -393,6 +405,7 @@ impl RootType {
             RootType::Session => "SESSION",
             RootType::Subscription => "SUBSCRIPTION",
             RootType::Process => "PROCESS",
+            RootType::Reconciliation => "RECONCILIATION",
         }
     }
 }

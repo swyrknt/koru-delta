@@ -11,18 +11,23 @@
 /// 3. **Bloom Filter Fallback**: For large differences, use Bloom filters
 /// 4. **Send Missing**: Only transmit distinctions the other node lacks
 ///
+/// ## LCA Architecture
+///
+/// ReconciliationAgent implements `LocalCausalAgent`, making all sync operations
+/// causal distinctions. The formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+///
 /// ## Example
 ///
 /// ```rust,ignore
-/// use koru_delta::reconciliation::ReconciliationManager;
+/// use koru_delta::reconciliation::ReconciliationAgent;
 ///
-/// let mut manager = ReconciliationManager::new();
-/// manager.add_local_distinction("dist_1".to_string());
-/// manager.add_local_distinction("dist_2".to_string());
+/// let mut agent = ReconciliationAgent::new();
+/// agent.add_local_distinction("dist_1".to_string());
+/// agent.add_local_distinction("dist_2".to_string());
 ///
 /// // Compare with remote (32-byte root hash from network)
 /// let remote_root = [0u8; 32];
-/// let missing = manager.compare_merkle_root(&remote_root);
+/// let missing = agent.compare_merkle_root(&remote_root);
 /// ```
 pub mod bloom;
 pub mod merkle;
@@ -32,8 +37,13 @@ pub use bloom::{BloomExchange, BloomFilter};
 pub use merkle::{MerkleNode, MerkleTree};
 pub use world::{SyncResult, WorldReconciliation};
 
+use crate::actions::{ConflictResolution, ReconciliationAction};
 use crate::causal_graph::CausalGraph;
+use crate::engine::SharedEngine;
+use crate::roots::KoruRoots;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::collections::HashSet;
+use std::sync::Arc;
 
 /// Strategy for set reconciliation.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -47,11 +57,21 @@ pub enum SyncStrategy {
     Hybrid { threshold: usize },
 }
 
-/// Manager for set reconciliation operations.
+/// Reconciliation agent implementing LocalCausalAgent trait.
 ///
-/// Tracks local distinctions and handles sync with remote nodes.
+/// Follows the LCA formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+/// All reconciliation operations are causal distinctions synthesized from the reconciliation root.
 #[derive(Debug, Clone)]
-pub struct ReconciliationManager {
+pub struct ReconciliationAgent {
+    /// LCA: Local root distinction (Root: RECONCILIATION)
+    local_root: Distinction,
+
+    /// LCA: Handle to the unified field
+    _field: SharedEngine,
+
+    /// The underlying distinction engine for content addressing
+    engine: Arc<DistinctionEngine>,
+
     /// Local distinction IDs.
     local_distinctions: HashSet<String>,
     /// Strategy for sync.
@@ -63,25 +83,53 @@ pub struct ReconciliationManager {
     cache_dirty: bool,
 }
 
-impl ReconciliationManager {
-    /// Create a new reconciliation manager.
+impl ReconciliationAgent {
+    /// Create a new reconciliation agent with LCA pattern.
+    ///
+    /// The agent initializes from the reconciliation canonical root,
+    /// establishing its causal anchor in the field.
     pub fn new() -> Self {
-        Self {
-            local_distinctions: HashSet::new(),
-            strategy: SyncStrategy::default(),
-            cached_tree: None,
-            cache_dirty: true,
-        }
+        let field = SharedEngine::new();
+        Self::with_strategy_and_field(SyncStrategy::default(), &field)
     }
 
     /// Create with specific strategy.
     pub fn with_strategy(strategy: SyncStrategy) -> Self {
+        let field = SharedEngine::new();
+        Self::with_strategy_and_field(strategy, &field)
+    }
+
+    /// Create with strategy and shared field.
+    pub fn with_strategy_and_field(strategy: SyncStrategy, field: &SharedEngine) -> Self {
+        let engine = Arc::clone(field.inner());
+        let roots = KoruRoots::initialize(&engine);
+        let local_root = roots.reconciliation.clone();
+
         Self {
+            local_root,
+            _field: field.clone(),
+            engine,
             local_distinctions: HashSet::new(),
             strategy,
             cached_tree: None,
             cache_dirty: true,
         }
+    }
+
+    /// Get the local root distinction.
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    /// Apply a reconciliation action, synthesizing new state.
+    ///
+    /// This is the primary interface for reconciliation operations following
+    /// the LCA formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+    pub fn apply_action(&mut self, action: ReconciliationAction) -> Distinction {
+        let engine = Arc::clone(&self.engine);
+        let new_root = self.synthesize_action(action, &engine);
+        self.local_root = new_root.clone();
+        new_root
     }
 
     /// Add a local distinction.
@@ -222,9 +270,83 @@ impl ReconciliationManager {
             self.cache_dirty = false;
         }
     }
+
+    /// Start sync with synthesis.
+    pub fn start_sync_synthesized(&mut self, peer_id: String) -> Distinction {
+        let action = ReconciliationAction::StartSync { peer_id };
+        self.apply_action(action)
+    }
+
+    /// Exchange roots with synthesis.
+    pub fn exchange_roots_synthesized(&mut self, peer_frontier: [u8; 32]) -> Distinction {
+        let action = ReconciliationAction::ExchangeRoots { peer_frontier };
+        self.apply_action(action)
+    }
+
+    /// Request differences with synthesis.
+    pub fn request_differences_synthesized(&mut self, divergence_point: String) -> Distinction {
+        let action = ReconciliationAction::RequestDifferences { divergence_point };
+        self.apply_action(action)
+    }
+
+    /// Apply delta with synthesis.
+    pub fn apply_delta_synthesized(&mut self, changes: Vec<String>) -> Distinction {
+        let action = ReconciliationAction::ApplyDelta { changes };
+        self.apply_action(action)
+    }
+
+    /// Resolve conflict with synthesis.
+    pub fn resolve_conflict_synthesized(
+        &mut self,
+        conflict_id: String,
+        resolution: ConflictResolution,
+    ) -> Distinction {
+        let action = ReconciliationAction::ResolveConflict { conflict_id, resolution };
+        self.apply_action(action)
+    }
+
+    /// Complete sync with synthesis.
+    pub fn complete_sync_synthesized(&mut self, peer_id: String) -> Distinction {
+        let action = ReconciliationAction::CompleteSync { peer_id };
+        self.apply_action(action)
+    }
+
+    /// Get sync status with synthesis.
+    pub fn get_sync_status_synthesized(&mut self) -> Distinction {
+        let action = ReconciliationAction::GetSyncStatus;
+        self.apply_action(action)
+    }
 }
 
-impl Default for ReconciliationManager {
+// LCA Trait Implementation
+impl LocalCausalAgent for ReconciliationAgent {
+    type ActionData = ReconciliationAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: ReconciliationAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        // Canonical LCA pattern: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
+// Backward-compatible type alias
+pub type ReconciliationManager = ReconciliationAgent;
+
+impl Default for ReconciliationAgent {
     fn default() -> Self {
         Self::new()
     }
@@ -324,5 +446,124 @@ mod tests {
         assert_eq!(sync_efficiency(0, 100), 1.0); // Perfect
         assert_eq!(sync_efficiency(50, 100), 0.5); // 50% efficient
         assert_eq!(sync_efficiency(100, 100), 0.0); // Nothing in common
+    }
+
+    // LCA Tests
+    mod lca_tests {
+        use super::*;
+        use koru_lambda_core::LocalCausalAgent;
+
+        fn setup_agent() -> ReconciliationAgent {
+            ReconciliationAgent::new()
+        }
+
+        #[test]
+        fn test_reconciliation_agent_implements_lca_trait() {
+            let agent = setup_agent();
+            
+            // Verify trait is implemented
+            let _root = agent.get_current_root();
+        }
+
+        #[test]
+        fn test_reconciliation_agent_has_unique_local_root() {
+            let agent1 = ReconciliationAgent::new();
+            let agent2 = ReconciliationAgent::new();
+
+            // Each agent should have the same reconciliation root from canonical roots
+            assert_eq!(
+                agent1.local_root().id(),
+                agent2.local_root().id(),
+                "Reconciliation agents share the same canonical root"
+            );
+        }
+
+        #[test]
+        fn test_start_sync_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let new_root = agent.start_sync_synthesized("peer-1".to_string());
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_exchange_roots_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let new_root = agent.exchange_roots_synthesized([1u8; 32]);
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after exchange roots synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_apply_delta_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let new_root = agent.apply_delta_synthesized(vec!["dist1".to_string(), "dist2".to_string()]);
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after apply delta synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_resolve_conflict_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let new_root = agent.resolve_conflict_synthesized(
+                "conflict-1".to_string(),
+                ConflictResolution::PreferLocal,
+            );
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after resolve conflict synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_complete_sync_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let new_root = agent.complete_sync_synthesized("peer-1".to_string());
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after complete sync synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_get_sync_status_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let new_root = agent.get_sync_status_synthesized();
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after get sync status synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_apply_action_changes_root() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let action = ReconciliationAction::GetSyncStatus;
+            let new_root = agent.apply_action(action);
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after apply_action");
+            assert_eq!(new_root.id(), root_after);
+        }
     }
 }
