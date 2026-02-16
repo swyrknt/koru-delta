@@ -1,10 +1,10 @@
 [package]
 name = "koru-delta-python"
-version = "2.0.0"
+version = "3.0.0"
 edition = "2021"
 authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
 license = "MIT OR Apache-2.0"
-description = "Python bindings for KoruDelta - the database for AI agents"
+description = "Python bindings for KoruDelta - the invisible database for AI agents"
 repository = "https://github.com/swyrknt/koru-delta"
 
 [lib]
@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 # KoruDelta core
 koru-delta = { path = "../.." }
 
-# PyO3
+# PyO3 - Version 0.20 for compatibility
 pyo3 = { version = "0.20", features = ["extension-module", "abi3-py39"] }
 pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
 
@@ -37,6 +37,9 @@ hex = "0.4"
 
 # Time handling
 chrono = "0.4"
+
+# UUID generation
+uuid = { version = "1.0", features = ["v4"] }
 
 [dev-dependencies]
 # Testing
