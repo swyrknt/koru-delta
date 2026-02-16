@@ -150,6 +150,12 @@ pub struct KoruRoots {
     /// Anchors all session operations. Sessions are synthesized
     /// from this root with session actions.
     pub session: Distinction,
+
+    /// Subscription root - perspective of pub/sub notifications (Root: SUBSCRIPTION).
+    ///
+    /// Anchors all subscription operations. Subscriptions are synthesized
+    /// from this root with subscription actions.
+    pub subscription: Distinction,
 }
 
 impl KoruRoots {
@@ -196,6 +202,7 @@ impl KoruRoots {
         let vector = Self::synthesize_agent_root(engine, &d1, b"VECTOR");
         let lifecycle = Self::synthesize_agent_root(engine, &d1, b"LIFECYCLE");
         let session = Self::synthesize_agent_root(engine, &d1, b"SESSION");
+        let subscription = Self::synthesize_agent_root(engine, &d1, b"SUBSCRIPTION");
 
         // The field root is the synthesis of all agent roots
         // This represents the unified consciousness field
@@ -219,6 +226,7 @@ impl KoruRoots {
                 &vector,
                 &lifecycle,
                 &session,
+                &subscription,
             ],
         );
 
@@ -240,6 +248,7 @@ impl KoruRoots {
             vector,
             lifecycle,
             session,
+            subscription,
         }
     }
 
@@ -303,6 +312,7 @@ impl KoruRoots {
             RootType::Vector => &self.vector,
             RootType::Lifecycle => &self.lifecycle,
             RootType::Session => &self.session,
+            RootType::Subscription => &self.subscription,
         }
     }
 }
@@ -344,6 +354,8 @@ pub enum RootType {
     Lifecycle,
     /// Session root.
     Session,
+    /// Subscription root.
+    Subscription,
 }
 
 impl RootType {
@@ -367,6 +379,7 @@ impl RootType {
             RootType::Vector => "VECTOR",
             RootType::Lifecycle => "LIFECYCLE",
             RootType::Session => "SESSION",
+            RootType::Subscription => "SUBSCRIPTION",
         }
     }
 }

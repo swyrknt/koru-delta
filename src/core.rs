@@ -348,7 +348,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let subscriptions = Arc::new(SubscriptionManager::new());
+        let subscriptions = Arc::new(SubscriptionManager::new(&shared_engine));
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
@@ -434,7 +434,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let subscriptions = Arc::new(SubscriptionManager::new());
+        let subscriptions = Arc::new(SubscriptionManager::new(&shared_engine));
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
@@ -737,7 +737,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize subscriptions (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let subscriptions = Arc::new(SubscriptionManager::new());
+        let subscriptions = Arc::new(SubscriptionManager::new(&shared_engine));
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]

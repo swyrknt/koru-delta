@@ -7,32 +7,41 @@
 /// - **Key-level**: Get notified when a specific key changes
 /// - **Filter-based**: Get notified when changes match a filter
 ///
+/// ## LCA Architecture
+///
+/// SubscriptionAgent implements `LocalCausalAgent`, making all subscription operations
+/// causal distinctions. The formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+///
 /// # Example
 ///
 /// ```ignore
-/// use koru_delta::subscriptions::{SubscriptionManager, Subscription};
+/// use koru_delta::subscriptions::{SubscriptionAgent, Subscription};
 /// use koru_delta::query::Filter;
 ///
-/// let manager = SubscriptionManager::new();
+/// let agent = SubscriptionAgent::new();
 ///
 /// // Subscribe to all changes in "users" collection
-/// let sub_id = manager.subscribe(Subscription::collection("users"));
+/// let sub_id = agent.subscribe(Subscription::collection("users"));
 ///
 /// // Get the receiver for this subscription
-/// let mut rx = manager.receiver(sub_id).unwrap();
+/// let mut rx = agent.receiver(sub_id).unwrap();
 ///
 /// // In an async context:
 /// while let Some(event) = rx.recv().await {
 ///     println!("Change: {:?}", event);
 /// }
 /// ```
+use crate::actions::SubscriptionAction;
+use crate::engine::SharedEngine;
 use crate::error::{DeltaError, DeltaResult};
 use crate::query::Filter;
+use crate::roots::KoruRoots;
 #[cfg(test)]
 use crate::types::VectorClock;
 use crate::types::VersionedValue;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -64,7 +73,7 @@ pub enum ChangeType {
 }
 
 /// A change event notification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChangeEvent {
     /// Type of change.
     pub change_type: ChangeType,
@@ -142,7 +151,7 @@ impl ChangeEvent {
 }
 
 /// A subscription definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Subscription {
     /// Optional collection filter (None = all collections).
     pub collection: Option<String>,
@@ -277,6 +286,7 @@ pub struct SubscriptionInfo {
 }
 
 /// Internal subscription state.
+#[derive(Debug)]
 struct SubscriptionState {
     subscription: Subscription,
     sender: broadcast::Sender<ChangeEvent>,
@@ -284,32 +294,65 @@ struct SubscriptionState {
     events_delivered: AtomicU64,
 }
 
-/// Manager for subscriptions.
+/// Subscription agent implementing LocalCausalAgent trait.
 ///
-/// Handles subscription lifecycle and event dispatch.
-pub struct SubscriptionManager {
+/// Follows the LCA formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+/// All subscription operations are causal distinctions synthesized from the subscription root.
+#[derive(Debug)]
+pub struct SubscriptionAgent {
+    /// LCA: Local root distinction (Root: SUBSCRIPTION)
+    local_root: Distinction,
+
+    /// LCA: Handle to the unified field
+    _field: SharedEngine,
+
+    /// The underlying distinction engine for content addressing
+    engine: Arc<DistinctionEngine>,
+
     subscriptions: DashMap<SubscriptionId, SubscriptionState>,
     next_id: AtomicU64,
     channel_capacity: usize,
 }
 
-impl SubscriptionManager {
-    /// Create a new subscription manager.
-    pub fn new() -> Self {
-        Self {
-            subscriptions: DashMap::new(),
-            next_id: AtomicU64::new(1),
-            channel_capacity: DEFAULT_CHANNEL_CAPACITY,
-        }
+impl SubscriptionAgent {
+    /// Create a new subscription agent with LCA pattern.
+    ///
+    /// The agent initializes from the subscription canonical root,
+    /// establishing its causal anchor in the field.
+    pub fn new(field: &SharedEngine) -> Self {
+        Self::with_capacity(field, DEFAULT_CHANNEL_CAPACITY)
     }
 
-    /// Create a new subscription manager with custom channel capacity.
-    pub fn with_capacity(capacity: usize) -> Self {
+    /// Create a new subscription agent with custom channel capacity.
+    pub fn with_capacity(field: &SharedEngine, capacity: usize) -> Self {
+        let engine = Arc::clone(field.inner());
+        let roots = KoruRoots::initialize(&engine);
+        let local_root = roots.subscription.clone();
+
         Self {
+            local_root,
+            _field: field.clone(),
+            engine,
             subscriptions: DashMap::new(),
             next_id: AtomicU64::new(1),
             channel_capacity: capacity,
         }
+    }
+
+    /// Get the local root distinction.
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    /// Apply a subscription action, synthesizing new state.
+    ///
+    /// This is the primary interface for subscription operations following
+    /// the LCA formula: `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
+    pub fn apply_action(&mut self, action: SubscriptionAction) -> Distinction {
+        let engine = Arc::clone(&self.engine);
+        let new_root = self.synthesize_action(action, &engine);
+        self.local_root = new_root.clone();
+        new_root
     }
 
     /// Subscribe to changes.
@@ -427,11 +470,73 @@ impl SubscriptionManager {
         let event = ChangeEvent::delete(collection, key, previous);
         self.notify(event);
     }
+
+    /// Subscribe with synthesis.
+    pub fn subscribe_synthesized(
+        &mut self,
+        subscription: Subscription,
+    ) -> (SubscriptionId, broadcast::Receiver<ChangeEvent>, Distinction) {
+        let action = SubscriptionAction::Subscribe { subscription: subscription.clone() };
+        let new_root = self.apply_action(action);
+
+        let (id, receiver) = self.subscribe(subscription);
+        (id, receiver, new_root)
+    }
+
+    /// Unsubscribe with synthesis.
+    pub fn unsubscribe_synthesized(
+        &mut self,
+        id: SubscriptionId,
+    ) -> (DeltaResult<()>, Distinction) {
+        let action = SubscriptionAction::Unsubscribe { subscription_id: id };
+        let new_root = self.apply_action(action);
+
+        let result = self.unsubscribe(id);
+        (result, new_root)
+    }
+
+    /// Notify with synthesis.
+    pub fn notify_synthesized(&mut self, event: ChangeEvent) -> Distinction {
+        let action = SubscriptionAction::Notify { event: event.clone() };
+        let new_root = self.apply_action(action);
+
+        self.notify(event);
+        new_root
+    }
 }
 
-impl Default for SubscriptionManager {
+// LCA Trait Implementation
+impl LocalCausalAgent for SubscriptionAgent {
+    type ActionData = SubscriptionAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: SubscriptionAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        // Canonical LCA pattern: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
+// Backward-compatible type alias
+pub type SubscriptionManager = SubscriptionAgent;
+
+impl Default for SubscriptionAgent {
     fn default() -> Self {
-        Self::new()
+        let field = SharedEngine::new();
+        Self::new(&field)
     }
 }
 
@@ -608,7 +713,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscription_manager_basic() {
-        let manager = SubscriptionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SubscriptionManager::new(&field);
 
         let (id, mut rx) = manager.subscribe(Subscription::collection("users"));
 
@@ -636,7 +743,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscription_filtering() {
-        let manager = SubscriptionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SubscriptionManager::new(&field);
 
         // Subscribe only to users collection.
         let (_id, mut rx) = manager.subscribe(Subscription::collection("users"));
@@ -663,7 +772,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_subscribers() {
-        let manager = SubscriptionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SubscriptionManager::new(&field);
 
         let (_id1, mut rx1) = manager.subscribe(Subscription::all());
         let (_id2, mut rx2) = manager.subscribe(Subscription::all());
@@ -681,7 +792,9 @@ mod tests {
 
     #[test]
     fn test_subscription_info() {
-        let manager = SubscriptionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SubscriptionManager::new(&field);
 
         let (id, _rx) =
             manager.subscribe(Subscription::collection("users").with_name("user_watcher"));
@@ -694,7 +807,9 @@ mod tests {
 
     #[test]
     fn test_subscription_list() {
-        let manager = SubscriptionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SubscriptionManager::new(&field);
 
         let (_id1, _rx1) = manager.subscribe(Subscription::collection("users"));
         let (_id2, _rx2) = manager.subscribe(Subscription::collection("products"));
@@ -706,7 +821,9 @@ mod tests {
 
     #[test]
     fn test_events_delivered_counter() {
-        let manager = SubscriptionManager::new();
+        use crate::engine::SharedEngine;
+        let field = SharedEngine::new();
+        let manager = SubscriptionManager::new(&field);
 
         let (id, _rx) = manager.subscribe(Subscription::all());
 
@@ -722,12 +839,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribable_storage() {
+        use crate::engine::SharedEngine;
         use crate::storage::CausalStorage;
         use koru_lambda_core::DistinctionEngine;
 
         let engine = Arc::new(DistinctionEngine::new());
         let storage = Arc::new(CausalStorage::new(engine));
-        let subs = Arc::new(SubscriptionManager::new());
+        let field = SharedEngine::new();
+        let subs = Arc::new(SubscriptionManager::new(&field));
 
         let subscribable = SubscribableStorage::new(storage, subs.clone());
 
@@ -752,5 +871,97 @@ mod tests {
         let event = rx.try_recv().unwrap();
         assert_eq!(event.change_type, ChangeType::Update);
         assert!(event.previous_value.is_some());
+    }
+
+    // LCA Tests
+    mod lca_tests {
+        use super::*;
+        use koru_lambda_core::LocalCausalAgent;
+
+        fn setup_agent() -> SubscriptionAgent {
+            let field = SharedEngine::new();
+            SubscriptionAgent::new(&field)
+        }
+
+        #[test]
+        fn test_subscription_agent_implements_lca_trait() {
+            let agent = setup_agent();
+            
+            // Verify trait is implemented
+            let _root = agent.get_current_root();
+        }
+
+        #[test]
+        fn test_subscription_agent_has_unique_local_root() {
+            let field = SharedEngine::new();
+            let agent1 = SubscriptionAgent::new(&field);
+            let agent2 = SubscriptionAgent::new(&field);
+
+            // Each agent should have the same subscription root from canonical roots
+            assert_eq!(
+                agent1.local_root().id(),
+                agent2.local_root().id(),
+                "Subscription agents share the same canonical root"
+            );
+        }
+
+        #[test]
+        fn test_subscribe_synthesizes() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let (_id, _receiver, new_root) = agent.subscribe_synthesized(Subscription::collection("users"));
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_unsubscribe_synthesizes() {
+            let mut agent = setup_agent();
+            
+            // First subscribe
+            let (id, _receiver, _) = agent.subscribe_synthesized(Subscription::collection("users"));
+
+            let root_before = agent.local_root().id().to_string();
+
+            let (result, new_root) = agent.unsubscribe_synthesized(id);
+            assert!(result.is_ok());
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after unsubscribe synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_notify_synthesizes() {
+            let mut agent = setup_agent();
+            
+            // Subscribe first
+            agent.subscribe(Subscription::collection("users"));
+
+            let root_before = agent.local_root().id().to_string();
+
+            let event = ChangeEvent::insert("users", "alice", &create_test_value(json!({"name": "Alice"})));
+            let new_root = agent.notify_synthesized(event);
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after notify synthesis");
+            assert_eq!(new_root.id(), root_after);
+        }
+
+        #[test]
+        fn test_apply_action_changes_root() {
+            let mut agent = setup_agent();
+            let root_before = agent.local_root().id().to_string();
+
+            let action = SubscriptionAction::ListSubscriptions;
+            let new_root = agent.apply_action(action);
+
+            let root_after = agent.local_root().id().to_string();
+            assert_ne!(root_before, root_after, "Local root should change after apply_action");
+            assert_eq!(new_root.id(), root_after);
+        }
     }
 }

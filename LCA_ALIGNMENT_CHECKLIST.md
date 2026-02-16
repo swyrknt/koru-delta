@@ -12,9 +12,9 @@ This checklist aligns all remaining components to follow the LCA (Local Causal A
 **The Law:** `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
 
 ### Current State
-- **10 agents** fully implement `LocalCausalAgent` trait ✅
-- **5 agents** follow pattern but don't implement trait ⚠️
-- **4 managers** have NO LCA at all 🔴
+- **11 agents** fully implement `LocalCausalAgent` trait ✅
+- **4 agents** follow pattern but don't implement trait ⚠️
+- **3 managers** have NO LCA at all 🔴
 - **Goal:** 100% trait implementation across all interactive components
 
 ### Alignment Strategy
@@ -275,34 +275,69 @@ impl LocalCausalAgent for SessionAgent {
 
 ---
 
-### A.4 SubscriptionManager → SubscriptionAgent
+### A.4 SubscriptionManager → SubscriptionAgent ✅ COMPLETE
 
 **File:** `src/subscriptions.rs` (refactor)
 
-**Current State:**
-- Direct subscriber registry mutations
-- NO local_root, NO synthesis
+**Status:** All tasks completed, 450 tests passing, zero warnings.
 
-**Target State:**
+**Implementation:**
 ```rust
 pub struct SubscriptionAgent {
-    local_root: Distinction,  // NEW
+    local_root: Distinction,           // ✅ RootType::Subscription (NEW)
+    _field: SharedEngine,              // ✅ LCA field handle
+    engine: Arc<DistinctionEngine>,
+    subscriptions: DashMap<SubscriptionId, SubscriptionState>,
+    next_id: AtomicU64,
+    channel_capacity: usize,
 }
 
 impl LocalCausalAgent for SubscriptionAgent {
     type ActionData = SubscriptionAction;
+    
+    fn synthesize_action(&mut self, action: SubscriptionAction, engine: &Arc<DistinctionEngine>) 
+        -> Distinction {
+        // ✅ Formula: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
 }
 ```
 
-**Actions to Implement:**
-- [ ] `SubscriptionAction::Subscribe { query, subscriber_id }`
-- [ ] `SubscriptionAction::Unsubscribe { subscription_id }`
-- [ ] `SubscriptionAction::Notify { event }`
-- [ ] `SubscriptionAction::UpdateQuery { subscription_id, new_query }`
+**Actions Implemented:**
+- [x] `SubscriptionAction::Subscribe { subscription }`
+- [x] `SubscriptionAction::Unsubscribe { subscription_id }`
+- [x] `SubscriptionAction::Notify { event }`
+- [x] `SubscriptionAction::UpdateSubscription { subscription_id, new_subscription }`
+- [x] `SubscriptionAction::ListSubscriptions`
+- [x] `SubscriptionAction::GetSubscription { subscription_id }`
+
+**Synthesis Methods Added:**
+- `subscribe_synthesized()` - Subscribe with synthesis
+- `unsubscribe_synthesized()` - Unsubscribe with synthesis
+- `notify_synthesized()` - Notify with synthesis
+
+**New Tests (6 added):**
+- `test_subscription_agent_implements_lca_trait`
+- `test_subscription_agent_has_unique_local_root`
+- `test_subscribe_synthesizes`
+- `test_unsubscribe_synthesizes`
+- `test_notify_synthesizes`
+- `test_apply_action_changes_root`
 
 **Verification:**
-- [ ] Pub/sub operations synthesize
-- [ ] Event notifications still work
+- [x] Pub/sub operations synthesize
+- [x] Event notifications still work
+- [x] 450 tests passing (⬆️ +6 new LCA tests)
+
+**Backward Compatibility:**
+- `pub type SubscriptionManager = SubscriptionAgent;` (type alias)
+- Updated `core.rs` to pass `SharedEngine` to `SubscriptionAgent::new()`
+
+**Additional Changes:**
+- Added `PartialEq` derive to `Filter`, `Subscription`, `ChangeEvent` for action serialization
 
 ---
 

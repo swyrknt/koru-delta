@@ -83,6 +83,8 @@ pub enum KoruAction {
     Lifecycle(LifecycleAction),
     /// Session operations - authenticated session management.
     Session(SessionAction),
+    /// Subscription operations - pub/sub change notifications.
+    Subscription(SubscriptionAction),
 }
 
 impl From<PulseAction> for KoruAction {
@@ -123,6 +125,7 @@ impl KoruAction {
             KoruAction::Vector(_) => "VECTOR",
             KoruAction::Lifecycle(_) => "LIFECYCLE",
             KoruAction::Session(_) => "SESSION",
+            KoruAction::Subscription(_) => "SUBSCRIPTION",
         }
     }
 
@@ -147,6 +150,7 @@ impl KoruAction {
             KoruAction::Vector(action) => action.validate(),
             KoruAction::Lifecycle(action) => action.validate(),
             KoruAction::Session(action) => action.validate(),
+            KoruAction::Subscription(action) => action.validate(),
         }
     }
 }
@@ -171,6 +175,7 @@ impl Canonicalizable for KoruAction {
             KoruAction::Vector(action) => action.to_canonical_structure(engine),
             KoruAction::Lifecycle(action) => action.to_canonical_structure(engine),
             KoruAction::Session(action) => action.to_canonical_structure(engine),
+            KoruAction::Subscription(action) => action.to_canonical_structure(engine),
         }
     }
 }
@@ -213,6 +218,7 @@ pub(crate) enum ActionSerializable {
     Vector(VectorActionSerializable),
     Lifecycle(LifecycleActionSerializable),
     Session(SessionActionSerializable),
+    Subscription(SubscriptionActionSerializable),
 }
 
 impl From<&KoruAction> for ActionSerializable {
@@ -234,6 +240,7 @@ impl From<&KoruAction> for ActionSerializable {
             KoruAction::Vector(a) => ActionSerializable::Vector(a.into()),
             KoruAction::Lifecycle(a) => ActionSerializable::Lifecycle(a.into()),
             KoruAction::Session(a) => ActionSerializable::Session(a.into()),
+            KoruAction::Subscription(a) => ActionSerializable::Subscription(a.into()),
         }
     }
 }
@@ -2032,6 +2039,138 @@ impl SessionAction {
 impl Canonicalizable for SessionAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
         let serializable = SessionActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+// ============================================================================
+// SUBSCRIPTION ACTIONS
+// ============================================================================
+
+/// Actions for subscription management agent.
+///
+/// Subscription operations follow the LCA pattern:
+/// - Each subscription operation synthesizes a new distinction
+/// - Subscriptions are content-addressed by their action history
+/// - All subscription state changes are causal distinctions
+#[derive(Debug, Clone, PartialEq)]
+pub enum SubscriptionAction {
+    /// Subscribe to changes.
+    Subscribe {
+        /// Subscription definition.
+        subscription: crate::subscriptions::Subscription,
+    },
+    /// Unsubscribe from changes.
+    Unsubscribe {
+        /// Subscription ID to unsubscribe.
+        subscription_id: crate::subscriptions::SubscriptionId,
+    },
+    /// Notify subscribers of a change event.
+    Notify {
+        /// Change event to broadcast.
+        event: crate::subscriptions::ChangeEvent,
+    },
+    /// Update an existing subscription's query.
+    UpdateSubscription {
+        /// Subscription ID to update.
+        subscription_id: crate::subscriptions::SubscriptionId,
+        /// New subscription definition.
+        new_subscription: crate::subscriptions::Subscription,
+    },
+    /// List all active subscriptions.
+    ListSubscriptions,
+    /// Get subscription info.
+    GetSubscription {
+        /// Subscription ID to query.
+        subscription_id: crate::subscriptions::SubscriptionId,
+    },
+}
+
+/// Serializable version of SubscriptionAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum SubscriptionActionSerializable {
+    Subscribe { subscription: crate::subscriptions::Subscription },
+    Unsubscribe { subscription_id: u64 },
+    Notify { event: crate::subscriptions::ChangeEvent },
+    UpdateSubscription { subscription_id: u64, new_subscription: crate::subscriptions::Subscription },
+    ListSubscriptions,
+    GetSubscription { subscription_id: u64 },
+}
+
+impl From<&SubscriptionAction> for SubscriptionActionSerializable {
+    fn from(action: &SubscriptionAction) -> Self {
+        match action {
+            SubscriptionAction::Subscribe { subscription } => {
+                SubscriptionActionSerializable::Subscribe {
+                    subscription: subscription.clone(),
+                }
+            }
+            SubscriptionAction::Unsubscribe { subscription_id } => {
+                SubscriptionActionSerializable::Unsubscribe {
+                    subscription_id: subscription_id.0,
+                }
+            }
+            SubscriptionAction::Notify { event } => {
+                SubscriptionActionSerializable::Notify {
+                    event: event.clone(),
+                }
+            }
+            SubscriptionAction::UpdateSubscription { subscription_id, new_subscription } => {
+                SubscriptionActionSerializable::UpdateSubscription {
+                    subscription_id: subscription_id.0,
+                    new_subscription: new_subscription.clone(),
+                }
+            }
+            SubscriptionAction::ListSubscriptions => SubscriptionActionSerializable::ListSubscriptions,
+            SubscriptionAction::GetSubscription { subscription_id } => {
+                SubscriptionActionSerializable::GetSubscription {
+                    subscription_id: subscription_id.0,
+                }
+            }
+        }
+    }
+}
+
+impl SubscriptionAction {
+    /// Validate the subscription action.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            SubscriptionAction::Subscribe { subscription } => {
+                if subscription.change_types.is_empty() {
+                    return Err("SubscriptionAction::Subscribe: change_types is empty".to_string());
+                }
+                Ok(())
+            }
+            SubscriptionAction::Unsubscribe { subscription_id } => {
+                if subscription_id.0 == 0 {
+                    return Err("SubscriptionAction::Unsubscribe: subscription_id is 0".to_string());
+                }
+                Ok(())
+            }
+            SubscriptionAction::Notify { .. } => Ok(()),
+            SubscriptionAction::UpdateSubscription { subscription_id, .. } => {
+                if subscription_id.0 == 0 {
+                    return Err("SubscriptionAction::UpdateSubscription: subscription_id is 0".to_string());
+                }
+                Ok(())
+            }
+            SubscriptionAction::ListSubscriptions => Ok(()),
+            SubscriptionAction::GetSubscription { subscription_id } => {
+                if subscription_id.0 == 0 {
+                    return Err("SubscriptionAction::GetSubscription: subscription_id is 0".to_string());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Canonicalizable for SubscriptionAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = SubscriptionActionSerializable::from(self);
         match bincode::serialize(&serializable) {
             Ok(bytes) => bytes_to_distinction(&bytes, engine),
             Err(_) => engine.d0().clone(),

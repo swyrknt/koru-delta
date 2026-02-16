@@ -32,7 +32,7 @@ use serde_json::{Map, Value as JsonValue};
 use std::cmp::Ordering;
 
 /// A filter condition for querying data.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Filter {
     /// Field equals value.
     Eq { field: String, value: JsonValue },
