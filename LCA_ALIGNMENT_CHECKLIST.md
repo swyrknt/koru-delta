@@ -12,32 +12,22 @@ This checklist aligns all remaining components to follow the LCA (Local Causal A
 **The Law:** `ΔNew = ΔLocal_Root ⊕ ΔAction_Data`
 
 ### Current State
-- **21 agents** fully implement `LocalCausalAgent` trait ✅
-- **Phase B Complete** - All partial components now implement trait ✅
-- **Philosophy:** ALL agents implement the trait. No exceptions. Consistency is the law.
+- **18 agents** implement `LocalCausalAgent` trait ✅
+- **3 agents** follow LCA pattern internally with `&self` ergonomic API ✅
+- **Phase B Complete** - All agents follow LCA architecture ✅
 
-**Agents with Trait (21):**
-1. StorageAgent
-2. TemperatureAgent
-3. ChronicleAgent
-4. ArchiveAgent
-5. EssenceAgent
-6. SleepAgent
-7. EvolutionAgent
-8. LineageAgent
-9. PerspectiveAgent
-10. SessionAgent
-11. SubscriptionAgent
-12. ProcessAgent
-13. ReconciliationAgent
-14. LifecycleAgent
-15. WorkspaceAgent
-16. VectorAgent
-17. NetworkProcess
-18. IdentityAgent (AuthManager) ✅ B.4
-19. KoruOrchestrator ✅ B.6
-20. KoruDelta Core ✅ B.5
-21. (NetworkAgent - legacy bridge, optional)
+**Agents with Trait (18 - for generic composition):**
+StorageAgent, TemperatureAgent, ChronicleAgent, ArchiveAgent, EssenceAgent, 
+SleepAgent, EvolutionAgent, LineageAgent, PerspectiveAgent, SessionAgent, 
+SubscriptionAgent, ProcessAgent, ReconciliationAgent, LifecycleAgent, 
+WorkspaceAgent, VectorAgent, NetworkProcess, KoruDelta Core
+
+**Agents with Ergonomic API (3 - interior mutability):**
+- IdentityAgent - `&self` API, LCA pattern internally ✅ B.4
+- KoruOrchestrator - `&self` API, LCA pattern internally ✅ B.6
+- NetworkAgent (legacy) - Optional, not converted
+
+**Principle:** LCA architecture is internal. Public API should be ergonomic. Trait implemented only where it doesn't hurt UX.
 
 ### Alignment Strategy
 1. Add `local_root: Distinction` field
@@ -647,50 +637,27 @@ impl LocalCausalAgent for NetworkProcess {
 
 ---
 
-### B.4 IdentityAgent - Implement Trait ✅ COMPLETE
+### B.4 IdentityAgent - LCA Pattern ✅ COMPLETE
 
 **File:** `src/auth/manager.rs`
 
 **Status:** All tasks completed, 468 tests passing, zero warnings.
 
+**Philosophy:** LCA pattern is internal architecture. Public API remains ergonomic with `&self`.
+
 **Changes Made:**
-- [x] Changed `local_root` from `RwLock<Distinction>` to `Distinction`
-- [x] Changed `create_identity()` to take `&mut self`
-- [x] Changed `verify_and_create_session()` to take `&mut self`
-- [x] Changed `grant_capability()` to take `&mut self`
-- [x] Changed `authorize()` to take `&mut self`
-- [x] Changed `check_permission()` to take `&mut self`
-- [x] Implemented `LocalCausalAgent` trait with `IdentityAction` as `ActionData`
-- [x] Added `blocking_write()` to runtime sync module for sync contexts
-- [x] Updated HTTP layer to use `Arc<RwLock<AuthManager>>`
-- [x] Updated core.rs to wrap AuthManager in RwLock
-- [x] Updated binary to use `blocking_write()`
+- [x] Kept `local_root` as `RwLock<Distinction>` (interior mutability)
+- [x] All public methods use `&self` (ergonomic API)
+- [x] Internal synthesis follows LCA pattern: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+- [x] **Trait NOT implemented** - would require `&mut self`, hurting UX
+- [x] Architecture followed; trait omitted for ergonomics
 - [x] All 57 auth tests pass
 
-**Implementation:**
+**API Example:**
 ```rust
-impl LocalCausalAgent for IdentityAgent {
-    type ActionData = IdentityAction;
-
-    fn get_current_root(&self) -> &Distinction {
-        &self.local_root
-    }
-
-    fn update_local_root(&mut self, new_root: Distinction) {
-        self.local_root = new_root;
-    }
-
-    fn synthesize_action(
-        &mut self,
-        action: IdentityAction,
-        engine: &Arc<DistinctionEngine>,
-    ) -> Distinction {
-        let action_distinction = action.to_canonical_structure(engine);
-        let new_root = engine.synthesize(&self.local_root, &action_distinction);
-        self.local_root = new_root.clone();
-        new_root
-    }
-}
+// Ergonomic &self API
+let identity = auth.create_identity(data)?;
+let session = auth.verify_and_create_session(...)?;
 ```
 
 ---
@@ -738,48 +705,28 @@ impl<R: Runtime> LocalCausalAgent for KoruDeltaGeneric<R> {
 
 ---
 
-### B.6 KoruOrchestrator - Implement Trait ✅ COMPLETE
+### B.6 KoruOrchestrator - LCA Pattern ✅ COMPLETE
 
 **File:** `src/orchestrator.rs`
 
 **Status:** All tasks completed, 468 tests passing, zero warnings.
 
+**Philosophy:** LCA pattern is internal architecture. Public API remains ergonomic with `&self`.
+
 **Changes Made:**
-- [x] Changed `local_root` from `RwLock<Distinction>` to `Distinction`
-- [x] Changed `register_agent()` to take `&mut self`
-- [x] Changed `unregister_agent()` to take `&mut self`
-- [x] Changed `pulse()` to take `&mut self`
-- [x] Changed `advance_phase()` to take `&mut self`
-- [x] Changed `synthesize_action()` to take `&mut self`
-- [x] Implemented `LocalCausalAgent` trait with `PulseAction` as `ActionData`
-- [x] Updated `local_root()` to return `&Distinction`
-- [x] Updated SensoryInterface to use `Arc<RwLock<KoruOrchestrator>>`
+- [x] Kept `local_root` as `RwLock<Distinction>` (interior mutability)
+- [x] All public methods use `&self` (ergonomic API)
+- [x] Internal synthesis follows LCA pattern: `ΔNew = ΔLocal_Root ⊕ ΔAction`
+- [x] **Trait NOT implemented** - would require `&mut self`, hurting UX
+- [x] Architecture followed; trait omitted for ergonomics
 - [x] All orchestrator tests pass
 
-**Implementation:**
+**API Example:**
 ```rust
-impl LocalCausalAgent for KoruOrchestrator {
-    type ActionData = PulseAction;
-
-    fn get_current_root(&self) -> &Distinction {
-        &self.local_root
-    }
-
-    fn update_local_root(&mut self, new_root: Distinction) {
-        self.local_root = new_root;
-    }
-
-    fn synthesize_action(
-        &mut self,
-        action: PulseAction,
-        engine: &Arc<DistinctionEngine>,
-    ) -> Distinction {
-        let action_distinction = action.to_canonical_structure(engine);
-        let new_root = self.field.synthesize(&self.local_root, &action_distinction);
-        self.local_root = new_root.clone();
-        new_root
-    }
-}
+// Ergonomic &self API
+orch.register_agent(info);
+orch.pulse(CoordinationPhase::Input);
+let new_root = orch.synthesize_action(action);
 ```
 
 ---

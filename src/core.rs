@@ -231,7 +231,7 @@ pub struct KoruDeltaGeneric<R: Runtime> {
     cold: Arc<RwLock<ColdMemory>>,
     deep: Arc<RwLock<DeepMemory>>,
     /// Auth manager (LCA Identity Agent)
-    auth: Arc<RwLock<AuthManager>>,
+    auth: Arc<AuthManager>,
     /// Lifecycle manager for memory consolidation (non-WASM only)
     #[cfg(not(target_arch = "wasm32"))]
     lifecycle: Arc<LifecycleManager>,
@@ -337,11 +337,11 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
         // Initialize auth with LCA identity agent
-        let auth = Arc::new(RwLock::new(AuthManager::with_config(
+        let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
             &shared_engine,
-        )));
+        ));
 
         // Initialize views with LCA perspective agent
         let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
@@ -423,11 +423,11 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
         // Initialize auth with LCA identity agent
-        let auth = Arc::new(RwLock::new(AuthManager::with_config(
+        let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
             &shared_engine,
-        )));
+        ));
 
         // Initialize views with LCA perspective agent
         let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
@@ -726,11 +726,11 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let deep = Arc::new(RwLock::new(DeepMemory::new(&shared_engine)));
 
         // Initialize auth with LCA identity agent
-        let auth = Arc::new(RwLock::new(AuthManager::with_config(
+        let auth = Arc::new(AuthManager::with_config(
             Arc::clone(&storage),
             config.auth.clone(),
             &shared_engine,
-        )));
+        ));
 
         // Initialize views with LCA perspective agent
         let views = Arc::new(ViewManager::new(Arc::clone(&storage), &shared_engine));
@@ -1448,7 +1448,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     }
 
     /// Get auth manager.
-    pub fn auth(&self) -> Arc<RwLock<AuthManager>> {
+    pub fn auth(&self) -> Arc<AuthManager> {
         Arc::clone(&self.auth)
     }
 

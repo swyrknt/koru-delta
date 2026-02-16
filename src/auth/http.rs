@@ -374,7 +374,7 @@ async fn handle_register(
 ) -> Result<Json<RegisterResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     // For now, we mine the identity server-side
     // In production, client should mine and just submit the proof
-    let mut auth_guard = auth.write().await;
+    let auth_guard = auth.read().await;
     let (identity, _secret_key) = auth_guard
         .create_identity(request.user_data)
         .map_err(auth_error)?;
@@ -406,7 +406,7 @@ async fn handle_verify(
     State(auth): State<Arc<RwLock<AuthManager>>>,
     Json(request): Json<VerifyRequest>,
 ) -> Result<Json<SessionResponse>, (StatusCode, Json<AuthErrorResponse>)> {
-    let mut auth_guard = auth.write().await;
+    let auth_guard = auth.read().await;
     let session = auth_guard
         .verify_and_create_session(&request.public_key, &request.challenge, &request.response)
         .map_err(auth_error)?;
@@ -551,7 +551,7 @@ async fn handle_authorize(
     headers: axum::http::HeaderMap,
     Json(request): Json<AuthorizeRequest>,
 ) -> Result<Json<AuthorizeResponse>, (StatusCode, Json<AuthErrorResponse>)> {
-    let mut auth_guard = auth.write().await;
+    let auth_guard = auth.read().await;
     // Require authentication
     let (identity, _) = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
         (
