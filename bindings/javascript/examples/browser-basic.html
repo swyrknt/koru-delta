@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KoruDelta - Basic Browser Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #output {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.ready {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <h1>🌊 KoruDelta Browser Example</h1>
+    <p>
+        <span id="status" class="status loading">Loading WASM...</span>
+        <span id="persistence-status"></span>
+    </p>
+
+    <div class="card">
+        <h2>Store Data</h2>
+        <input type="text" id="namespace" placeholder="Namespace (e.g., 'users')" value="demo">
+        <input type="text" id="key" placeholder="Key (e.g., 'alice')">
+        <input type="text" id="value" placeholder='Value (JSON, e.g., {"name":"Alice"})'>
+        <button id="btn-put" disabled>Store</button>
+    </div>
+
+    <div class="card">
+        <h2>Retrieve Data</h2>
+        <input type="text" id="get-namespace" placeholder="Namespace" value="demo">
+        <input type="text" id="get-key" placeholder="Key">
+        <button id="btn-get" disabled>Get</button>
+        <button id="btn-history" disabled>History</button>
+    </div>
+
+    <div class="card">
+        <h2>Search & Query</h2>
+        <input type="text" id="search-namespace" placeholder="Namespace" value="demo">
+        <button id="btn-list-keys" disabled>List Keys</button>
+        <button id="btn-list-namespaces" disabled>List Namespaces</button>
+        <button id="btn-stats" disabled>Database Stats</button>
+    </div>
+
+    <div class="card">
+        <h2>Output</h2>
+        <div id="output">Waiting for database initialization...</div>
+    </div>
+
+    <script type="module">
+        import init, { KoruDeltaWasm } from '../pkg/koru_delta.js';
+
+        let db = null;
+        const output = document.getElementById('output');
+        const statusEl = document.getElementById('status');
+        const persistenceEl = document.getElementById('persistence-status');
+
+        function log(message) {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            output.textContent += `[${timestamp}] ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        async function initDb() {
+            try {
+                await init();
+                db = await KoruDeltaWasm.new();
+                
+                statusEl.textContent = 'Ready';
+                statusEl.className = 'status ready';
+                persistenceEl.textContent = '(In-memory mode)';
+                
+                // Enable buttons
+                document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                
+                log('Database initialized successfully!');
+                log('Using in-memory storage (data will be lost on refresh)');
+            } catch (error) {
+                statusEl.textContent = 'Error';
+                statusEl.style.background = '#f8d7da';
+                statusEl.style.color = '#721c24';
+                log(`Error initializing database: ${error.message}`);
+            }
+        }
+
+        // Store data
+        document.getElementById('btn-put').addEventListener('click', async () => {
+            const ns = document.getElementById('namespace').value;
+            const key = document.getElementById('key').value;
+            const valueStr = document.getElementById('value').value;
+
+            if (!ns || !key || !valueStr) {
+                log('Error: Please fill in all fields');
+                return;
+            }
+
+            try {
+                const value = JSON.parse(valueStr);
+                const result = await db.put(ns, key, value);
+                log(`Stored: ${ns}/${key}`);
+                log(`  Version ID: ${result.versionId}`);
+                log(`  Timestamp: ${result.timestamp}`);
+            } catch (error) {
+                log(`Error storing data: ${error.message}`);
+            }
+        });
+
+        // Get data
+        document.getElementById('btn-get').addEventListener('click', async () => {
+            const ns = document.getElementById('get-namespace').value;
+            const key = document.getElementById('get-key').value;
+
+            if (!ns || !key) {
+                log('Error: Please fill in namespace and key');
+                return;
+            }
+
+            try {
+                const result = await db.get(ns, key);
+                log(`Retrieved: ${ns}/${key}`);
+                log(`  Value: ${JSON.stringify(result.value, null, 2)}`);
+                log(`  Version ID: ${result.versionId}`);
+                log(`  Timestamp: ${result.timestamp}`);
+            } catch (error) {
+                log(`Error retrieving data: ${error.message}`);
+            }
+        });
+
+        // Get history
+        document.getElementById('btn-history').addEventListener('click', async () => {
+            const ns = document.getElementById('get-namespace').value;
+            const key = document.getElementById('get-key').value;
+
+            if (!ns || !key) {
+                log('Error: Please fill in namespace and key');
+                return;
+            }
+
+            try {
+                const history = await db.history(ns, key);
+                log(`History for ${ns}/${key} (${history.length} versions):`);
+                history.forEach((entry, i) => {
+                    log(`  [${i}] ${entry.timestamp}: ${JSON.stringify(entry.value)}`);
+                });
+            } catch (error) {
+                log(`Error getting history: ${error.message}`);
+            }
+        });
+
+        // List keys
+        document.getElementById('btn-list-keys').addEventListener('click', async () => {
+            const ns = document.getElementById('search-namespace').value;
+            if (!ns) {
+                log('Error: Please enter a namespace');
+                return;
+            }
+
+            try {
+                const keys = await db.listKeys(ns);
+                log(`Keys in "${ns}": ${keys.join(', ') || '(none)'}`);
+            } catch (error) {
+                log(`Error listing keys: ${error.message}`);
+            }
+        });
+
+        // List namespaces
+        document.getElementById('btn-list-namespaces').addEventListener('click', async () => {
+            try {
+                const namespaces = await db.listNamespaces();
+                log(`Namespaces: ${namespaces.join(', ') || '(none)'}`);
+            } catch (error) {
+                log(`Error listing namespaces: ${error.message}`);
+            }
+        });
+
+        // Stats
+        document.getElementById('btn-stats').addEventListener('click', async () => {
+            try {
+                const stats = await db.stats();
+                log('Database Statistics:');
+                log(`  Keys: ${stats.keyCount}`);
+                log(`  Total Versions: ${stats.totalVersions}`);
+                log(`  Namespaces: ${stats.namespaceCount}`);
+            } catch (error) {
+                log(`Error getting stats: ${error.message}`);
+            }
+        });
+
+        // Initialize on load
+        initDb();
+    </script>
+</body>
+</html>

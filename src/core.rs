@@ -835,6 +835,55 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         Ok(versioned)
     }
 
+    /// Store a value with causal parent links in the graph.
+    ///
+    /// This establishes causal relationships in the graph while storing the value.
+    /// Use this when a distinction is caused by prior distinctions.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace to store in
+    /// * `key` - The key for this value
+    /// * `value` - The value to store
+    /// * `parent_keys` - Keys of parent distinctions that caused this one
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Store inference with causal link to observation
+    /// db.put_with_causal_links(
+    ///     "concepts",
+    ///     "inference_weather",
+    ///     json!({"conclusion": "rain"}),
+    ///     vec!["observation_sky"],  // Causal parent
+    /// ).await?;
+    /// ```
+    pub async fn put_with_causal_links<T: Serialize>(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        value: T,
+        parent_keys: Vec<String>,
+    ) -> DeltaResult<VersionedValue> {
+        let namespace = namespace.into();
+        let key = key.into();
+        
+        // Store the value first
+        let result = self.put(&namespace, &key, value).await?;
+        
+        // Add to causal graph with parent links
+        let full_key = format!("{}:{}", namespace, key);
+        let parent_ids: Vec<String> = parent_keys
+            .into_iter()
+            .map(|pk| format!("{}:{}", namespace, pk))
+            .collect();
+        
+        self.storage.causal_graph().add_with_parents(full_key, parent_ids);
+        
+        debug!(namespace = %namespace, key = %key, "Causal links established");
+        Ok(result)
+    }
+
     /// Store multiple values in a batch operation with a single WAL fsync.
     ///
     /// This is significantly more efficient than calling `put` multiple times
@@ -1621,28 +1670,27 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             return Ok(true);
         }
 
-        // Get version IDs for both keys
-        let version_a = match self.storage.get(namespace, key_a) {
-            Ok(v) => v.version_id().to_string(),
-            Err(_) => return Ok(false),
-        };
+        // Use full key format (namespace:key) to match put_with_causal_links
+        let full_key_a = format!("{}:{}", namespace, key_a);
+        let full_key_b = format!("{}:{}", namespace, key_b);
 
-        let version_b = match self.storage.get(namespace, key_b) {
-            Ok(v) => v.version_id().to_string(),
-            Err(_) => return Ok(false),
-        };
+        // Check if keys exist in storage
+        if self.storage.get(namespace, key_a).is_err() || 
+           self.storage.get(namespace, key_b).is_err() {
+            return Ok(false);
+        }
 
-        // Check if either version exists in causal graph
+        // Check if either exists in causal graph
         let graph = self.storage.causal_graph();
-        if !graph.contains(&version_a) || !graph.contains(&version_b) {
-            // Not in causal graph yet, check if they're the same key's lineage
-            return Ok(key_a == key_b);
+        if !graph.contains(&full_key_a) || !graph.contains(&full_key_b) {
+            // Not in causal graph - no causal link established
+            return Ok(false);
         }
 
         // Synthesize the query action
         let action = crate::actions::LineageQueryAction::QueryConnected {
-            key_a: version_a.clone(),
-            key_b: version_b.clone(),
+            key_a: full_key_a.clone(),
+            key_b: full_key_b.clone(),
         };
         let _ = action.to_canonical_structure(self.shared_engine.inner());
 
@@ -1651,12 +1699,12 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let mut visited = std::collections::HashSet::new();
         let mut queue = std::collections::VecDeque::new();
 
-        queue.push_back(version_a.clone());
-        visited.insert(version_a.clone());
+        queue.push_back(full_key_a.clone());
+        visited.insert(full_key_a.clone());
 
         while let Some(current) = queue.pop_front() {
             // Check if we found the target
-            if current == version_b {
+            if current == full_key_b {
                 return Ok(true);
             }
 
@@ -1712,26 +1760,25 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             return Ok(Some(vec![key_a.to_string()]));
         }
 
-        // Get version IDs
-        let version_a = match self.storage.get(namespace, key_a) {
-            Ok(v) => v.version_id().to_string(),
-            Err(_) => return Ok(None),
-        };
+        // Use full key format (namespace:key) to match put_with_causal_links
+        let full_key_a = format!("{}:{}", namespace, key_a);
+        let full_key_b = format!("{}:{}", namespace, key_b);
 
-        let version_b = match self.storage.get(namespace, key_b) {
-            Ok(v) => v.version_id().to_string(),
-            Err(_) => return Ok(None),
-        };
+        // Check if keys exist in storage
+        if self.storage.get(namespace, key_a).is_err() || 
+           self.storage.get(namespace, key_b).is_err() {
+            return Ok(None);
+        }
 
         let graph = self.storage.causal_graph();
-        if !graph.contains(&version_a) || !graph.contains(&version_b) {
+        if !graph.contains(&full_key_a) || !graph.contains(&full_key_b) {
             return Ok(None);
         }
 
         // Synthesize the query action
         let action = crate::actions::LineageQueryAction::GetConnectionPath {
-            key_a: version_a.clone(),
-            key_b: version_b.clone(),
+            key_a: full_key_a.clone(),
+            key_b: full_key_b.clone(),
         };
         let _ = action.to_canonical_structure(self.shared_engine.inner());
 
@@ -1740,19 +1787,21 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let mut queue = std::collections::VecDeque::new();
         let mut parent_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
-        queue.push_back(version_a.clone());
-        visited.insert(version_a.clone());
+        queue.push_back(full_key_a.clone());
+        visited.insert(full_key_a.clone());
 
         while let Some(current) = queue.pop_front() {
-            if current == version_b {
+            if current == full_key_b {
                 // Reconstruct path
-                let mut path = vec![version_b.clone()];
-                let mut current_node = version_b.clone();
+                let mut path = vec![key_b.to_string()];  // Return just the key part for readability
+                let mut current_node = full_key_b.clone();
 
                 while let Some(parent) = parent_map.get(&current_node) {
-                    path.push(parent.clone());
+                    // Extract just the key part from "namespace:key"
+                    let parent_key = parent.split(':').nth(1).unwrap_or(parent).to_string();
+                    path.push(parent_key);
                     current_node = parent.clone();
-                    if current_node == version_a {
+                    if current_node == full_key_a {
                         break;
                     }
                 }
@@ -1829,11 +1878,32 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let all_nodes = graph.all_nodes();
 
         // Build connectivity scores
-        let mut scored_distinctions: Vec<(String, u32, Vec<String>, Vec<String>)> = Vec::new();
+        struct ScoredDistinction {
+            namespace: String,
+            key: String,
+            score: u32,
+            parents: Vec<String>,
+            children: Vec<String>,
+        }
+        
+        let mut scored_distinctions: Vec<ScoredDistinction> = Vec::new();
 
         for node in all_nodes {
-            // For now, we use version_id as the key identifier
-            // In a full implementation, we'd map version_id back to namespace:key
+            // Parse "namespace:key" format
+            let parts: Vec<&str> = node.splitn(2, ':').collect();
+            if parts.len() != 2 {
+                continue;
+            }
+            let node_namespace = parts[0];
+            let node_key = parts[1].to_string();
+
+            // Filter by namespace if specified
+            if let Some(filter_ns) = namespace {
+                if node_namespace != filter_ns {
+                    continue;
+                }
+            }
+
             let parents = graph.ancestors(&node);
             let children = graph.descendants(&node);
 
@@ -1845,22 +1915,28 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             let synthesis_count = parent_count.saturating_add(child_count) / 2;
             let score = parent_count + child_count + synthesis_count;
 
-            scored_distinctions.push((node, score, parents, children));
+            scored_distinctions.push(ScoredDistinction {
+                namespace: node_namespace.to_string(),
+                key: node_key,
+                score,
+                parents,
+                children,
+            });
         }
 
         // Sort by score descending
-        scored_distinctions.sort_by(|a, b| b.1.cmp(&a.1));
+        scored_distinctions.sort_by(|a, b| b.score.cmp(&a.score));
 
         // Take top k
         let results: Vec<ConnectedDistinction> = scored_distinctions
             .into_iter()
             .take(k)
-            .map(|(key, score, parents, children)| ConnectedDistinction {
-                namespace: namespace.unwrap_or("__all").to_string(),
-                key,
-                connection_score: score,
-                parents,
-                children,
+            .map(|dist| ConnectedDistinction {
+                namespace: dist.namespace,
+                key: dist.key,
+                connection_score: dist.score,
+                parents: dist.parents,
+                children: dist.children,
             })
             .collect();
 

@@ -48,11 +48,11 @@
 //!
 //! The KoruDelta API is designed to be minimal and intuitive:
 //!
-//! - [`KoruDelta::start()`] - Initialize the database
-//! - [`KoruDelta::put()`] - Store a value (creates new version)
-//! - [`KoruDelta::get()`] - Retrieve current value
-//! - [`KoruDelta::history()`] - Get complete change history
-//! - [`KoruDelta::get_at()`] - Time travel to specific timestamp
+//! - `KoruDelta::start()` - Initialize the database
+//! - `KoruDelta::put()` - Store a value (creates new version)
+//! - `KoruDelta::get()` - Retrieve current value
+//! - `KoruDelta::history()` - Get complete change history
+//! - `KoruDelta::get_at()` - Time travel to specific timestamp
 //!
 //! ## Architecture
 //!

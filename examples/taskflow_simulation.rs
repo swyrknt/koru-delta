@@ -12,7 +12,7 @@ use std::collections::HashMap;
 /// TaskFlow - Project Management Platform Simulation
 struct TaskFlow {
     db: KoruDelta,
-    current_user: Option<String>,
+    _current_user: Option<String>,
 }
 
 impl TaskFlow {
@@ -20,7 +20,7 @@ impl TaskFlow {
         println!("🚀 Initializing TaskFlow...");
         let db = KoruDelta::start().await?;
         println!("✅ TaskFlow database ready");
-        Ok(Self { db, current_user: None })
+        Ok(Self { db, _current_user: None })
     }
 
     // ============================================
@@ -67,6 +67,7 @@ impl TaskFlow {
         Ok(valid)
     }
     
+    #[allow(dead_code)]
     async fn get_user(&self, user_id: &str) -> anyhow::Result<Option<serde_json::Value>> {
         match self.db.get("users", user_id).await {
             Ok(v) => Ok(Some(v.value().clone())),
@@ -101,7 +102,7 @@ impl TaskFlow {
     }
     
     async fn add_project_member(&self, project_id: &str, user_id: &str) -> anyhow::Result<()> {
-        let mut project = self.db.get("projects", project_id).await?;
+        let project = self.db.get("projects", project_id).await?;
         let mut members = project.value()["members"].as_array().unwrap().clone();
         
         if !members.contains(&json!(user_id)) {
@@ -334,7 +335,7 @@ async fn main() -> anyhow::Result<()> {
     println!("╚════════════════════════════════════════════════════════════════╝");
     
     let mut passed = 0;
-    let mut failed = 0;
+    let failed = 0;
     
     // Initialize TaskFlow
     let taskflow = TaskFlow::new().await?;
@@ -431,7 +432,7 @@ async fn main() -> anyhow::Result<()> {
             &format!("Detailed description for: {}", title),
             &dev1_id,
             priority,
-            tags.iter().map(|s| *s).collect()
+            tags.to_vec()
         ).await?;
         mobile_tasks.push(task_id);
     }
@@ -454,7 +455,7 @@ async fn main() -> anyhow::Result<()> {
             &format!("Detailed description for: {}", title),
             &dev2_id,
             priority,
-            tags.iter().map(|s| *s).collect()
+            tags.to_vec()
         ).await?;
         web_task_ids.push(task_id);
     }
@@ -566,9 +567,9 @@ async fn main() -> anyhow::Result<()> {
     let mut handles = vec![];
     
     // Multiple users updating tasks simultaneously
-    for i in 0..5 {
+    for (i, task_id) in mobile_tasks.iter().take(5).enumerate() {
         let db_clone = taskflow.db.clone();
-        let task_id = mobile_tasks[i].clone();
+        let task_id = task_id.clone();
         handles.push(tokio::spawn(async move {
             db_clone.put(&format!("comments_{}", i), "comment", json!({
                 "task_id": task_id,
@@ -590,7 +591,7 @@ async fn main() -> anyhow::Result<()> {
     println!("───────────────────────────────────────");
     
     print!("Getting database stats... ");
-    let stats = taskflow.db.stats().await;
+    let _stats = taskflow.db.stats().await;
     println!("✅"); passed += 1;
     
     print!("Verifying namespaces... ");

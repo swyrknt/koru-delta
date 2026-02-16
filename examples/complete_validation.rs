@@ -29,7 +29,8 @@ async fn main() {
         }
         Err(e) => {
             println!("❌ {}", e);
-            failed += 1;
+            #[allow(unused_assignments)]
+            { failed += 1; }
             std::process::exit(1);
         }
     };
@@ -63,7 +64,7 @@ async fn main() {
     println!("✅"); passed += 1; total_tests += 1;
 
     // 1.4 Empty object
-    print!("[1.4] Empty object {}... ", "{}");
+    print!("[1.4] Empty object {{}}... ");
     db.put("test", "empty_obj", json!({})).await.unwrap();
     let v = db.get("test", "empty_obj").await.unwrap();
     assert_eq!(v.value(), &json!({}));
@@ -93,7 +94,7 @@ async fn main() {
     // 1.8 Number values
     print!("[1.8] Number values (int/float)... ");
     db.put("test", "int", json!(42)).await.unwrap();
-    db.put("test", "float", json!(3.14)).await.unwrap();
+    db.put("test", "float", json!(1.5_f64)).await.unwrap();
     db.put("test", "neg", json!(-17)).await.unwrap();
     println!("✅"); passed += 1; total_tests += 1;
 
@@ -416,7 +417,7 @@ async fn main() {
         ..Default::default()
     };
     let r = db.query("query", q).await.unwrap();
-    assert!(r.records.len() > 0);
+    assert!(!r.records.is_empty());
     println!("✅ ({} matching)", r.records.len()); passed += 1; total_tests += 1;
 
     // 4.7 Query total count

@@ -66,7 +66,7 @@ pub struct CausalStorage {
     version_store: DashMap<String, VersionedValue>,
 
     /// Deduplicated value storage
-    /// Maps version_id → Arc<JsonValue>
+    /// Maps version_id → `Arc<JsonValue>`
     /// Same values share the same Arc allocation
     value_store: DashMap<String, Arc<JsonValue>>,
 

@@ -61,4 +61,16 @@ python examples/04_config_management.py
 
 ## Documentation
 
-See the [main repository](https://github.com/swyrknt/koru-delta) for full documentation.
+- **Python API Reference**: See `docs/` directory for Sphinx documentation
+- **LCA Architecture Guide**: Understanding the Local Causal Agent architecture
+- **Examples**: Check the `examples/` directory for complete working examples
+- **Main Repository**: https://github.com/swyrknt/koru-delta
+
+## Building Documentation
+
+```bash
+cd docs
+pip install sphinx sphinx-rtd-theme
+make html
+# Documentation will be in _build/html/
+```

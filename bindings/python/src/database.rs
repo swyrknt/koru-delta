@@ -687,6 +687,49 @@ impl PyDatabase {
         }
     }
 
+    /// Store a value with causal parent links in the graph.
+    ///
+    /// This establishes causal relationships in the graph while storing the value.
+    /// Use this when a distinction is caused by prior distinctions.
+    ///
+    /// # Arguments
+    /// * `namespace` - The namespace to store in
+    /// * `key` - The key for this value
+    /// * `value` - The value to store
+    /// * `parent_keys` - List of parent keys that caused this distinction
+    ///
+    /// # Example
+    /// ```python
+    /// # Store inference with causal link to observation
+    /// await db.put_with_causal_links(
+    ///     "concepts",
+    ///     "inference_weather",
+    ///     {"conclusion": "rain"},
+    ///     ["observation_sky"]  # Causal parent
+    /// )
+    /// ```
+    #[pyo3(signature = (namespace, key, value, parent_keys = vec![]))]
+    fn put_with_causal_links<'py>(
+        &self,
+        py: Python<'py>,
+        namespace: &str,
+        key: &str,
+        value: &'py PyAny,
+        parent_keys: Vec<String>,
+    ) -> PyResult<&'py PyAny> {
+        let db = self.db.clone();
+        let ns = namespace.to_string();
+        let k = key.to_string();
+        let json_value = pyobject_to_json(value)?;
+
+        future_into_py(py, async move {
+            db.put_with_causal_links(ns, k, json_value, parent_keys)
+                .await
+                .map_err(to_python_error)?;
+            Ok(())
+        })
+    }
+
     /// Store a value with TTL (time-to-live) in seconds
     ///
     /// The value will be automatically deleted after the specified number of seconds.
@@ -799,7 +842,7 @@ impl PyDatabase {
         let db = self.db.clone();
 
         future_into_py(py, async move {
-            let expiring = db.list_expiring_soon(within_seconds).await.map_err(to_python_error)?;
+            let expiring = db.list_expiring_soon(within_seconds).await;
             
             Python::with_gil(|py| {
                 let list = PyList::new(py, Vec::<PyObject>::new());

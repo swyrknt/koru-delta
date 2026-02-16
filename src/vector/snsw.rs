@@ -310,7 +310,7 @@ pub struct AbstractionNode {
 /// Navigation path through synthesis relationships.
 ///
 /// Enables explainable search: "Why is A related to B?"
-/// Answer: "Through path: A →[composition]→ X →[abstraction]→ B"
+/// Answer: "Through path: A →`[composition]`→ X →`[abstraction]`→ B"
 #[derive(Clone, Debug)]
 pub struct SynthesisPath {
     /// Starting node

@@ -547,7 +547,7 @@ enum AuthCommands {
     /// Grant a capability to another identity
     ///
     /// Example:
-    ///   kdelta auth grant --to <identity> --resource "users/*" --permission read
+    ///   kdelta auth grant --to `<identity>` --resource "users/*" --permission read
     Grant {
         /// Identity to grant capability to
         #[arg(short, long)]

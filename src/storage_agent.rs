@@ -63,7 +63,7 @@ pub struct StorageAgent {
     version_store: DashMap<String, VersionedValue>,
 
     /// Deduplicated value storage
-    /// Maps version_id → Arc<JsonValue>
+    /// Maps version_id → `Arc<JsonValue>`
     value_store: DashMap<String, Arc<JsonValue>>,
 
     /// Tombstones for deleted keys

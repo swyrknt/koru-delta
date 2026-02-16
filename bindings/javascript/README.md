@@ -312,6 +312,12 @@ const history: HistoryEntry[] = await db.history('users', 'alice');
 - **Single-user**: No built-in multi-user synchronization (use the Rust version for that)
 - **WASM overhead**: First load requires downloading the WASM binary
 
+## Documentation
+
+- **[API Reference](./docs/API.md)** - Complete API documentation
+- **[LCA Architecture](./docs/LCA_ARCHITECTURE.md)** - Understanding the Local Causal Agent pattern
+- **[TypeScript Types](./index.d.ts)** - Complete type definitions
+
 ## Building from Source
 
 ```bash

@@ -946,6 +946,36 @@ impl KoruDeltaWasm {
         }
     }
 
+    /// Store a value with causal parent links in the graph.
+    ///
+    /// This establishes causal relationships in the graph while storing the value.
+    /// Use this when a distinction is caused by prior distinctions.
+    ///
+    /// # Arguments
+    /// * `namespace` - The namespace
+    /// * `key` - The key
+    /// * `value` - JSON value to store
+    /// * `parentKeys` - Array of parent keys that caused this distinction
+    #[wasm_bindgen(js_name = putWithCausalLinks)]
+    pub async fn put_with_causal_links_js(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: JsValue,
+        parent_keys: Vec<String>,
+    ) -> Result<JsValue, JsValue> {
+        let json_value: JsonValue = serde_wasm_bindgen::from_value(value)
+            .map_err(|e| JsValue::from_str(&format!("Invalid JSON value: {}", e)))?;
+
+        let versioned = self
+            .db
+            .put_with_causal_links(namespace, key, json_value, parent_keys)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Failed to store with causal links: {}", e)))?;
+
+        versioned_to_js(&versioned)
+    }
+
     /// Store a value with TTL (time-to-live) in seconds
     ///
     /// The value will be automatically deleted after the specified number of seconds.

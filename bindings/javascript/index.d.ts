@@ -622,6 +622,34 @@ export class KoruDeltaWasm {
   clearPersistence(): Promise<void>;
 
   // ============================================================================
+  // Causal Graph Methods
+  // ============================================================================
+
+  /**
+   * Store a value with causal parent links in the graph.
+   * 
+   * This establishes causal relationships in the graph while storing the value.
+   * Use this when a distinction is caused by prior distinctions.
+   * 
+   * @param namespace - The namespace
+   * @param key - The key
+   * @param value - Any JSON-serializable value
+   * @param parentKeys - Array of parent keys that caused this distinction
+   * @returns A Promise that resolves to the versioned stored value
+   * @example
+   * ```typescript
+   * // Store inference with causal link to observation
+   * await db.putWithCausalLinks(
+   *   'concepts',
+   *   'inference_weather',
+   *   { conclusion: 'rain' },
+   *   ['observation_sky']  // Causal parent
+   * );
+   * ```
+   */
+  putWithCausalLinks(namespace: string, key: string, value: any, parentKeys: string[]): Promise<VersionedValue>;
+
+  // ============================================================================
   // TTL (Time-To-Live) Methods
   // ============================================================================
 

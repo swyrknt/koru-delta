@@ -150,77 +150,86 @@ async fn stage_2_graph_connectivity(
     println!("STAGE 2: Graph Connectivity (Causal Relationships)");
     println!("{}", "═".repeat(66));
 
-    // Create a causal chain: A → B → C
+    // Create a causal chain: A → B → C using put_with_causal_links
     println!("\n[Causal Graph] Creating causal chain A → B → C...");
+    println!("  (Using put_with_causal_links to establish graph edges)");
 
+    // A: Root observation (no parents)
     delta
-        .put_similar(
+        .put_with_causal_links(
             "concepts",
             "observation_sky",
-            "The sky is dark and cloudy",
-            Some(json!({"type": "observation"})),
+            json!({"text": "The sky is dark and cloudy", "type": "observation"}),
+            vec![],  // No parents - this is a root
         )
         .await?;
     println!("  ✓ A: observation_sky (root observation)");
 
+    // B: Inference caused by A
     delta
-        .put_similar(
+        .put_with_causal_links(
             "concepts",
             "inference_weather",
-            "Dark clouds indicate rain is likely",
-            Some(json!({
-                "type": "inference",
-                "caused_by": "observation_sky"
-            })),
+            json!({"text": "Dark clouds indicate rain is likely", "type": "inference"}),
+            vec!["observation_sky".to_string()],  // Caused by A
         )
         .await?;
     println!("  ✓ B: inference_weather (caused by A)");
 
+    // C: Prediction caused by B
     delta
-        .put_similar(
+        .put_with_causal_links(
             "concepts",
             "prediction_rain",
-            "It will rain today, bring an umbrella",
-            Some(json!({
-                "type": "prediction",
-                "caused_by": "inference_weather"
-            })),
+            json!({"text": "It will rain today, bring an umbrella", "type": "prediction"}),
+            vec!["inference_weather".to_string()],  // Caused by B
         )
         .await?;
     println!("  ✓ C: prediction_rain (caused by B)");
 
-    // Create a parallel branch: A → D
+    // D: Parallel branch, also caused by A
     delta
-        .put_similar(
+        .put_with_causal_links(
             "concepts",
             "inference_mood",
-            "Dark weather affects mood",
-            Some(json!({
-                "type": "inference",
-                "caused_by": "observation_sky"
-            })),
+            json!({"text": "Dark weather affects mood", "type": "inference"}),
+            vec!["observation_sky".to_string()],  // Also caused by A
         )
         .await?;
     println!("  ✓ D: inference_mood (also caused by A)");
 
     // Test connectivity queries
     println!("\n[Connectivity Queries]");
-    println!("  Note: Causal connections are tracked through synthesis operations.");
-    println!("  Simple put() stores values but doesn't establish causal links.");
+    println!("  (Using causal graph with established parent links)");
 
-    // Check connectivity (will be false for simple put() values)
+    // Check connectivity - should be TRUE now that causal links are established
     let connected = delta
         .are_connected("concepts", "observation_sky", "prediction_rain")
         .await?;
     println!("  - observation_sky → prediction_rain: {}", connected);
+    if connected {
+        println!("    ✓ Causal chain A → B → C verified!");
+    }
 
-    // Get the connection path (will be None if not causally connected)
+    // Get the connection path
     let path = delta
         .get_connection_path("concepts", "observation_sky", "prediction_rain")
         .await?;
     match path {
-        Some(p) => println!("  - Path: {}", p.join(" → ")),
-        None => println!("  - No causal path found (use synthesis operations to connect)"),
+        Some(p) => {
+            println!("  - Path found: {}", p.join(" → "));
+            println!("    (Causal chain through the graph)");
+        }
+        None => println!("  - No path found"),
+    }
+
+    // Are two branches connected? (Both share common ancestor A)
+    let branches_connected = delta
+        .are_connected("concepts", "prediction_rain", "inference_mood")
+        .await?;
+    println!("  - prediction_rain ↔ inference_mood: {}", branches_connected);
+    if branches_connected {
+        println!("    ✓ Both share common ancestor: observation_sky");
     }
 
     // Get highly-connected distinctions
