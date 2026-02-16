@@ -2748,7 +2748,197 @@ mod tests {
         assert!(invalid.validate().is_err());
     }
 
-    #[test]
+// ============================================================================
+// ALIS AI Integration Actions - Phase 1: TTL Support
+// ============================================================================
+
+/// Consolidation actions for proactive synthesis and TTL management.
+///
+/// These actions are performed by the ConsolidationAgent during background
+/// processing to maintain the health and coherence of the distinction field.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConsolidationAction {
+    /// Clean up expired TTL values.
+    ///
+    /// Removes all values that have exceeded their time-to-live,
+    /// returning the count of items removed.
+    CleanupExpired,
+    /// Find similar distinctions that are not causally connected.
+    ///
+    /// These pairs are candidates for proactive synthesis.
+    FindSimilarUnconnectedPairs {
+        /// Maximum number of pairs to return.
+        k: usize,
+        /// Minimum similarity threshold (0.0 - 1.0).
+        threshold: f32,
+    },
+}
+
+/// Serializable version of ConsolidationAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum ConsolidationActionSerializable {
+    CleanupExpired,
+    FindSimilarUnconnectedPairs { k: usize, threshold: f32 },
+}
+
+impl From<&ConsolidationAction> for ConsolidationActionSerializable {
+    fn from(action: &ConsolidationAction) -> Self {
+        match action {
+            ConsolidationAction::CleanupExpired => {
+                ConsolidationActionSerializable::CleanupExpired
+            }
+            ConsolidationAction::FindSimilarUnconnectedPairs { k, threshold } => {
+                ConsolidationActionSerializable::FindSimilarUnconnectedPairs {
+                    k: *k,
+                    threshold: *threshold,
+                }
+            }
+        }
+    }
+}
+
+impl Canonicalizable for ConsolidationAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = ConsolidationActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+impl From<ConsolidationAction> for KoruAction {
+    fn from(action: ConsolidationAction) -> Self {
+        // For now, map to Storage action as a placeholder
+        // In full implementation, would add KoruAction::Consolidation variant
+        KoruAction::Storage(StorageAction::Query {
+            pattern_json: serde_json::json!({
+                "consolidation_action": format!("{:?}", action)
+            }),
+        })
+    }
+}
+
+// ============================================================================
+// ALIS AI Integration - Extended Lineage Actions
+// ============================================================================
+
+/// Extended lineage actions for graph connectivity queries.
+///
+/// These actions query the causal graph structure to understand
+/// relationships between distinctions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LineageQueryAction {
+    /// Check if two distinctions are causally connected.
+    QueryConnected {
+        /// First distinction key.
+        key_a: String,
+        /// Second distinction key.
+        key_b: String,
+    },
+    /// Get the causal connection path between two distinctions.
+    GetConnectionPath {
+        /// First distinction key.
+        key_a: String,
+        /// Second distinction key.
+        key_b: String,
+    },
+    /// Get the most highly-connected distinctions.
+    GetHighlyConnected {
+        /// Maximum number of results.
+        k: usize,
+    },
+}
+
+/// Serializable version of LineageQueryAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum LineageQueryActionSerializable {
+    QueryConnected { key_a: String, key_b: String },
+    GetConnectionPath { key_a: String, key_b: String },
+    GetHighlyConnected { k: usize },
+}
+
+impl From<&LineageQueryAction> for LineageQueryActionSerializable {
+    fn from(action: &LineageQueryAction) -> Self {
+        match action {
+            LineageQueryAction::QueryConnected { key_a, key_b } => {
+                LineageQueryActionSerializable::QueryConnected {
+                    key_a: key_a.clone(),
+                    key_b: key_b.clone(),
+                }
+            }
+            LineageQueryAction::GetConnectionPath { key_a, key_b } => {
+                LineageQueryActionSerializable::GetConnectionPath {
+                    key_a: key_a.clone(),
+                    key_b: key_b.clone(),
+                }
+            }
+            LineageQueryAction::GetHighlyConnected { k } => {
+                LineageQueryActionSerializable::GetHighlyConnected { k: *k }
+            }
+        }
+    }
+}
+
+impl Canonicalizable for LineageQueryAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = LineageQueryActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+// ============================================================================
+// ALIS AI Integration - Extended Sleep Actions
+// ============================================================================
+
+/// Extended sleep actions for creative synthesis.
+///
+/// These actions are performed during the dream phase to create
+/// novel combinations of distant distinctions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SleepCreativeAction {
+    /// Perform random walk combinations for creative synthesis.
+    RandomWalkCombinations {
+        /// Number of combinations to generate.
+        n: usize,
+        /// Number of steps per random walk.
+        steps: usize,
+    },
+}
+
+/// Serializable version of SleepCreativeAction.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) enum SleepCreativeActionSerializable {
+    RandomWalkCombinations { n: usize, steps: usize },
+}
+
+impl From<&SleepCreativeAction> for SleepCreativeActionSerializable {
+    fn from(action: &SleepCreativeAction) -> Self {
+        match action {
+            SleepCreativeAction::RandomWalkCombinations { n, steps } => {
+                SleepCreativeActionSerializable::RandomWalkCombinations {
+                    n: *n,
+                    steps: *steps,
+                }
+            }
+        }
+    }
+}
+
+impl Canonicalizable for SleepCreativeAction {
+    fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
+        let serializable = SleepCreativeActionSerializable::from(self);
+        match bincode::serialize(&serializable) {
+            Ok(bytes) => bytes_to_distinction(&bytes, engine),
+            Err(_) => engine.d0().clone(),
+        }
+    }
+}
+
+#[test]
     fn test_temperature_levels() {
         assert_ne!(TemperatureLevel::Hot, TemperatureLevel::Cold);
         assert_ne!(TemperatureLevel::Warm, TemperatureLevel::Cool);

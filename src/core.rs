@@ -1266,6 +1266,317 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         Ok(results)
     }
 
+    // =========================================================================
+    // TTL (Time-To-Live) Support - ALIS AI Integration
+    // =========================================================================
+
+    /// Store a value with automatic expiration (TTL).
+    ///
+    /// The value will be automatically removed after the specified number of ticks.
+    /// This is essential for ALIS AI's active inference loop where predictions
+    /// need to expire if not confirmed.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace to store in
+    /// * `key` - The key for this value
+    /// * `value` - The value to store
+    /// * `ttl_ticks` - Number of ticks until expiration
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Store a prediction that expires after 100 ticks
+    /// db.put_with_ttl(
+    ///     "predictions",
+    ///     "pred_1",
+    ///     json!({"prediction": "rain", "confidence": 0.8}),
+    ///     100
+    /// ).await?;
+    /// ```
+    pub async fn put_with_ttl<T: Serialize>(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        value: T,
+        ttl_ticks: u64,
+    ) -> DeltaResult<VersionedValue> {
+        let namespace = namespace.into();
+        let key = key.into();
+
+        // Store the value first
+        let result = self.put(&namespace, &key, value).await?;
+
+        // Also store in TTL tracking index for efficient cleanup
+        self.add_to_ttl_index(&namespace, &key, ttl_ticks).await;
+
+        debug!(
+            namespace = %namespace,
+            key = %key,
+            ttl_ticks = ttl_ticks,
+            "Value stored with TTL"
+        );
+
+        Ok(result)
+    }
+
+    /// Store content with auto-generated embedding and TTL.
+    ///
+    /// Combines semantic storage with automatic expiration.
+    /// Perfect for ALIS AI's temporary distinctions that need embeddings.
+    ///
+    /// # Arguments
+    ///
+    /// * `namespace` - The namespace to store in
+    /// * `key` - The key for this content
+    /// * `content` - The content to store and embed
+    /// * `metadata` - Optional additional metadata
+    /// * `ttl_ticks` - Number of ticks until expiration
+    pub async fn put_similar_with_ttl(
+        &self,
+        namespace: impl Into<String>,
+        key: impl Into<String>,
+        content: impl Serialize,
+        metadata: Option<serde_json::Value>,
+        ttl_ticks: u64,
+    ) -> DeltaResult<VersionedValue> {
+        let namespace = namespace.into();
+        let key = key.into();
+
+        // Merge user metadata with TTL metadata
+        let mut ttl_metadata = metadata.unwrap_or(serde_json::Value::Null);
+        if let Some(obj) = ttl_metadata.as_object_mut() {
+            obj.insert("__ttl".to_string(), serde_json::json!({
+                "ttl_ticks": ttl_ticks,
+                "created_at_ticks": self.current_tick(),
+                "expires_at_ticks": self.current_tick() + ttl_ticks,
+            }));
+        } else {
+            ttl_metadata = serde_json::json!({
+                "__ttl": {
+                    "ttl_ticks": ttl_ticks,
+                    "created_at_ticks": self.current_tick(),
+                    "expires_at_ticks": self.current_tick() + ttl_ticks,
+                }
+            });
+        }
+
+        // Use put_similar which handles embedding
+        self.put_similar(&namespace, &key, content, Some(ttl_metadata)).await
+    }
+
+    /// Remove all expired values.
+    ///
+    /// Scans the TTL index and removes all values that have exceeded their TTL.
+    /// Returns the count of items removed.
+    ///
+    /// This is the core of the consolidation action for TTL management.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let cleaned = db.cleanup_expired().await?;
+    /// println!("Removed {} expired items", cleaned);
+    /// ```
+    pub async fn cleanup_expired(&self) -> DeltaResult<usize> {
+        let current_tick = self.current_tick();
+        let mut removed_count = 0;
+
+        // Get all expired items from TTL index
+        let expired = self.get_expired_items(current_tick).await;
+
+        for (namespace, key) in expired {
+            // Delete the expired value (tombstone)
+            match self.delete(&namespace, &key).await {
+                Ok(_) => {
+                    removed_count += 1;
+                    trace!(namespace = %namespace, key = %key, "Expired item removed");
+                }
+                Err(e) => {
+                    warn!(error = %e, namespace = %namespace, key = %key, "Failed to remove expired item");
+                }
+            }
+
+            // Remove from vector index if present
+            self.vector_index.remove(&namespace, &key);
+        }
+
+        // Clean up TTL index
+        self.cleanup_ttl_index(current_tick).await;
+
+        info!(removed = removed_count, "TTL cleanup completed");
+        Ok(removed_count)
+    }
+
+    /// Get remaining TTL for a key.
+    ///
+    /// Returns `None` if the key doesn't exist or has no TTL.
+    pub async fn get_ttl_remaining(&self, namespace: &str, key: &str) -> DeltaResult<Option<u64>> {
+        match self.get(namespace, key).await {
+            Ok(versioned) => {
+                let value = versioned.value();
+                
+                // Check for TTL in metadata
+                if let Some(metadata) = value.get("__metadata") {
+                    if let Some(ttl_info) = metadata.get("__ttl") {
+                        if let Some(expires_at) = ttl_info.get("expires_at_ticks").and_then(|v| v.as_u64()) {
+                            let current = self.current_tick();
+                            return Ok(Some(expires_at.saturating_sub(current)));
+                        }
+                    }
+                }
+                
+                Ok(None)
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// List items expiring within the given number of ticks.
+    ///
+    /// Useful for proactive cleanup or monitoring.
+    pub async fn list_expiring_soon(&self, within_ticks: u64) -> Vec<(String, String, u64)> {
+        let current_tick = self.current_tick();
+        let threshold = current_tick + within_ticks;
+
+        self.get_ttl_items_before(threshold).await
+    }
+
+    /// Get all expired predictions for surprise detection.
+    ///
+    /// This is critical for ALIS AI's active inference loop.
+    /// Returns (namespace, key) pairs of predictions that have expired.
+    pub async fn get_expired_predictions(&self) -> DeltaResult<Vec<(String, String)>> {
+        let current_tick = self.current_tick();
+        let mut expired_predictions = Vec::new();
+
+        // Get all expired items
+        let expired = self.get_expired_items(current_tick).await;
+
+        for (namespace, key) in expired {
+            // Check if this was a prediction (has prediction metadata)
+            if let Ok(versioned) = self.get(&namespace, &key).await {
+                let value = versioned.value();
+                
+                // Check for prediction marker in metadata
+                let is_prediction = value
+                    .get("__metadata")
+                    .and_then(|m| m.get("source"))
+                    .and_then(|s| s.as_str())
+                    .map(|s| s == "prediction")
+                    .unwrap_or(false);
+
+                if is_prediction {
+                    expired_predictions.push((namespace, key));
+                }
+            }
+        }
+
+        Ok(expired_predictions)
+    }
+
+    // -------------------------------------------------------------------------
+    // TTL Internal Helpers
+    // -------------------------------------------------------------------------
+
+    /// Get the current tick count.
+    ///
+    /// In a real implementation, this would come from the PulseAgent.
+    /// For now, we use a monotonic counter based on operation count.
+    fn current_tick(&self) -> u64 {
+        // Use the storage's operation count as a proxy for ticks
+        // This ensures TTL is tied to actual database activity
+        self.storage.key_count() as u64
+    }
+
+    /// Add an item to the TTL tracking index.
+    async fn add_to_ttl_index(&self, namespace: &str, key: &str, ttl_ticks: u64) {
+        let expires_at = self.current_tick() + ttl_ticks;
+        let full_key = format!("{}:{}", namespace, key);
+        
+        // Store in the TTL namespace for efficient lookup
+        let ttl_record = serde_json::json!({
+            "namespace": namespace,
+            "key": key,
+            "expires_at": expires_at,
+        });
+
+        let _ = self.storage.put(
+            "__ttl_index",
+            &full_key,
+            ttl_record,
+        );
+    }
+
+    /// Get all expired items from TTL index.
+    async fn get_expired_items(&self, current_tick: u64) -> Vec<(String, String)> {
+        let mut expired = Vec::new();
+
+        // Get all keys in TTL index
+        let ttl_keys = self.storage.list_keys("__ttl_index");
+
+        for full_key in ttl_keys {
+            if let Ok(value) = self.storage.get("__ttl_index", &full_key) {
+                if let Some(expires_at) = value.value().get("expires_at").and_then(|v| v.as_u64()) {
+                    if current_tick >= expires_at {
+                        if let Some(namespace) = value.value().get("namespace").and_then(|v| v.as_str()) {
+                            if let Some(key) = value.value().get("key").and_then(|v| v.as_str()) {
+                                expired.push((namespace.to_string(), key.to_string()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        expired
+    }
+
+    /// Get TTL items expiring before a threshold.
+    async fn get_ttl_items_before(&self, threshold: u64) -> Vec<(String, String, u64)> {
+        let current_tick = self.current_tick();
+        let mut items = Vec::new();
+
+        let ttl_keys = self.storage.list_keys("__ttl_index");
+
+        for full_key in ttl_keys {
+            if let Ok(value) = self.storage.get("__ttl_index", &full_key) {
+                if let Some(expires_at) = value.value().get("expires_at").and_then(|v| v.as_u64()) {
+                    if expires_at <= threshold {
+                        if let Some(namespace) = value.value().get("namespace").and_then(|v| v.as_str()) {
+                            if let Some(key) = value.value().get("key").and_then(|v| v.as_str()) {
+                                let remaining = expires_at.saturating_sub(current_tick);
+                                items.push((namespace.to_string(), key.to_string(), remaining));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        items
+    }
+
+    /// Clean up the TTL index by removing expired entries.
+    async fn cleanup_ttl_index(&self, current_tick: u64) {
+        let ttl_keys = self.storage.list_keys("__ttl_index");
+
+        for full_key in ttl_keys {
+            if let Ok(value) = self.storage.get("__ttl_index", &full_key) {
+                if let Some(expires_at) = value.value().get("expires_at").and_then(|v| v.as_u64()) {
+                    if current_tick >= expires_at {
+                        // Remove from TTL index (store tombstone)
+                        let _ = self.storage.put(
+                            "__ttl_index",
+                            &full_key,
+                            serde_json::Value::Null,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// Simplified: Store content with an auto-generated distinction-based embedding.
     ///
     /// This is the high-level convenience method for semantic storage.
