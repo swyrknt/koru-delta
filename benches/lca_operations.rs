@@ -7,7 +7,7 @@
 //! - Memory usage is comparable or better
 //! - Concurrent operations scale well
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use koru_delta::KoruDelta;
 use serde_json::json;
 use std::time::Duration;
@@ -169,13 +169,9 @@ fn bench_root_advancement(c: &mut Criterion) {
 
                     // Create a synthesis chain: each operation advances local_root
                     for i in 0..chain_length {
-                        db.put(
-                            "chain_bench",
-                            "chain_key",
-                            json!({"iteration": i}),
-                        )
-                        .await
-                        .unwrap();
+                        db.put("chain_bench", "chain_key", json!({"iteration": i}))
+                            .await
+                            .unwrap();
                     }
                 });
             },
@@ -191,13 +187,9 @@ fn bench_history_synthesis(c: &mut Criterion) {
         let db = KoruDelta::start().await.unwrap();
         // Create version history
         for i in 0..100 {
-            db.put(
-                "history_bench",
-                "versioned_key",
-                json!({"version": i}),
-            )
-            .await
-            .unwrap();
+            db.put("history_bench", "versioned_key", json!({"version": i}))
+                .await
+                .unwrap();
         }
         db
     });
@@ -205,11 +197,7 @@ fn bench_history_synthesis(c: &mut Criterion) {
     c.bench_function("lca_history_synthesis", |b| {
         b.to_async(Runtime::new().unwrap()).iter(|| async {
             // Retrieving history synthesizes chronicle actions
-            black_box(
-                db.history("history_bench", "versioned_key")
-                    .await
-                    .unwrap(),
-            )
+            black_box(db.history("history_bench", "versioned_key").await.unwrap())
         })
     });
 }

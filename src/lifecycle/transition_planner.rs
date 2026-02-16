@@ -12,8 +12,8 @@
 use std::collections::HashMap;
 
 use crate::causal_graph::DistinctionId;
-use crate::lifecycle::importance_scorer::ImportanceScore;
 use crate::lifecycle::MemoryTier;
+use crate::lifecycle::importance_scorer::ImportanceScore;
 
 /// Plans transitions between memory tiers
 #[derive(Debug)]

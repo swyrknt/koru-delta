@@ -6,8 +6,8 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     use colored::*;
+    use koru_delta::KoruDelta;
     use koru_delta::cluster::{ClusterConfig, ClusterNode};
-    use koru_delta::{KoruDelta, CoreConfig};
     use serde_json::json;
     use std::sync::Arc;
 
@@ -33,7 +33,12 @@ async fn main() -> anyhow::Result<()> {
     // =================================================================
     // PHASE 1: Create Two Database Instances with Cluster
     // =================================================================
-    println!("\n{}", "📦 PHASE 1: Creating Cluster Nodes with Full DB".bold().yellow());
+    println!(
+        "\n{}",
+        "📦 PHASE 1: Creating Cluster Nodes with Full DB"
+            .bold()
+            .yellow()
+    );
 
     let db_path1 = tempfile::tempdir()?.path().to_path_buf();
     let db_path2 = tempfile::tempdir()?.path().to_path_buf();
@@ -88,7 +93,8 @@ async fn main() -> anyhow::Result<()> {
             "message": "Data stored before node 2 joined",
             "timestamp": chrono::Utc::now().to_rfc3339()
         }),
-    ).await?;
+    )
+    .await?;
     println!("   ✓ Data stored on Node 1 before Node 2 joins");
 
     // =================================================================
@@ -148,7 +154,8 @@ async fn main() -> anyhow::Result<()> {
             "message": "Data stored after node 2 joined",
             "timestamp": chrono::Utc::now().to_rfc3339()
         }),
-    ).await?;
+    )
+    .await?;
     println!("   ✓ Post-join data stored on Node 1 (should broadcast)");
 
     // Wait for broadcast replication

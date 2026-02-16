@@ -98,8 +98,12 @@ async fn stage_1_ttl_predictions(delta: &KoruDelta) -> Result<(), Box<dyn std::e
     println!("  ✓ Stored user intent prediction (TTL: 60s)");
 
     // Check TTL remaining
-    let ttl_weather = delta.get_ttl_remaining("predictions", "weather_today").await?;
-    let ttl_intent = delta.get_ttl_remaining("predictions", "user_intent").await?;
+    let ttl_weather = delta
+        .get_ttl_remaining("predictions", "weather_today")
+        .await?;
+    let ttl_intent = delta
+        .get_ttl_remaining("predictions", "user_intent")
+        .await?;
 
     println!("\n  [TTL Check]");
     if let Some(remaining) = ttl_weather {
@@ -111,7 +115,10 @@ async fn stage_1_ttl_predictions(delta: &KoruDelta) -> Result<(), Box<dyn std::e
 
     // List predictions expiring soon
     let expiring = delta.list_expiring_soon(10).await;
-    println!("\n  [Expiring Soon] {} predictions expire within 10s", expiring.len());
+    println!(
+        "\n  [Expiring Soon] {} predictions expire within 10s",
+        expiring.len()
+    );
     for (ns, key, remaining) in &expiring {
         println!("    - {}/{}: {}s", ns, key, remaining);
     }
@@ -125,13 +132,17 @@ async fn stage_1_ttl_predictions(delta: &KoruDelta) -> Result<(), Box<dyn std::e
     println!("  ✓ Cleanup complete: {} items removed", cleaned);
 
     // Verify weather prediction is gone
-    let weather_remaining = delta.get_ttl_remaining("predictions", "weather_today").await?;
+    let weather_remaining = delta
+        .get_ttl_remaining("predictions", "weather_today")
+        .await?;
     if weather_remaining.is_none() {
         println!("  ✓ Weather prediction expired (as expected)");
     }
 
     // User intent should still exist
-    let intent_remaining = delta.get_ttl_remaining("predictions", "user_intent").await?;
+    let intent_remaining = delta
+        .get_ttl_remaining("predictions", "user_intent")
+        .await?;
     if intent_remaining.is_some() {
         println!("  ✓ User intent prediction still valid");
     }
@@ -143,9 +154,7 @@ async fn stage_1_ttl_predictions(delta: &KoruDelta) -> Result<(), Box<dyn std::e
 ///
 /// ALIS AI tracks causal relationships between distinctions.
 /// This enables "why" questions and understanding the lineage of ideas.
-async fn stage_2_graph_connectivity(
-    delta: &KoruDelta,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn stage_2_graph_connectivity(delta: &KoruDelta) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n{}", "═".repeat(66));
     println!("STAGE 2: Graph Connectivity (Causal Relationships)");
     println!("{}", "═".repeat(66));
@@ -160,7 +169,7 @@ async fn stage_2_graph_connectivity(
             "concepts",
             "observation_sky",
             json!({"text": "The sky is dark and cloudy", "type": "observation"}),
-            vec![],  // No parents - this is a root
+            vec![], // No parents - this is a root
         )
         .await?;
     println!("  ✓ A: observation_sky (root observation)");
@@ -171,7 +180,7 @@ async fn stage_2_graph_connectivity(
             "concepts",
             "inference_weather",
             json!({"text": "Dark clouds indicate rain is likely", "type": "inference"}),
-            vec!["observation_sky".to_string()],  // Caused by A
+            vec!["observation_sky".to_string()], // Caused by A
         )
         .await?;
     println!("  ✓ B: inference_weather (caused by A)");
@@ -182,7 +191,7 @@ async fn stage_2_graph_connectivity(
             "concepts",
             "prediction_rain",
             json!({"text": "It will rain today, bring an umbrella", "type": "prediction"}),
-            vec!["inference_weather".to_string()],  // Caused by B
+            vec!["inference_weather".to_string()], // Caused by B
         )
         .await?;
     println!("  ✓ C: prediction_rain (caused by B)");
@@ -193,7 +202,7 @@ async fn stage_2_graph_connectivity(
             "concepts",
             "inference_mood",
             json!({"text": "Dark weather affects mood", "type": "inference"}),
-            vec!["observation_sky".to_string()],  // Also caused by A
+            vec!["observation_sky".to_string()], // Also caused by A
         )
         .await?;
     println!("  ✓ D: inference_mood (also caused by A)");
@@ -227,7 +236,10 @@ async fn stage_2_graph_connectivity(
     let branches_connected = delta
         .are_connected("concepts", "prediction_rain", "inference_mood")
         .await?;
-    println!("  - prediction_rain ↔ inference_mood: {}", branches_connected);
+    println!(
+        "  - prediction_rain ↔ inference_mood: {}",
+        branches_connected
+    );
     if branches_connected {
         println!("    ✓ Both share common ancestor: observation_sky");
     }
@@ -265,14 +277,22 @@ async fn stage_3_similar_unconnected_pairs(
 
     // Store semantically similar concepts in different contexts
     let concepts = vec![
-        ("physics", "gravity", "Objects attract each other based on mass"),
+        (
+            "physics",
+            "gravity",
+            "Objects attract each other based on mass",
+        ),
         (
             "social",
             "attraction",
             "People are drawn to similar personalities",
         ),
         ("physics", "momentum", "Objects in motion stay in motion"),
-        ("business", "momentum", "Successful projects build on success"),
+        (
+            "business",
+            "momentum",
+            "Successful projects build on success",
+        ),
         ("biology", "evolution", "Species adapt to their environment"),
         (
             "technology",
@@ -298,9 +318,7 @@ async fn stage_3_similar_unconnected_pairs(
 
     // Find similar unconnected pairs (potential synthesis candidates)
     println!("\n[Synthesis Candidates]");
-    let pairs: Vec<UnconnectedPair> = delta
-        .find_similar_unconnected_pairs(None, 5, 0.6)
-        .await?;
+    let pairs: Vec<UnconnectedPair> = delta.find_similar_unconnected_pairs(None, 5, 0.6).await?;
 
     if pairs.is_empty() {
         println!("  (No similar unconnected pairs found - vector index may need more data)");
@@ -308,20 +326,13 @@ async fn stage_3_similar_unconnected_pairs(
         for pair in &pairs {
             println!(
                 "  ✓ {}/{} ↔ {}/{} (similarity: {:.2})",
-                pair.namespace_a,
-                pair.key_a,
-                pair.namespace_b,
-                pair.key_b,
-                pair.similarity_score
+                pair.namespace_a, pair.key_a, pair.namespace_b, pair.key_b, pair.similarity_score
             );
             println!("    [Synthesis Opportunity] Cross-domain insight!");
         }
     }
 
-    println!(
-        "\n  Found {} synthesis candidates",
-        pairs.len()
-    );
+    println!("\n  Found {} synthesis candidates", pairs.len());
 
     Ok(())
 }
@@ -354,10 +365,7 @@ async fn stage_4_dream_phase(delta: &KoruDelta) -> Result<(), Box<dyn std::error
                 combo.path.len().saturating_sub(1),
                 0 // Would need actual lookup
             );
-            println!(
-                "    End: {}/{}",
-                combo.end_namespace, combo.end_key
-            );
+            println!("    End: {}/{}", combo.end_namespace, combo.end_key);
             println!("    Path length: {} steps", combo.path.len());
             println!("    Novelty score: {:.2}", combo.novelty_score);
 

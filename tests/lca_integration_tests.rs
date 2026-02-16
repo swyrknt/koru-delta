@@ -6,12 +6,12 @@
 //! 3. Causal chains are preserved across agent boundaries
 //! 4. Content-addressing ensures determinism
 
+use koru_delta::workspace_agent::WorkspaceAgent;
 use koru_delta::{
     KoruDelta,
     actions::{KoruAction, PulseAction, StorageAction},
-    orchestrator::{KoruOrchestrator, AgentInfo, AgentCapability, CoordinationPhase},
+    orchestrator::{AgentCapability, AgentInfo, CoordinationPhase, KoruOrchestrator},
 };
-use koru_delta::workspace_agent::WorkspaceAgent;
 use koru_lambda_core::{Canonicalizable, DistinctionEngine};
 use std::sync::Arc;
 
@@ -103,10 +103,7 @@ fn test_cross_agent_synthesis_produces_valid_distinction() {
         phase: "Test".to_string(),
     });
 
-    let result = orchestrator.synthesize_cross_agent(
-        &["agent1", "agent2"],
-        action,
-    );
+    let result = orchestrator.synthesize_cross_agent(&["agent1", "agent2"], action);
 
     // FALSIFICATION: Must produce a valid distinction
     assert!(
@@ -284,7 +281,10 @@ async fn test_multi_agent_workflow() {
 
     // 5. Verify we can get agent roots for cross-agent operations
     let query_root = orchestrator.get_agent_root("query_service");
-    assert!(query_root.is_some(), "Should be able to retrieve agent root");
+    assert!(
+        query_root.is_some(),
+        "Should be able to retrieve agent root"
+    );
 }
 
 // ====================================================================================

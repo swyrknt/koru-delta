@@ -1,9 +1,9 @@
+use koru_delta::KoruDelta;
 /// Integration tests for the HTTP API.
 ///
 /// These tests verify that the HTTP endpoints work correctly
 /// by starting a server and making HTTP requests to it.
 use koru_delta::http::HttpServer;
-use koru_delta::KoruDelta;
 use serde_json::json;
 
 /// Test the basic HTTP endpoints.

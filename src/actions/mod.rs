@@ -337,46 +337,55 @@ fn bytes_to_distinction(bytes: &[u8], engine: &DistinctionEngine) -> Distinction
 /// Serializable version of StorageAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum StorageActionSerializable {
-    Store { namespace: String, key: String, value_json: serde_json::Value },
-    Retrieve { namespace: String, key: String },
-    History { namespace: String, key: String },
-    Query { pattern_json: serde_json::Value },
-    Delete { namespace: String, key: String },
+    Store {
+        namespace: String,
+        key: String,
+        value_json: serde_json::Value,
+    },
+    Retrieve {
+        namespace: String,
+        key: String,
+    },
+    History {
+        namespace: String,
+        key: String,
+    },
+    Query {
+        pattern_json: serde_json::Value,
+    },
+    Delete {
+        namespace: String,
+        key: String,
+    },
 }
 
 impl From<&StorageAction> for StorageActionSerializable {
     fn from(action: &StorageAction) -> Self {
         match action {
-            StorageAction::Store { namespace, key, value_json } => {
-                StorageActionSerializable::Store {
-                    namespace: namespace.clone(),
-                    key: key.clone(),
-                    value_json: value_json.clone(),
-                }
-            }
-            StorageAction::Retrieve { namespace, key } => {
-                StorageActionSerializable::Retrieve {
-                    namespace: namespace.clone(),
-                    key: key.clone(),
-                }
-            }
-            StorageAction::History { namespace, key } => {
-                StorageActionSerializable::History {
-                    namespace: namespace.clone(),
-                    key: key.clone(),
-                }
-            }
-            StorageAction::Query { pattern_json } => {
-                StorageActionSerializable::Query {
-                    pattern_json: pattern_json.clone(),
-                }
-            }
-            StorageAction::Delete { namespace, key } => {
-                StorageActionSerializable::Delete {
-                    namespace: namespace.clone(),
-                    key: key.clone(),
-                }
-            }
+            StorageAction::Store {
+                namespace,
+                key,
+                value_json,
+            } => StorageActionSerializable::Store {
+                namespace: namespace.clone(),
+                key: key.clone(),
+                value_json: value_json.clone(),
+            },
+            StorageAction::Retrieve { namespace, key } => StorageActionSerializable::Retrieve {
+                namespace: namespace.clone(),
+                key: key.clone(),
+            },
+            StorageAction::History { namespace, key } => StorageActionSerializable::History {
+                namespace: namespace.clone(),
+                key: key.clone(),
+            },
+            StorageAction::Query { pattern_json } => StorageActionSerializable::Query {
+                pattern_json: pattern_json.clone(),
+            },
+            StorageAction::Delete { namespace, key } => StorageActionSerializable::Delete {
+                namespace: namespace.clone(),
+                key: key.clone(),
+            },
         }
     }
 }
@@ -459,36 +468,40 @@ pub enum TemperatureAction {
 /// Serializable version of TemperatureAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum TemperatureActionSerializable {
-    Heat { distinction_id: String, level: TemperatureLevel },
-    Cool { distinction_id: String },
-    Evict { distinction_id: String },
-    Access { distinction_id: String },
+    Heat {
+        distinction_id: String,
+        level: TemperatureLevel,
+    },
+    Cool {
+        distinction_id: String,
+    },
+    Evict {
+        distinction_id: String,
+    },
+    Access {
+        distinction_id: String,
+    },
 }
 
 impl From<&TemperatureAction> for TemperatureActionSerializable {
     fn from(action: &TemperatureAction) -> Self {
         match action {
-            TemperatureAction::Heat { distinction_id, level } => {
-                TemperatureActionSerializable::Heat {
-                    distinction_id: distinction_id.clone(),
-                    level: *level,
-                }
-            }
-            TemperatureAction::Cool { distinction_id } => {
-                TemperatureActionSerializable::Cool {
-                    distinction_id: distinction_id.clone(),
-                }
-            }
-            TemperatureAction::Evict { distinction_id } => {
-                TemperatureActionSerializable::Evict {
-                    distinction_id: distinction_id.clone(),
-                }
-            }
-            TemperatureAction::Access { distinction_id } => {
-                TemperatureActionSerializable::Access {
-                    distinction_id: distinction_id.clone(),
-                }
-            }
+            TemperatureAction::Heat {
+                distinction_id,
+                level,
+            } => TemperatureActionSerializable::Heat {
+                distinction_id: distinction_id.clone(),
+                level: *level,
+            },
+            TemperatureAction::Cool { distinction_id } => TemperatureActionSerializable::Cool {
+                distinction_id: distinction_id.clone(),
+            },
+            TemperatureAction::Evict { distinction_id } => TemperatureActionSerializable::Evict {
+                distinction_id: distinction_id.clone(),
+            },
+            TemperatureAction::Access { distinction_id } => TemperatureActionSerializable::Access {
+                distinction_id: distinction_id.clone(),
+            },
         }
     }
 }
@@ -555,34 +568,40 @@ pub enum ChronicleAction {
 /// Serializable version of ChronicleAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum ChronicleActionSerializable {
-    Record { event_id: String, timestamp: DateTime<Utc> },
-    Recall { query: String },
-    Promote { distinction_id: String },
-    Demote { distinction_id: String },
+    Record {
+        event_id: String,
+        timestamp: DateTime<Utc>,
+    },
+    Recall {
+        query: String,
+    },
+    Promote {
+        distinction_id: String,
+    },
+    Demote {
+        distinction_id: String,
+    },
 }
 
 impl From<&ChronicleAction> for ChronicleActionSerializable {
     fn from(action: &ChronicleAction) -> Self {
         match action {
-            ChronicleAction::Record { event_id, timestamp } => {
-                ChronicleActionSerializable::Record {
-                    event_id: event_id.clone(),
-                    timestamp: *timestamp,
-                }
-            }
-            ChronicleAction::Recall { query } => {
-                ChronicleActionSerializable::Recall { query: query.clone() }
-            }
-            ChronicleAction::Promote { distinction_id } => {
-                ChronicleActionSerializable::Promote {
-                    distinction_id: distinction_id.clone(),
-                }
-            }
-            ChronicleAction::Demote { distinction_id } => {
-                ChronicleActionSerializable::Demote {
-                    distinction_id: distinction_id.clone(),
-                }
-            }
+            ChronicleAction::Record {
+                event_id,
+                timestamp,
+            } => ChronicleActionSerializable::Record {
+                event_id: event_id.clone(),
+                timestamp: *timestamp,
+            },
+            ChronicleAction::Recall { query } => ChronicleActionSerializable::Recall {
+                query: query.clone(),
+            },
+            ChronicleAction::Promote { distinction_id } => ChronicleActionSerializable::Promote {
+                distinction_id: distinction_id.clone(),
+            },
+            ChronicleAction::Demote { distinction_id } => ChronicleActionSerializable::Demote {
+                distinction_id: distinction_id.clone(),
+            },
         }
     }
 }
@@ -602,7 +621,8 @@ impl ChronicleAction {
                 }
                 Ok(())
             }
-            ChronicleAction::Promote { distinction_id } | ChronicleAction::Demote { distinction_id } => {
+            ChronicleAction::Promote { distinction_id }
+            | ChronicleAction::Demote { distinction_id } => {
                 if distinction_id.is_empty() {
                     return Err(format!("{:?}: distinction_id is empty", self));
                 }
@@ -650,36 +670,46 @@ pub enum ArchiveAction {
 /// Serializable version of ArchiveAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum ArchiveActionSerializable {
-    EpochStart { timestamp: DateTime<Utc> },
-    EpochSeal { epoch_number: u64, content_id: String },
-    Compress { epoch_id: String },
-    Retrieve { pattern: String },
-    Archive { distinction_ids: Vec<String> },
+    EpochStart {
+        timestamp: DateTime<Utc>,
+    },
+    EpochSeal {
+        epoch_number: u64,
+        content_id: String,
+    },
+    Compress {
+        epoch_id: String,
+    },
+    Retrieve {
+        pattern: String,
+    },
+    Archive {
+        distinction_ids: Vec<String>,
+    },
 }
 
 impl From<&ArchiveAction> for ArchiveActionSerializable {
     fn from(action: &ArchiveAction) -> Self {
         match action {
-            ArchiveAction::EpochStart { timestamp } => {
-                ArchiveActionSerializable::EpochStart { timestamp: *timestamp }
-            }
-            ArchiveAction::EpochSeal { epoch_number, content_id } => {
-                ArchiveActionSerializable::EpochSeal {
-                    epoch_number: *epoch_number,
-                    content_id: content_id.clone(),
-                }
-            }
-            ArchiveAction::Compress { epoch_id } => {
-                ArchiveActionSerializable::Compress { epoch_id: epoch_id.clone() }
-            }
-            ArchiveAction::Retrieve { pattern } => {
-                ArchiveActionSerializable::Retrieve { pattern: pattern.clone() }
-            }
-            ArchiveAction::Archive { distinction_ids } => {
-                ArchiveActionSerializable::Archive {
-                    distinction_ids: distinction_ids.clone(),
-                }
-            }
+            ArchiveAction::EpochStart { timestamp } => ArchiveActionSerializable::EpochStart {
+                timestamp: *timestamp,
+            },
+            ArchiveAction::EpochSeal {
+                epoch_number,
+                content_id,
+            } => ArchiveActionSerializable::EpochSeal {
+                epoch_number: *epoch_number,
+                content_id: content_id.clone(),
+            },
+            ArchiveAction::Compress { epoch_id } => ArchiveActionSerializable::Compress {
+                epoch_id: epoch_id.clone(),
+            },
+            ArchiveAction::Retrieve { pattern } => ArchiveActionSerializable::Retrieve {
+                pattern: pattern.clone(),
+            },
+            ArchiveAction::Archive { distinction_ids } => ArchiveActionSerializable::Archive {
+                distinction_ids: distinction_ids.clone(),
+            },
         }
     }
 }
@@ -759,16 +789,18 @@ impl From<&EssenceAction> for EssenceActionSerializable {
     fn from(action: &EssenceAction) -> Self {
         match action {
             EssenceAction::ExtractTopology { source_id } => {
-                EssenceActionSerializable::ExtractTopology { source_id: source_id.clone() }
+                EssenceActionSerializable::ExtractTopology {
+                    source_id: source_id.clone(),
+                }
             }
             EssenceAction::SynthesizeDNA { topology_json } => {
                 EssenceActionSerializable::SynthesizeDNA {
                     topology_json: topology_json.clone(),
                 }
             }
-            EssenceAction::Regenerate { from_dna_id } => {
-                EssenceActionSerializable::Regenerate { from_dna_id: from_dna_id.clone() }
-            }
+            EssenceAction::Regenerate { from_dna_id } => EssenceActionSerializable::Regenerate {
+                from_dna_id: from_dna_id.clone(),
+            },
             EssenceAction::StoreGenome { name, genome_id } => {
                 EssenceActionSerializable::StoreGenome {
                     name: name.clone(),
@@ -934,17 +966,15 @@ impl From<&EvolutionAction> for EvolutionActionSerializable {
                     candidate_id: candidate_id.clone(),
                 }
             }
-            EvolutionAction::Select { population_ids } => {
-                EvolutionActionSerializable::Select {
-                    population_ids: population_ids.clone(),
-                }
-            }
-            EvolutionAction::Preserve { fit_ids } => {
-                EvolutionActionSerializable::Preserve { fit_ids: fit_ids.clone() }
-            }
-            EvolutionAction::Archive { unfit_ids } => {
-                EvolutionActionSerializable::Archive { unfit_ids: unfit_ids.clone() }
-            }
+            EvolutionAction::Select { population_ids } => EvolutionActionSerializable::Select {
+                population_ids: population_ids.clone(),
+            },
+            EvolutionAction::Preserve { fit_ids } => EvolutionActionSerializable::Preserve {
+                fit_ids: fit_ids.clone(),
+            },
+            EvolutionAction::Archive { unfit_ids } => EvolutionActionSerializable::Archive {
+                unfit_ids: unfit_ids.clone(),
+            },
         }
     }
 }
@@ -954,7 +984,9 @@ impl EvolutionAction {
         match self {
             EvolutionAction::EvaluateFitness { candidate_id } => {
                 if candidate_id.is_empty() {
-                    return Err("EvolutionAction::EvaluateFitness: candidate_id is empty".to_string());
+                    return Err(
+                        "EvolutionAction::EvaluateFitness: candidate_id is empty".to_string()
+                    );
                 }
                 Ok(())
             }
@@ -1015,26 +1047,41 @@ pub enum LineageAction {
 /// Serializable version of LineageAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum LineageActionSerializable {
-    RecordBirth { child_id: String, parent_ids: Vec<String> },
-    TraceAncestors { from_id: String },
-    TraceDescendants { from_id: String },
-    FindCommonAncestor { a_id: String, b_id: String },
+    RecordBirth {
+        child_id: String,
+        parent_ids: Vec<String>,
+    },
+    TraceAncestors {
+        from_id: String,
+    },
+    TraceDescendants {
+        from_id: String,
+    },
+    FindCommonAncestor {
+        a_id: String,
+        b_id: String,
+    },
 }
 
 impl From<&LineageAction> for LineageActionSerializable {
     fn from(action: &LineageAction) -> Self {
         match action {
-            LineageAction::RecordBirth { child_id, parent_ids } => {
-                LineageActionSerializable::RecordBirth {
-                    child_id: child_id.clone(),
-                    parent_ids: parent_ids.clone(),
+            LineageAction::RecordBirth {
+                child_id,
+                parent_ids,
+            } => LineageActionSerializable::RecordBirth {
+                child_id: child_id.clone(),
+                parent_ids: parent_ids.clone(),
+            },
+            LineageAction::TraceAncestors { from_id } => {
+                LineageActionSerializable::TraceAncestors {
+                    from_id: from_id.clone(),
                 }
             }
-            LineageAction::TraceAncestors { from_id } => {
-                LineageActionSerializable::TraceAncestors { from_id: from_id.clone() }
-            }
             LineageAction::TraceDescendants { from_id } => {
-                LineageActionSerializable::TraceDescendants { from_id: from_id.clone() }
+                LineageActionSerializable::TraceDescendants {
+                    from_id: from_id.clone(),
+                }
             }
             LineageAction::FindCommonAncestor { a_id, b_id } => {
                 LineageActionSerializable::FindCommonAncestor {
@@ -1049,7 +1096,10 @@ impl From<&LineageAction> for LineageActionSerializable {
 impl LineageAction {
     pub fn validate(&self) -> Result<(), String> {
         match self {
-            LineageAction::RecordBirth { child_id, parent_ids } => {
+            LineageAction::RecordBirth {
+                child_id,
+                parent_ids,
+            } => {
                 if child_id.is_empty() {
                     return Err("LineageAction::RecordBirth: child_id is empty".to_string());
                 }
@@ -1123,10 +1173,21 @@ pub enum PerspectiveAction {
 /// Serializable version of PerspectiveAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum PerspectiveActionSerializable {
-    FormView { query_json: serde_json::Value, name: String },
-    Refresh { view_id: String },
-    Compose { view_a_id: String, view_b_id: String },
-    Project { from_view_id: String, onto_query: String },
+    FormView {
+        query_json: serde_json::Value,
+        name: String,
+    },
+    Refresh {
+        view_id: String,
+    },
+    Compose {
+        view_a_id: String,
+        view_b_id: String,
+    },
+    Project {
+        from_view_id: String,
+        onto_query: String,
+    },
 }
 
 impl From<&PerspectiveAction> for PerspectiveActionSerializable {
@@ -1138,21 +1199,23 @@ impl From<&PerspectiveAction> for PerspectiveActionSerializable {
                     name: name.clone(),
                 }
             }
-            PerspectiveAction::Refresh { view_id } => {
-                PerspectiveActionSerializable::Refresh { view_id: view_id.clone() }
-            }
-            PerspectiveAction::Compose { view_a_id, view_b_id } => {
-                PerspectiveActionSerializable::Compose {
-                    view_a_id: view_a_id.clone(),
-                    view_b_id: view_b_id.clone(),
-                }
-            }
-            PerspectiveAction::Project { from_view_id, onto_query } => {
-                PerspectiveActionSerializable::Project {
-                    from_view_id: from_view_id.clone(),
-                    onto_query: onto_query.clone(),
-                }
-            }
+            PerspectiveAction::Refresh { view_id } => PerspectiveActionSerializable::Refresh {
+                view_id: view_id.clone(),
+            },
+            PerspectiveAction::Compose {
+                view_a_id,
+                view_b_id,
+            } => PerspectiveActionSerializable::Compose {
+                view_a_id: view_a_id.clone(),
+                view_b_id: view_b_id.clone(),
+            },
+            PerspectiveAction::Project {
+                from_view_id,
+                onto_query,
+            } => PerspectiveActionSerializable::Project {
+                from_view_id: from_view_id.clone(),
+                onto_query: onto_query.clone(),
+            },
         }
     }
 }
@@ -1172,7 +1235,10 @@ impl PerspectiveAction {
                 }
                 Ok(())
             }
-            PerspectiveAction::Compose { view_a_id, view_b_id } => {
+            PerspectiveAction::Compose {
+                view_a_id,
+                view_b_id,
+            } => {
                 if view_a_id.is_empty() {
                     return Err("PerspectiveAction::Compose: view_a_id is empty".to_string());
                 }
@@ -1181,7 +1247,10 @@ impl PerspectiveAction {
                 }
                 Ok(())
             }
-            PerspectiveAction::Project { from_view_id, onto_query } => {
+            PerspectiveAction::Project {
+                from_view_id,
+                onto_query,
+            } => {
                 if from_view_id.is_empty() {
                     return Err("PerspectiveAction::Project: from_view_id is empty".to_string());
                 }
@@ -1233,10 +1302,22 @@ pub enum IdentityAction {
 /// Serializable version of IdentityAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum IdentityActionSerializable {
-    MineIdentity { proof_of_work_json: serde_json::Value },
-    Authenticate { identity_id: String, challenge: String },
-    GrantCapability { from_id: String, to_id: String, permission: String },
-    VerifyAccess { identity_id: String, resource: String },
+    MineIdentity {
+        proof_of_work_json: serde_json::Value,
+    },
+    Authenticate {
+        identity_id: String,
+        challenge: String,
+    },
+    GrantCapability {
+        from_id: String,
+        to_id: String,
+        permission: String,
+    },
+    VerifyAccess {
+        identity_id: String,
+        resource: String,
+    },
 }
 
 impl From<&IdentityAction> for IdentityActionSerializable {
@@ -1247,25 +1328,29 @@ impl From<&IdentityAction> for IdentityActionSerializable {
                     proof_of_work_json: proof_of_work_json.clone(),
                 }
             }
-            IdentityAction::Authenticate { identity_id, challenge } => {
-                IdentityActionSerializable::Authenticate {
-                    identity_id: identity_id.clone(),
-                    challenge: challenge.clone(),
-                }
-            }
-            IdentityAction::GrantCapability { from_id, to_id, permission } => {
-                IdentityActionSerializable::GrantCapability {
-                    from_id: from_id.clone(),
-                    to_id: to_id.clone(),
-                    permission: permission.clone(),
-                }
-            }
-            IdentityAction::VerifyAccess { identity_id, resource } => {
-                IdentityActionSerializable::VerifyAccess {
-                    identity_id: identity_id.clone(),
-                    resource: resource.clone(),
-                }
-            }
+            IdentityAction::Authenticate {
+                identity_id,
+                challenge,
+            } => IdentityActionSerializable::Authenticate {
+                identity_id: identity_id.clone(),
+                challenge: challenge.clone(),
+            },
+            IdentityAction::GrantCapability {
+                from_id,
+                to_id,
+                permission,
+            } => IdentityActionSerializable::GrantCapability {
+                from_id: from_id.clone(),
+                to_id: to_id.clone(),
+                permission: permission.clone(),
+            },
+            IdentityAction::VerifyAccess {
+                identity_id,
+                resource,
+            } => IdentityActionSerializable::VerifyAccess {
+                identity_id: identity_id.clone(),
+                resource: resource.clone(),
+            },
         }
     }
 }
@@ -1274,7 +1359,10 @@ impl IdentityAction {
     pub fn validate(&self) -> Result<(), String> {
         match self {
             IdentityAction::MineIdentity { .. } => Ok(()),
-            IdentityAction::Authenticate { identity_id, challenge } => {
+            IdentityAction::Authenticate {
+                identity_id,
+                challenge,
+            } => {
                 if identity_id.is_empty() {
                     return Err("IdentityAction::Authenticate: identity_id is empty".to_string());
                 }
@@ -1283,7 +1371,11 @@ impl IdentityAction {
                 }
                 Ok(())
             }
-            IdentityAction::GrantCapability { from_id, to_id, permission } => {
+            IdentityAction::GrantCapability {
+                from_id,
+                to_id,
+                permission,
+            } => {
                 if from_id.is_empty() {
                     return Err("IdentityAction::GrantCapability: from_id is empty".to_string());
                 }
@@ -1295,7 +1387,10 @@ impl IdentityAction {
                 }
                 Ok(())
             }
-            IdentityAction::VerifyAccess { identity_id, resource } => {
+            IdentityAction::VerifyAccess {
+                identity_id,
+                resource,
+            } => {
                 if identity_id.is_empty() {
                     return Err("IdentityAction::VerifyAccess: identity_id is empty".to_string());
                 }
@@ -1354,25 +1449,21 @@ pub(crate) enum NetworkActionSerializable {
 impl From<&NetworkAction> for NetworkActionSerializable {
     fn from(action: &NetworkAction) -> Self {
         match action {
-            NetworkAction::Join { peer_address } => {
-                NetworkActionSerializable::Join { peer_address: peer_address.clone() }
-            }
-            NetworkAction::Synchronize { peer_id } => {
-                NetworkActionSerializable::Synchronize { peer_id: peer_id.clone() }
-            }
-            NetworkAction::Reconcile { difference_ids } => {
-                NetworkActionSerializable::Reconcile {
-                    difference_ids: difference_ids.clone(),
-                }
-            }
-            NetworkAction::Broadcast { message_json } => {
-                NetworkActionSerializable::Broadcast {
-                    message_json: message_json.clone(),
-                }
-            }
-            NetworkAction::Gossip { state_json } => {
-                NetworkActionSerializable::Gossip { state_json: state_json.clone() }
-            }
+            NetworkAction::Join { peer_address } => NetworkActionSerializable::Join {
+                peer_address: peer_address.clone(),
+            },
+            NetworkAction::Synchronize { peer_id } => NetworkActionSerializable::Synchronize {
+                peer_id: peer_id.clone(),
+            },
+            NetworkAction::Reconcile { difference_ids } => NetworkActionSerializable::Reconcile {
+                difference_ids: difference_ids.clone(),
+            },
+            NetworkAction::Broadcast { message_json } => NetworkActionSerializable::Broadcast {
+                message_json: message_json.clone(),
+            },
+            NetworkAction::Gossip { state_json } => NetworkActionSerializable::Gossip {
+                state_json: state_json.clone(),
+            },
         }
     }
 }
@@ -1431,30 +1522,34 @@ pub enum PulseAction {
 /// Serializable version of PulseAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum PulseActionSerializable {
-    RegisterAgent { agent_id: String, agent_type: String },
-    UnregisterAgent { agent_id: String },
-    TriggerPulse { phase: String },
+    RegisterAgent {
+        agent_id: String,
+        agent_type: String,
+    },
+    UnregisterAgent {
+        agent_id: String,
+    },
+    TriggerPulse {
+        phase: String,
+    },
 }
 
 impl From<&PulseAction> for PulseActionSerializable {
     fn from(action: &PulseAction) -> Self {
         match action {
-            PulseAction::RegisterAgent { agent_id, agent_type } => {
-                PulseActionSerializable::RegisterAgent {
-                    agent_id: agent_id.clone(),
-                    agent_type: agent_type.clone(),
-                }
-            }
-            PulseAction::UnregisterAgent { agent_id } => {
-                PulseActionSerializable::UnregisterAgent {
-                    agent_id: agent_id.clone(),
-                }
-            }
-            PulseAction::TriggerPulse { phase } => {
-                PulseActionSerializable::TriggerPulse {
-                    phase: phase.clone(),
-                }
-            }
+            PulseAction::RegisterAgent {
+                agent_id,
+                agent_type,
+            } => PulseActionSerializable::RegisterAgent {
+                agent_id: agent_id.clone(),
+                agent_type: agent_type.clone(),
+            },
+            PulseAction::UnregisterAgent { agent_id } => PulseActionSerializable::UnregisterAgent {
+                agent_id: agent_id.clone(),
+            },
+            PulseAction::TriggerPulse { phase } => PulseActionSerializable::TriggerPulse {
+                phase: phase.clone(),
+            },
         }
     }
 }
@@ -1463,7 +1558,10 @@ impl PulseAction {
     /// Validate the pulse action.
     pub fn validate(&self) -> Result<(), String> {
         match self {
-            PulseAction::RegisterAgent { agent_id, agent_type } => {
+            PulseAction::RegisterAgent {
+                agent_id,
+                agent_type,
+            } => {
                 if agent_id.is_empty() {
                     return Err("PulseAction::RegisterAgent: agent_id is empty".to_string());
                 }
@@ -1541,40 +1639,58 @@ pub enum WorkspaceAction {
 /// Serializable version of WorkspaceAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum WorkspaceActionSerializable {
-    Remember { workspace_id: String, item_id: String, content_json: serde_json::Value },
-    Recall { workspace_id: String, query: String },
-    Consolidate { workspace_id: String },
-    Search { workspace_id: String, pattern: String, options: WorkspaceSearchOptionsSerializable },
+    Remember {
+        workspace_id: String,
+        item_id: String,
+        content_json: serde_json::Value,
+    },
+    Recall {
+        workspace_id: String,
+        query: String,
+    },
+    Consolidate {
+        workspace_id: String,
+    },
+    Search {
+        workspace_id: String,
+        pattern: String,
+        options: WorkspaceSearchOptionsSerializable,
+    },
 }
 
 impl From<&WorkspaceAction> for WorkspaceActionSerializable {
     fn from(action: &WorkspaceAction) -> Self {
         match action {
-            WorkspaceAction::Remember { workspace_id, item_id, content_json } => {
-                WorkspaceActionSerializable::Remember {
-                    workspace_id: workspace_id.clone(),
-                    item_id: item_id.clone(),
-                    content_json: content_json.clone(),
-                }
-            }
-            WorkspaceAction::Recall { workspace_id, query } => {
-                WorkspaceActionSerializable::Recall {
-                    workspace_id: workspace_id.clone(),
-                    query: query.clone(),
-                }
-            }
+            WorkspaceAction::Remember {
+                workspace_id,
+                item_id,
+                content_json,
+            } => WorkspaceActionSerializable::Remember {
+                workspace_id: workspace_id.clone(),
+                item_id: item_id.clone(),
+                content_json: content_json.clone(),
+            },
+            WorkspaceAction::Recall {
+                workspace_id,
+                query,
+            } => WorkspaceActionSerializable::Recall {
+                workspace_id: workspace_id.clone(),
+                query: query.clone(),
+            },
             WorkspaceAction::Consolidate { workspace_id } => {
                 WorkspaceActionSerializable::Consolidate {
                     workspace_id: workspace_id.clone(),
                 }
             }
-            WorkspaceAction::Search { workspace_id, pattern, options } => {
-                WorkspaceActionSerializable::Search {
-                    workspace_id: workspace_id.clone(),
-                    pattern: pattern.clone(),
-                    options: options.into(),
-                }
-            }
+            WorkspaceAction::Search {
+                workspace_id,
+                pattern,
+                options,
+            } => WorkspaceActionSerializable::Search {
+                workspace_id: workspace_id.clone(),
+                pattern: pattern.clone(),
+                options: options.into(),
+            },
         }
     }
 }
@@ -1583,7 +1699,11 @@ impl WorkspaceAction {
     /// Validate the workspace action.
     pub fn validate(&self) -> Result<(), String> {
         match self {
-            WorkspaceAction::Remember { workspace_id, item_id, content_json } => {
+            WorkspaceAction::Remember {
+                workspace_id,
+                item_id,
+                content_json,
+            } => {
                 if workspace_id.is_empty() {
                     return Err("WorkspaceAction::Remember: workspace_id is empty".to_string());
                 }
@@ -1595,7 +1715,10 @@ impl WorkspaceAction {
                 }
                 Ok(())
             }
-            WorkspaceAction::Recall { workspace_id, query } => {
+            WorkspaceAction::Recall {
+                workspace_id,
+                query,
+            } => {
                 if workspace_id.is_empty() {
                     return Err("WorkspaceAction::Recall: workspace_id is empty".to_string());
                 }
@@ -1610,7 +1733,11 @@ impl WorkspaceAction {
                 }
                 Ok(())
             }
-            WorkspaceAction::Search { workspace_id, pattern, .. } => {
+            WorkspaceAction::Search {
+                workspace_id,
+                pattern,
+                ..
+            } => {
                 if workspace_id.is_empty() {
                     return Err("WorkspaceAction::Search: workspace_id is empty".to_string());
                 }
@@ -1671,35 +1798,49 @@ pub enum VectorAction {
 /// Serializable version of VectorAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum VectorActionSerializable {
-    Embed { data_json: serde_json::Value, model: String, dimensions: usize },
-    Search { query_vector: Vec<f32>, top_k: usize, threshold: f32 },
-    Index { vector: Vec<f32>, key: String, model: String },
+    Embed {
+        data_json: serde_json::Value,
+        model: String,
+        dimensions: usize,
+    },
+    Search {
+        query_vector: Vec<f32>,
+        top_k: usize,
+        threshold: f32,
+    },
+    Index {
+        vector: Vec<f32>,
+        key: String,
+        model: String,
+    },
 }
 
 impl From<&VectorAction> for VectorActionSerializable {
     fn from(action: &VectorAction) -> Self {
         match action {
-            VectorAction::Embed { data_json, model, dimensions } => {
-                VectorActionSerializable::Embed {
-                    data_json: data_json.clone(),
-                    model: model.clone(),
-                    dimensions: *dimensions,
-                }
-            }
-            VectorAction::Search { query_vector, top_k, threshold } => {
-                VectorActionSerializable::Search {
-                    query_vector: query_vector.clone(),
-                    top_k: *top_k,
-                    threshold: *threshold,
-                }
-            }
-            VectorAction::Index { vector, key, model } => {
-                VectorActionSerializable::Index {
-                    vector: vector.clone(),
-                    key: key.clone(),
-                    model: model.clone(),
-                }
-            }
+            VectorAction::Embed {
+                data_json,
+                model,
+                dimensions,
+            } => VectorActionSerializable::Embed {
+                data_json: data_json.clone(),
+                model: model.clone(),
+                dimensions: *dimensions,
+            },
+            VectorAction::Search {
+                query_vector,
+                top_k,
+                threshold,
+            } => VectorActionSerializable::Search {
+                query_vector: query_vector.clone(),
+                top_k: *top_k,
+                threshold: *threshold,
+            },
+            VectorAction::Index { vector, key, model } => VectorActionSerializable::Index {
+                vector: vector.clone(),
+                key: key.clone(),
+                model: model.clone(),
+            },
         }
     }
 }
@@ -1708,7 +1849,11 @@ impl VectorAction {
     /// Validate the vector action.
     pub fn validate(&self) -> Result<(), String> {
         match self {
-            VectorAction::Embed { data_json, model, dimensions } => {
+            VectorAction::Embed {
+                data_json,
+                model,
+                dimensions,
+            } => {
                 if data_json.is_null() {
                     return Err("VectorAction::Embed: data_json is null".to_string());
                 }
@@ -1720,7 +1865,11 @@ impl VectorAction {
                 }
                 Ok(())
             }
-            VectorAction::Search { query_vector, top_k, threshold } => {
+            VectorAction::Search {
+                query_vector,
+                top_k,
+                threshold,
+            } => {
                 if query_vector.is_empty() {
                     return Err("VectorAction::Search: query_vector is empty".to_string());
                 }
@@ -1810,11 +1959,26 @@ pub enum LifecycleAction {
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum LifecycleActionSerializable {
-    EvaluateAccess { distinction_id: String, full_key: crate::types::FullKey },
-    Promote { distinction_id: String, from_tier: String, to_tier: String },
-    Demote { distinction_id: String, from_tier: String, to_tier: String },
-    Transition { transitions: Vec<crate::lifecycle::Transition> },
-    UpdateThresholds { thresholds: serde_json::Value },
+    EvaluateAccess {
+        distinction_id: String,
+        full_key: crate::types::FullKey,
+    },
+    Promote {
+        distinction_id: String,
+        from_tier: String,
+        to_tier: String,
+    },
+    Demote {
+        distinction_id: String,
+        from_tier: String,
+        to_tier: String,
+    },
+    Transition {
+        transitions: Vec<crate::lifecycle::Transition>,
+    },
+    UpdateThresholds {
+        thresholds: serde_json::Value,
+    },
     Consolidate,
     ExtractGenome,
 }
@@ -1823,26 +1987,31 @@ pub(crate) enum LifecycleActionSerializable {
 impl From<&LifecycleAction> for LifecycleActionSerializable {
     fn from(action: &LifecycleAction) -> Self {
         match action {
-            LifecycleAction::EvaluateAccess { distinction_id, full_key } => {
-                LifecycleActionSerializable::EvaluateAccess {
-                    distinction_id: distinction_id.clone(),
-                    full_key: full_key.clone(),
-                }
-            }
-            LifecycleAction::Promote { distinction_id, from_tier, to_tier } => {
-                LifecycleActionSerializable::Promote {
-                    distinction_id: distinction_id.clone(),
-                    from_tier: from_tier.to_string(),
-                    to_tier: to_tier.to_string(),
-                }
-            }
-            LifecycleAction::Demote { distinction_id, from_tier, to_tier } => {
-                LifecycleActionSerializable::Demote {
-                    distinction_id: distinction_id.clone(),
-                    from_tier: from_tier.to_string(),
-                    to_tier: to_tier.to_string(),
-                }
-            }
+            LifecycleAction::EvaluateAccess {
+                distinction_id,
+                full_key,
+            } => LifecycleActionSerializable::EvaluateAccess {
+                distinction_id: distinction_id.clone(),
+                full_key: full_key.clone(),
+            },
+            LifecycleAction::Promote {
+                distinction_id,
+                from_tier,
+                to_tier,
+            } => LifecycleActionSerializable::Promote {
+                distinction_id: distinction_id.clone(),
+                from_tier: from_tier.to_string(),
+                to_tier: to_tier.to_string(),
+            },
+            LifecycleAction::Demote {
+                distinction_id,
+                from_tier,
+                to_tier,
+            } => LifecycleActionSerializable::Demote {
+                distinction_id: distinction_id.clone(),
+                from_tier: from_tier.to_string(),
+                to_tier: to_tier.to_string(),
+            },
             LifecycleAction::Transition { transitions } => {
                 LifecycleActionSerializable::Transition {
                     transitions: transitions.clone(),
@@ -1866,11 +2035,17 @@ impl LifecycleAction {
         match self {
             LifecycleAction::EvaluateAccess { distinction_id, .. } => {
                 if distinction_id.is_empty() {
-                    return Err("LifecycleAction::EvaluateAccess: distinction_id is empty".to_string());
+                    return Err(
+                        "LifecycleAction::EvaluateAccess: distinction_id is empty".to_string()
+                    );
                 }
                 Ok(())
             }
-            LifecycleAction::Promote { distinction_id, from_tier, to_tier } => {
+            LifecycleAction::Promote {
+                distinction_id,
+                from_tier,
+                to_tier,
+            } => {
                 if distinction_id.is_empty() {
                     return Err("LifecycleAction::Promote: distinction_id is empty".to_string());
                 }
@@ -1879,7 +2054,11 @@ impl LifecycleAction {
                 }
                 Ok(())
             }
-            LifecycleAction::Demote { distinction_id, from_tier, to_tier } => {
+            LifecycleAction::Demote {
+                distinction_id,
+                from_tier,
+                to_tier,
+            } => {
                 if distinction_id.is_empty() {
                     return Err("LifecycleAction::Demote: distinction_id is empty".to_string());
                 }
@@ -1970,25 +2149,41 @@ pub enum SessionAction {
 /// Serializable version of SessionAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum SessionActionSerializable {
-    CreateSession { identity_key: String, challenge: String, capabilities: Vec<crate::auth::types::CapabilityRef> },
-    ValidateSession { session_id: String },
-    RefreshSession { session_id: String },
-    InvalidateSession { session_id: String },
-    RotateKeys { session_id: String },
+    CreateSession {
+        identity_key: String,
+        challenge: String,
+        capabilities: Vec<crate::auth::types::CapabilityRef>,
+    },
+    ValidateSession {
+        session_id: String,
+    },
+    RefreshSession {
+        session_id: String,
+    },
+    InvalidateSession {
+        session_id: String,
+    },
+    RotateKeys {
+        session_id: String,
+    },
     CleanupExpired,
-    RevokeAllForIdentity { identity_key: String },
+    RevokeAllForIdentity {
+        identity_key: String,
+    },
 }
 
 impl From<&SessionAction> for SessionActionSerializable {
     fn from(action: &SessionAction) -> Self {
         match action {
-            SessionAction::CreateSession { identity_key, challenge, capabilities } => {
-                SessionActionSerializable::CreateSession {
-                    identity_key: identity_key.clone(),
-                    challenge: challenge.clone(),
-                    capabilities: capabilities.clone(),
-                }
-            }
+            SessionAction::CreateSession {
+                identity_key,
+                challenge,
+                capabilities,
+            } => SessionActionSerializable::CreateSession {
+                identity_key: identity_key.clone(),
+                challenge: challenge.clone(),
+                capabilities: capabilities.clone(),
+            },
             SessionAction::ValidateSession { session_id } => {
                 SessionActionSerializable::ValidateSession {
                     session_id: session_id.clone(),
@@ -2004,11 +2199,9 @@ impl From<&SessionAction> for SessionActionSerializable {
                     session_id: session_id.clone(),
                 }
             }
-            SessionAction::RotateKeys { session_id } => {
-                SessionActionSerializable::RotateKeys {
-                    session_id: session_id.clone(),
-                }
-            }
+            SessionAction::RotateKeys { session_id } => SessionActionSerializable::RotateKeys {
+                session_id: session_id.clone(),
+            },
             SessionAction::CleanupExpired => SessionActionSerializable::CleanupExpired,
             SessionAction::RevokeAllForIdentity { identity_key } => {
                 SessionActionSerializable::RevokeAllForIdentity {
@@ -2023,7 +2216,11 @@ impl SessionAction {
     /// Validate the session action.
     pub fn validate(&self) -> Result<(), String> {
         match self {
-            SessionAction::CreateSession { identity_key, challenge, .. } => {
+            SessionAction::CreateSession {
+                identity_key,
+                challenge,
+                ..
+            } => {
                 if identity_key.is_empty() {
                     return Err("SessionAction::CreateSession: identity_key is empty".to_string());
                 }
@@ -2059,7 +2256,9 @@ impl SessionAction {
             SessionAction::CleanupExpired => Ok(()),
             SessionAction::RevokeAllForIdentity { identity_key } => {
                 if identity_key.is_empty() {
-                    return Err("SessionAction::RevokeAllForIdentity: identity_key is empty".to_string());
+                    return Err(
+                        "SessionAction::RevokeAllForIdentity: identity_key is empty".to_string()
+                    );
                 }
                 Ok(())
             }
@@ -2125,12 +2324,23 @@ pub enum SubscriptionAction {
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum SubscriptionActionSerializable {
-    Subscribe { subscription: crate::subscriptions::Subscription },
-    Unsubscribe { subscription_id: u64 },
-    Notify { event: crate::subscriptions::ChangeEvent },
-    UpdateSubscription { subscription_id: u64, new_subscription: crate::subscriptions::Subscription },
+    Subscribe {
+        subscription: crate::subscriptions::Subscription,
+    },
+    Unsubscribe {
+        subscription_id: u64,
+    },
+    Notify {
+        event: crate::subscriptions::ChangeEvent,
+    },
+    UpdateSubscription {
+        subscription_id: u64,
+        new_subscription: crate::subscriptions::Subscription,
+    },
     ListSubscriptions,
-    GetSubscription { subscription_id: u64 },
+    GetSubscription {
+        subscription_id: u64,
+    },
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -2147,18 +2357,19 @@ impl From<&SubscriptionAction> for SubscriptionActionSerializable {
                     subscription_id: subscription_id.0,
                 }
             }
-            SubscriptionAction::Notify { event } => {
-                SubscriptionActionSerializable::Notify {
-                    event: event.clone(),
-                }
+            SubscriptionAction::Notify { event } => SubscriptionActionSerializable::Notify {
+                event: event.clone(),
+            },
+            SubscriptionAction::UpdateSubscription {
+                subscription_id,
+                new_subscription,
+            } => SubscriptionActionSerializable::UpdateSubscription {
+                subscription_id: subscription_id.0,
+                new_subscription: new_subscription.clone(),
+            },
+            SubscriptionAction::ListSubscriptions => {
+                SubscriptionActionSerializable::ListSubscriptions
             }
-            SubscriptionAction::UpdateSubscription { subscription_id, new_subscription } => {
-                SubscriptionActionSerializable::UpdateSubscription {
-                    subscription_id: subscription_id.0,
-                    new_subscription: new_subscription.clone(),
-                }
-            }
-            SubscriptionAction::ListSubscriptions => SubscriptionActionSerializable::ListSubscriptions,
             SubscriptionAction::GetSubscription { subscription_id } => {
                 SubscriptionActionSerializable::GetSubscription {
                     subscription_id: subscription_id.0,
@@ -2186,16 +2397,22 @@ impl SubscriptionAction {
                 Ok(())
             }
             SubscriptionAction::Notify { .. } => Ok(()),
-            SubscriptionAction::UpdateSubscription { subscription_id, .. } => {
+            SubscriptionAction::UpdateSubscription {
+                subscription_id, ..
+            } => {
                 if subscription_id.0 == 0 {
-                    return Err("SubscriptionAction::UpdateSubscription: subscription_id is 0".to_string());
+                    return Err(
+                        "SubscriptionAction::UpdateSubscription: subscription_id is 0".to_string(),
+                    );
                 }
                 Ok(())
             }
             SubscriptionAction::ListSubscriptions => Ok(()),
             SubscriptionAction::GetSubscription { subscription_id } => {
                 if subscription_id.0 == 0 {
-                    return Err("SubscriptionAction::GetSubscription: subscription_id is 0".to_string());
+                    return Err(
+                        "SubscriptionAction::GetSubscription: subscription_id is 0".to_string()
+                    );
                 }
                 Ok(())
             }
@@ -2297,29 +2514,41 @@ impl Default for ProcessConfig {
 /// Serializable version of ProcessAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum ProcessActionSerializable {
-    SpawnProcess { process_type: ProcessType, config: ProcessConfig },
-    PauseProcess { process_id: String },
-    ResumeProcess { process_id: String },
-    TerminateProcess { process_id: String },
-    Heartbeat { process_id: String },
-    GetStatus { process_id: String },
+    SpawnProcess {
+        process_type: ProcessType,
+        config: ProcessConfig,
+    },
+    PauseProcess {
+        process_id: String,
+    },
+    ResumeProcess {
+        process_id: String,
+    },
+    TerminateProcess {
+        process_id: String,
+    },
+    Heartbeat {
+        process_id: String,
+    },
+    GetStatus {
+        process_id: String,
+    },
     ListProcesses,
 }
 
 impl From<&ProcessAction> for ProcessActionSerializable {
     fn from(action: &ProcessAction) -> Self {
         match action {
-            ProcessAction::SpawnProcess { process_type, config } => {
-                ProcessActionSerializable::SpawnProcess {
-                    process_type: process_type.clone(),
-                    config: config.clone(),
-                }
-            }
-            ProcessAction::PauseProcess { process_id } => {
-                ProcessActionSerializable::PauseProcess {
-                    process_id: process_id.clone(),
-                }
-            }
+            ProcessAction::SpawnProcess {
+                process_type,
+                config,
+            } => ProcessActionSerializable::SpawnProcess {
+                process_type: process_type.clone(),
+                config: config.clone(),
+            },
+            ProcessAction::PauseProcess { process_id } => ProcessActionSerializable::PauseProcess {
+                process_id: process_id.clone(),
+            },
             ProcessAction::ResumeProcess { process_id } => {
                 ProcessActionSerializable::ResumeProcess {
                     process_id: process_id.clone(),
@@ -2330,16 +2559,12 @@ impl From<&ProcessAction> for ProcessActionSerializable {
                     process_id: process_id.clone(),
                 }
             }
-            ProcessAction::Heartbeat { process_id } => {
-                ProcessActionSerializable::Heartbeat {
-                    process_id: process_id.clone(),
-                }
-            }
-            ProcessAction::GetStatus { process_id } => {
-                ProcessActionSerializable::GetStatus {
-                    process_id: process_id.clone(),
-                }
-            }
+            ProcessAction::Heartbeat { process_id } => ProcessActionSerializable::Heartbeat {
+                process_id: process_id.clone(),
+            },
+            ProcessAction::GetStatus { process_id } => ProcessActionSerializable::GetStatus {
+                process_id: process_id.clone(),
+            },
             ProcessAction::ListProcesses => ProcessActionSerializable::ListProcesses,
         }
     }
@@ -2349,12 +2574,19 @@ impl ProcessAction {
     /// Validate the process action.
     pub fn validate(&self) -> Result<(), String> {
         match self {
-            ProcessAction::SpawnProcess { process_type, config } => {
+            ProcessAction::SpawnProcess {
+                process_type,
+                config,
+            } => {
                 if config.interval_secs == 0 {
-                    return Err("ProcessAction::SpawnProcess: interval_secs cannot be 0".to_string());
+                    return Err(
+                        "ProcessAction::SpawnProcess: interval_secs cannot be 0".to_string()
+                    );
                 }
                 match process_type {
-                    ProcessType::Consolidation | ProcessType::Distillation | ProcessType::GenomeUpdate => Ok(()),
+                    ProcessType::Consolidation
+                    | ProcessType::Distillation
+                    | ProcessType::GenomeUpdate => Ok(()),
                 }
             }
             ProcessAction::PauseProcess { process_id } => {
@@ -2466,12 +2698,25 @@ pub enum ConflictResolution {
 /// Serializable version of ReconciliationAction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) enum ReconciliationActionSerializable {
-    StartSync { peer_id: String },
-    ExchangeRoots { peer_frontier: [u8; 32] },
-    RequestDifferences { divergence_point: String },
-    ApplyDelta { changes: Vec<String> },
-    ResolveConflict { conflict_id: String, resolution: ConflictResolution },
-    CompleteSync { peer_id: String },
+    StartSync {
+        peer_id: String,
+    },
+    ExchangeRoots {
+        peer_frontier: [u8; 32],
+    },
+    RequestDifferences {
+        divergence_point: String,
+    },
+    ApplyDelta {
+        changes: Vec<String>,
+    },
+    ResolveConflict {
+        conflict_id: String,
+        resolution: ConflictResolution,
+    },
+    CompleteSync {
+        peer_id: String,
+    },
     GetSyncStatus,
 }
 
@@ -2498,12 +2743,13 @@ impl From<&ReconciliationAction> for ReconciliationActionSerializable {
                     changes: changes.clone(),
                 }
             }
-            ReconciliationAction::ResolveConflict { conflict_id, resolution } => {
-                ReconciliationActionSerializable::ResolveConflict {
-                    conflict_id: conflict_id.clone(),
-                    resolution: *resolution,
-                }
-            }
+            ReconciliationAction::ResolveConflict {
+                conflict_id,
+                resolution,
+            } => ReconciliationActionSerializable::ResolveConflict {
+                conflict_id: conflict_id.clone(),
+                resolution: *resolution,
+            },
             ReconciliationAction::CompleteSync { peer_id } => {
                 ReconciliationActionSerializable::CompleteSync {
                     peer_id: peer_id.clone(),
@@ -2527,7 +2773,10 @@ impl ReconciliationAction {
             ReconciliationAction::ExchangeRoots { .. } => Ok(()),
             ReconciliationAction::RequestDifferences { divergence_point } => {
                 if divergence_point.is_empty() {
-                    return Err("ReconciliationAction::RequestDifferences: divergence_point is empty".to_string());
+                    return Err(
+                        "ReconciliationAction::RequestDifferences: divergence_point is empty"
+                            .to_string(),
+                    );
                 }
                 Ok(())
             }
@@ -2539,7 +2788,9 @@ impl ReconciliationAction {
             }
             ReconciliationAction::ResolveConflict { conflict_id, .. } => {
                 if conflict_id.is_empty() {
-                    return Err("ReconciliationAction::ResolveConflict: conflict_id is empty".to_string());
+                    return Err(
+                        "ReconciliationAction::ResolveConflict: conflict_id is empty".to_string(),
+                    );
                 }
                 Ok(())
             }
@@ -2760,9 +3011,7 @@ pub(crate) enum ConsolidationActionSerializable {
 impl From<&ConsolidationAction> for ConsolidationActionSerializable {
     fn from(action: &ConsolidationAction) -> Self {
         match action {
-            ConsolidationAction::CleanupExpired => {
-                ConsolidationActionSerializable::CleanupExpired
-            }
+            ConsolidationAction::CleanupExpired => ConsolidationActionSerializable::CleanupExpired,
             ConsolidationAction::FindSimilarUnconnectedPairs { k, threshold } => {
                 ConsolidationActionSerializable::FindSimilarUnconnectedPairs {
                     k: *k,
@@ -2914,7 +3163,6 @@ impl Canonicalizable for SleepCreativeAction {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2941,12 +3189,12 @@ mod tests {
 
         // Convert to serializable
         let serializable = ActionSerializable::from(&original);
-        
+
         // Serialize to bytes - should succeed
         let bytes = bincode::serialize(&serializable);
         assert!(bytes.is_ok());
         assert!(!bytes.unwrap().is_empty());
-        
+
         // Verify it's the right variant
         match (&original, &serializable) {
             (KoruAction::Storage(_), ActionSerializable::Storage(_)) => {}

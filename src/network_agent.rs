@@ -34,8 +34,8 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use koru_lambda_core::{Canonicalizable, Distinction};
 
@@ -217,12 +217,12 @@ impl NetworkAgent {
     /// Each event becomes: `ΔNew = ΔLocal_Root ⊕ ΔNetwork_Action`
     pub fn process_events(&self) -> usize {
         let mut count = 0;
-        
+
         while let Ok(event) = self.event_rx.read().unwrap().try_recv() {
             self.handle_event(event);
             count += 1;
         }
-        
+
         count
     }
 
@@ -238,13 +238,19 @@ impl NetworkAgent {
             NetworkEvent::PeerStatusChanged { node_id, status } => {
                 self.handle_peer_status_changed(&node_id, status);
             }
-            NetworkEvent::SyncCompleted { peer_id, updates_count } => {
+            NetworkEvent::SyncCompleted {
+                peer_id,
+                updates_count,
+            } => {
                 self.handle_sync_completed(&peer_id, updates_count);
             }
             NetworkEvent::MessageReceived { from, message_type } => {
                 self.handle_message_received(&from, &message_type);
             }
-            NetworkEvent::GossipExchanged { peer_id, their_peer_count } => {
+            NetworkEvent::GossipExchanged {
+                peer_id,
+                their_peer_count,
+            } => {
                 self.handle_gossip_exchanged(&peer_id, their_peer_count);
             }
             NetworkEvent::SelfJoined { via_peer } => {
@@ -262,10 +268,10 @@ impl NetworkAgent {
         let peer_distinction = self.synthesize_action_internal(action);
 
         // Store peer distinction
-        self.peer_distinctions.write().unwrap().insert(
-            peer.node_id.to_string(),
-            peer_distinction.clone(),
-        );
+        self.peer_distinctions
+            .write()
+            .unwrap()
+            .insert(peer.node_id.to_string(), peer_distinction.clone());
 
         // Synthesize into peers distinction
         self.synthesize_peer(peer_distinction);
@@ -276,7 +282,13 @@ impl NetworkAgent {
     /// Handle peer left event.
     fn handle_peer_left(&self, node_id: &str) {
         // Remove from peer distinctions
-        if self.peer_distinctions.write().unwrap().remove(node_id).is_some() {
+        if self
+            .peer_distinctions
+            .write()
+            .unwrap()
+            .remove(node_id)
+            .is_some()
+        {
             // Note: In a full implementation, we'd synthesize a tombstone
             // For now, we just remove from the active set
             self.peers_left.fetch_add(1, Ordering::SeqCst);
@@ -431,7 +443,8 @@ mod tests {
             status: PeerStatus::Healthy,
         };
 
-        tx.send(NetworkEvent::PeerJoined { peer: peer.clone() }).unwrap();
+        tx.send(NetworkEvent::PeerJoined { peer: peer.clone() })
+            .unwrap();
         agent.process_events();
 
         // Verify synthesis happened
@@ -440,7 +453,11 @@ mod tests {
 
         // Verify peer is tracked
         assert_eq!(agent.stats().peers_joined, 1);
-        assert!(agent.get_peer_distinction(&peer.node_id.to_string()).is_some());
+        assert!(
+            agent
+                .get_peer_distinction(&peer.node_id.to_string())
+                .is_some()
+        );
     }
 
     #[test]
@@ -456,7 +473,8 @@ mod tests {
             status: PeerStatus::Healthy,
         };
 
-        tx.send(NetworkEvent::PeerJoined { peer: peer.clone() }).unwrap();
+        tx.send(NetworkEvent::PeerJoined { peer: peer.clone() })
+            .unwrap();
         agent.process_events();
         assert_eq!(agent.stats().current_peers, 1);
 
@@ -469,7 +487,11 @@ mod tests {
 
         assert_eq!(agent.stats().peers_left, 1);
         assert_eq!(agent.stats().current_peers, 0);
-        assert!(agent.get_peer_distinction(&peer.node_id.to_string()).is_none());
+        assert!(
+            agent
+                .get_peer_distinction(&peer.node_id.to_string())
+                .is_none()
+        );
     }
 
     #[test]

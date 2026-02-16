@@ -85,7 +85,7 @@ impl CausalStorage {
         // Create a temporary SharedEngine for lineage agent initialization
         // In production, this would come from the field context
         let shared_engine = crate::engine::SharedEngine::with_engine(Arc::clone(&engine));
-        
+
         Self {
             engine,
             causal_graph: LineageAgent::new(&shared_engine),

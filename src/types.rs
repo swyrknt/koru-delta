@@ -436,12 +436,18 @@ impl UnconnectedPair {
     /// Get the canonical ID for this pair (for content addressing).
     /// Format: "namespace_a:key_a::namespace_b:key_b"
     pub fn pair_id(&self) -> String {
-        format!("{}:{}::{}:{}", self.namespace_a, self.key_a, self.namespace_b, self.key_b)
+        format!(
+            "{}:{}::{}:{}",
+            self.namespace_a, self.key_a, self.namespace_b, self.key_b
+        )
     }
 
     /// Get the reverse pair ID (for deduplication).
     pub fn reverse_pair_id(&self) -> String {
-        format!("{}:{}::{}:{}", self.namespace_b, self.key_b, self.namespace_a, self.key_a)
+        format!(
+            "{}:{}::{}:{}",
+            self.namespace_b, self.key_b, self.namespace_a, self.key_a
+        )
     }
 }
 

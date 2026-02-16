@@ -26,15 +26,14 @@ use crate::actions::{TemperatureAction, TemperatureLevel};
 use crate::causal_graph::DistinctionId;
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::roots::RootType;
-use crate::types::{FullKey, VersionedValue};
 #[cfg(test)]
 use crate::types::VectorClock;
+use crate::types::{FullKey, VersionedValue};
 use dashmap::DashMap;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
-use std::sync::Arc;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-
 
 /// Temperature agent configuration.
 #[derive(Debug, Clone)]
@@ -439,10 +438,6 @@ impl TemperatureStats {
     }
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -626,5 +621,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

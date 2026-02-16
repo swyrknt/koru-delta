@@ -126,7 +126,10 @@ impl ProcessAgent {
         process_type: ProcessType,
         config: ProcessConfig,
     ) -> Distinction {
-        let action = ProcessAction::SpawnProcess { process_type, config };
+        let action = ProcessAction::SpawnProcess {
+            process_type,
+            config,
+        };
         self.apply_action(action)
     }
 
@@ -191,8 +194,6 @@ impl LocalCausalAgent for ProcessAgent {
         new_root
     }
 }
-
-
 
 impl Default for ProcessAgent {
     fn default() -> Self {
@@ -262,7 +263,7 @@ mod tests {
         #[test]
         fn test_process_agent_implements_lca_trait() {
             let agent = setup_agent();
-            
+
             // Verify trait is implemented
             let _root = agent.get_current_root();
         }
@@ -286,13 +287,14 @@ mod tests {
             let mut agent = setup_agent();
             let root_before = agent.local_root().id().to_string();
 
-            let new_root = agent.spawn_process_synthesized(
-                ProcessType::Consolidation,
-                ProcessConfig::default(),
-            );
+            let new_root = agent
+                .spawn_process_synthesized(ProcessType::Consolidation, ProcessConfig::default());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -304,7 +306,10 @@ mod tests {
             let new_root = agent.pause_process_synthesized("process-1".to_string());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after pause synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after pause synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -316,7 +321,10 @@ mod tests {
             let new_root = agent.resume_process_synthesized("process-1".to_string());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after resume synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after resume synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -328,7 +336,10 @@ mod tests {
             let new_root = agent.terminate_process_synthesized("process-1".to_string());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after terminate synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after terminate synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -340,7 +351,10 @@ mod tests {
             let new_root = agent.heartbeat_synthesized("process-1".to_string());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after heartbeat synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after heartbeat synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -352,7 +366,10 @@ mod tests {
             let new_root = agent.list_processes_synthesized();
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after list processes synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after list processes synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -365,7 +382,10 @@ mod tests {
             let new_root = agent.apply_action(action);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after apply_action");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after apply_action"
+            );
             assert_eq!(new_root.id(), root_after);
         }
     }

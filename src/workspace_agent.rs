@@ -228,7 +228,9 @@ impl WorkspaceAgent {
         // Include sequence in the synthesis for uniqueness
         let seq_bytes = bincode::serialize(&seq).unwrap();
         let seq_distinction = bytes_to_distinction(&seq_bytes, &self.engine);
-        let config_distinction = self.engine.synthesize(&config_distinction, &seq_distinction);
+        let config_distinction = self
+            .engine
+            .synthesize(&config_distinction, &seq_distinction);
 
         // Synthesize new workspace from local root
         let distinction = self.engine.synthesize(local_root, &config_distinction);
@@ -302,7 +304,9 @@ impl WorkspaceAgent {
 
         // Include item_id in synthesis
         let id_distinction = bytes_to_distinction(item_id.as_bytes(), &self.engine);
-        let content_distinction = self.engine.synthesize(&content_distinction, &id_distinction);
+        let content_distinction = self
+            .engine
+            .synthesize(&content_distinction, &id_distinction);
 
         // Synthesize from workspace local root
         let distinction = self
@@ -416,7 +420,10 @@ impl WorkspaceAgent {
                     None => WorkspaceResult::Error(format!("Workspace {} not found", workspace_id)),
                 }
             }
-            WorkspaceAction::Recall { workspace_id, query: _ } => {
+            WorkspaceAction::Recall {
+                workspace_id,
+                query: _,
+            } => {
                 // For now, just return all memories
                 // In a more sophisticated implementation, query would filter
                 match self.recall(&workspace_id) {

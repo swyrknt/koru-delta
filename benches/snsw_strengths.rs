@@ -17,7 +17,7 @@
 //! - Semantic clusters (animals, vehicles, concepts)
 //! - Hierarchical relationships (dog → animal → concept)
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use koru_delta::vector::{
     ContentHash, HnswConfig, HnswIndex, NavigationOp, SearchTier, SynthesisGraph, Vector,
 };

@@ -28,8 +28,8 @@
 
 use crate::roots::{KoruRoots, RootType};
 use koru_lambda_core::{Distinction, DistinctionEngine};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A shared distinction engine for the unified Koru field.
 ///
@@ -175,7 +175,8 @@ impl SharedEngine {
     pub fn synthesize(&self, a: &Distinction, b: &Distinction) -> Distinction {
         let result = self.engine.synthesize(a, b);
         self.synthesis_count.fetch_add(1, Ordering::Relaxed);
-        self.distinction_count.store(self.engine.distinction_count() as u64, Ordering::Relaxed);
+        self.distinction_count
+            .store(self.engine.distinction_count() as u64, Ordering::Relaxed);
         result
     }
 

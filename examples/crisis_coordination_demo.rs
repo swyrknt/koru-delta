@@ -8,7 +8,7 @@ use std::time::Duration;
 async fn main() -> anyhow::Result<()> {
     use chrono::Utc;
     use colored::*;
-    use koru_delta::auth::{mine_identity, IdentityUserData};
+    use koru_delta::auth::{IdentityUserData, mine_identity};
     use koru_delta::prelude::*;
     use koru_delta::query::{Filter, Query, SortBy, SortOrder};
     use koru_delta::subscriptions::{ChangeType, Subscription};

@@ -466,7 +466,8 @@ mod tests {
         for i in 0..ids.len() {
             for j in (i + 1)..ids.len() {
                 assert_ne!(
-                    ids[i], ids[j],
+                    ids[i],
+                    ids[j],
                     "Roots {} and {} should be distinct",
                     RootType::try_from(i).unwrap(),
                     RootType::try_from(j).unwrap()
@@ -529,7 +530,7 @@ mod tests {
                 11 => Ok(RootType::Network),
                 12 => Ok(RootType::Workspace),
                 13 => Ok(RootType::Vector),
-                _ => Err(())
+                _ => Err(()),
             }
         }
     }

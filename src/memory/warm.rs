@@ -28,15 +28,15 @@ use crate::actions::ChronicleAction;
 use crate::causal_graph::DistinctionId;
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::roots::RootType;
-use crate::types::{FullKey, VersionedValue};
 #[cfg(test)]
 use crate::types::VectorClock;
+use crate::types::{FullKey, VersionedValue};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Chronicle agent configuration.
 #[derive(Debug, Clone)]
@@ -153,9 +153,7 @@ impl ChronicleAgent {
         let _entry = self.index.get(id)?;
 
         // Synthesize recall action
-        let action = ChronicleAction::Recall {
-            query: id.clone(),
-        };
+        let action = ChronicleAction::Recall { query: id.clone() };
         let _ = self.synthesize_action_internal(action);
 
         // Update access time
@@ -454,10 +452,6 @@ impl ChronicleStats {
     }
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,5 +650,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

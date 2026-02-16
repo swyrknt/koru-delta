@@ -74,13 +74,19 @@ pub enum SensoryEvent {
     PhaseTrigger { phase: String },
 
     /// Signal agent registration
-    AgentRegistered { agent_id: String, agent_type: String },
+    AgentRegistered {
+        agent_id: String,
+        agent_type: String,
+    },
 
     /// Signal agent unregistration  
     AgentUnregistered { agent_id: String },
 
     /// Custom event with arbitrary data
-    Custom { event_type: String, data: serde_json::Value },
+    Custom {
+        event_type: String,
+        data: serde_json::Value,
+    },
 }
 
 impl SensoryInterface {
@@ -135,23 +141,30 @@ impl SensoryInterface {
             SensoryEvent::PhaseTrigger { phase } => {
                 // Translate phase string to CoordinationPhase
                 let phase_enum = self.parse_phase(&phase);
-                
+
                 // Trigger the phase in the orchestrator
                 self.orchestrator.pulse(phase_enum);
-                
+
                 // Return the action for synthesis
                 KoruAction::from(PulseAction::TriggerPulse { phase })
             }
-            SensoryEvent::AgentRegistered { agent_id, agent_type } => {
-                KoruAction::from(PulseAction::RegisterAgent { agent_id, agent_type })
-            }
+            SensoryEvent::AgentRegistered {
+                agent_id,
+                agent_type,
+            } => KoruAction::from(PulseAction::RegisterAgent {
+                agent_id,
+                agent_type,
+            }),
             SensoryEvent::AgentUnregistered { agent_id } => {
                 KoruAction::from(PulseAction::UnregisterAgent { agent_id })
             }
-            SensoryEvent::Custom { event_type, data: _ } => {
+            SensoryEvent::Custom {
+                event_type,
+                data: _,
+            } => {
                 // Custom events become pulse actions with serialized data
                 // The data is part of the causal chain via the synthesized distinction
-                KoruAction::from(PulseAction::TriggerPulse { 
+                KoruAction::from(PulseAction::TriggerPulse {
                     phase: format!("CUSTOM:{}", event_type),
                 })
             }
@@ -193,7 +206,7 @@ mod tests {
         let orch = Arc::new(KoruOrchestrator::new());
         let (tx, rx) = channel();
         let _sensory = SensoryInterface::new(orch, rx);
-        
+
         // Just verify it creates without panic
         drop(tx);
     }
@@ -279,7 +292,10 @@ mod tests {
         let sensory = SensoryInterface::new(orch.clone(), rx);
 
         assert_eq!(sensory.parse_phase("INPUT"), CoordinationPhase::Input);
-        assert_eq!(sensory.parse_phase("processing"), CoordinationPhase::Processing);
+        assert_eq!(
+            sensory.parse_phase("processing"),
+            CoordinationPhase::Processing
+        );
         assert_eq!(sensory.parse_phase("Output"), CoordinationPhase::Output);
         assert_eq!(sensory.parse_phase("unknown"), CoordinationPhase::Idle);
     }

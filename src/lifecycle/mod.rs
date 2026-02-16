@@ -26,8 +26,8 @@
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::RwLock;
 use tokio::time::interval;
 use tracing::{info, trace, warn};
@@ -233,7 +233,7 @@ mod tests {
     #[tokio::test]
     async fn test_lifecycle_agent_creation() {
         use crate::engine::SharedEngine;
-        
+
         let field = SharedEngine::new();
         let agent = LifecycleAgent::new(&field);
 
@@ -365,7 +365,10 @@ impl LifecycleAgent {
 
     /// Evaluate access for a distinction and synthesize result.
     pub fn evaluate_access(&mut self, distinction_id: String, full_key: FullKey) -> Distinction {
-        let action = LifecycleAction::EvaluateAccess { distinction_id, full_key };
+        let action = LifecycleAction::EvaluateAccess {
+            distinction_id,
+            full_key,
+        };
         self.apply_action(action)
     }
 
@@ -482,15 +485,15 @@ impl LifecycleAgent {
 
                 // Note: Actual transition execution happens through apply_action
                 // This is a placeholder for background monitoring
-                trace!(planned_transitions = transitions.len(), "Lifecycle check complete");
+                trace!(
+                    planned_transitions = transitions.len(),
+                    "Lifecycle check complete"
+                );
             }
         })
     }
 
-    fn spawn_consolidation_task(
-        &self,
-        interval_duration: Duration,
-    ) -> tokio::task::JoinHandle<()> {
+    fn spawn_consolidation_task(&self, interval_duration: Duration) -> tokio::task::JoinHandle<()> {
         let stats = Arc::clone(&self.stats);
         let shutdown = Arc::clone(&self.shutdown);
 
@@ -563,8 +566,6 @@ impl LocalCausalAgent for LifecycleAgent {
     }
 }
 
-
-
 #[cfg(test)]
 mod lca_tests {
     use super::*;
@@ -578,7 +579,7 @@ mod lca_tests {
     #[test]
     fn test_lifecycle_agent_implements_lca_trait() {
         let agent = setup_agent();
-        
+
         // Verify trait is implemented
         let _root = agent.get_current_root();
     }
@@ -603,9 +604,12 @@ mod lca_tests {
         let root_before = agent.local_root().id().to_string();
 
         let new_root = agent.evaluate_access("dist1".to_string(), FullKey::new("test", "key1"));
-        
+
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after synthesis");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after synthesis"
+        );
         assert_eq!(new_root.id(), root_after);
     }
 
@@ -614,14 +618,13 @@ mod lca_tests {
         let mut agent = setup_agent();
         let root_before = agent.local_root().id().to_string();
 
-        let new_root = agent.promote(
-            "dist1".to_string(),
-            MemoryTier::Warm,
-            MemoryTier::Hot,
-        );
-        
+        let new_root = agent.promote("dist1".to_string(), MemoryTier::Warm, MemoryTier::Hot);
+
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after promote");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after promote"
+        );
         assert_eq!(new_root.id(), root_after);
     }
 
@@ -630,14 +633,13 @@ mod lca_tests {
         let mut agent = setup_agent();
         let root_before = agent.local_root().id().to_string();
 
-        let new_root = agent.demote(
-            "dist1".to_string(),
-            MemoryTier::Hot,
-            MemoryTier::Warm,
-        );
-        
+        let new_root = agent.demote("dist1".to_string(), MemoryTier::Hot, MemoryTier::Warm);
+
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after demote");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after demote"
+        );
         assert_eq!(new_root.id(), root_after);
     }
 
@@ -646,19 +648,20 @@ mod lca_tests {
         let mut agent = setup_agent();
         let root_before = agent.local_root().id().to_string();
 
-        let transitions = vec![
-            Transition {
-                distinction_id: "dist1".to_string(),
-                from_tier: MemoryTier::Warm,
-                to_tier: MemoryTier::Hot,
-                importance_score: 0.8,
-                priority: 1.0,
-            },
-        ];
+        let transitions = vec![Transition {
+            distinction_id: "dist1".to_string(),
+            from_tier: MemoryTier::Warm,
+            to_tier: MemoryTier::Hot,
+            importance_score: 0.8,
+            priority: 1.0,
+        }];
         let new_root = agent.transition(transitions);
-        
+
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after transition");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after transition"
+        );
         assert_eq!(new_root.id(), root_after);
     }
 
@@ -668,9 +671,12 @@ mod lca_tests {
         let root_before = agent.local_root().id().to_string();
 
         let new_root = agent.update_thresholds(serde_json::json!({"hot_target": 0.9}));
-        
+
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after update_thresholds");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after update_thresholds"
+        );
         assert_eq!(new_root.id(), root_after);
     }
 }

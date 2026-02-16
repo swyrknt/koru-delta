@@ -9,7 +9,7 @@ use koru_delta::storage::CausalStorage;
 
 // WASM-only imports
 #[cfg(target_arch = "wasm32")]
-use koru_delta::{json, KoruDelta};
+use koru_delta::{KoruDelta, json};
 #[cfg(target_arch = "wasm32")]
 use koru_lambda_core::DistinctionEngine;
 #[cfg(target_arch = "wasm32")]

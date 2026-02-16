@@ -1,5 +1,7 @@
 //! # KoruDelta — The Invisible Database
 //!
+#![allow(clippy::collapsible_if)] // Rust 2024 style - TODO: refactor later
+//!
 //! **Tagline:** *"Invisible. Causal. Everywhere."*
 //!
 //! KoruDelta is a zero-configuration, causal database that gives you:
@@ -169,7 +171,10 @@ pub mod wasm;
 // Public API exports
 pub use core::{CoreConfig, DatabaseStats, KoruDelta, MemoryConfig};
 pub use error::{DeltaError, DeltaResult};
-pub use types::{CausalWriteResult, ConnectedDistinction, FullKey, HistoryEntry, RandomCombination, Tombstone, UnconnectedPair, VectorClock, VersionedValue};
+pub use types::{
+    CausalWriteResult, ConnectedDistinction, FullKey, HistoryEntry, RandomCombination, Tombstone,
+    UnconnectedPair, VectorClock, VersionedValue,
+};
 
 // Query exports
 pub use query::{
@@ -192,8 +197,8 @@ pub use memory::{
 // Subscriptions exports (non-WASM only)
 #[cfg(not(target_arch = "wasm32"))]
 pub use subscriptions::{
-    ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionId, SubscriptionInfo,
-    SubscriptionAgent,
+    ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionAgent, SubscriptionId,
+    SubscriptionInfo,
 };
 
 // Cluster exports (non-WASM only)
@@ -205,7 +210,7 @@ pub use network::{NodeId, PeerInfo, PeerStatus};
 
 // Re-export commonly used external types for convenience
 pub use chrono::{DateTime, Utc};
-pub use serde_json::{json, Value as JsonValue};
+pub use serde_json::{Value as JsonValue, json};
 
 // Re-export the underlying engine for advanced use cases
 pub use koru_lambda_core::DistinctionEngine;
@@ -236,7 +241,7 @@ pub mod prelude {
     pub use crate::error::{DeltaError, DeltaResult};
     pub use crate::types::{HistoryEntry, VersionedValue};
     pub use chrono::{DateTime, Utc};
-    pub use serde_json::{json, Value as JsonValue};
+    pub use serde_json::{Value as JsonValue, json};
 
     // Query types
     pub use crate::query::{
@@ -258,8 +263,8 @@ pub mod prelude {
     // Subscriptions types (non-WASM only)
     #[cfg(not(target_arch = "wasm32"))]
     pub use crate::subscriptions::{
-        ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionId,
-        SubscriptionAgent, SubscriptionInfo,
+        ChangeEvent, ChangeType, SubscribableStorage, Subscription, SubscriptionAgent,
+        SubscriptionId, SubscriptionInfo,
     };
 
     // Cluster types (non-WASM only)
@@ -297,9 +302,9 @@ pub mod prelude {
 /// - `KORU_LOG=trace` - Verbose tracing
 #[cfg(not(target_arch = "wasm32"))]
 pub fn init_logging() {
+    use tracing_subscriber::EnvFilter;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::try_from_env("KORU_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
 
@@ -312,9 +317,9 @@ pub fn init_logging() {
 /// Initialize logging with a specific level.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn init_logging_with_level(level: &str) {
+    use tracing_subscriber::EnvFilter;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::new(level);
 

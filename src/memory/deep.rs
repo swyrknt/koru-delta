@@ -41,15 +41,15 @@
 /// A genome is ~1KB. A full database might be 1TB.
 /// But from the genome, you can regenerate the whole.
 use crate::actions::EssenceAction;
-use crate::causal_graph::{LineageAgent, DistinctionId};
+use crate::causal_graph::{DistinctionId, LineageAgent};
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::roots::RootType;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Essence agent configuration.
 #[derive(Debug, Clone)]
@@ -453,10 +453,6 @@ pub struct EssenceStats {
     pub total_archive_size: usize,
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -635,5 +631,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

@@ -34,8 +34,8 @@ use crate::reference_graph::ReferenceGraph;
 use crate::roots::RootType;
 use chrono::{DateTime, Duration, Utc};
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Evolution agent configuration.
 #[derive(Debug, Clone)]
@@ -379,12 +379,6 @@ pub struct EvolutionStats {
     pub preservation_rate: f64,
 }
 
-
-
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,8 +426,7 @@ mod tests {
 
         causal_graph.add_node("test1".to_string());
 
-        let fitness =
-            evolution.calculate_fitness("test1", &ref_graph, &causal_graph, Utc::now());
+        let fitness = evolution.calculate_fitness("test1", &ref_graph, &causal_graph, Utc::now());
 
         assert_eq!(fitness.reference_count, 1);
         assert_eq!(fitness.total_score, 1);
@@ -492,8 +485,7 @@ mod tests {
         // Created 30 days ago
         let old_timestamp = Utc::now() - Duration::days(30);
 
-        let fitness =
-            evolution.calculate_fitness("old", &ref_graph, &causal_graph, old_timestamp);
+        let fitness = evolution.calculate_fitness("old", &ref_graph, &causal_graph, old_timestamp);
 
         // Should have negative score due to age (30 - 7 = 23 days over threshold)
         assert!(fitness.total_score < 0);
@@ -563,5 +555,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

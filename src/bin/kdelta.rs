@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)] // Rust 2024 style - TODO: refactor later
+
 /// KoruDelta CLI - The Invisible Database Command Line Tool
 ///
 /// This is the main CLI interface for KoruDelta, providing simple commands
@@ -23,7 +25,7 @@ use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use colored::*;
 use koru_delta::cluster::{ClusterConfig, ClusterNode};
-use koru_delta::network::{PeerStatus, DEFAULT_PORT};
+use koru_delta::network::{DEFAULT_PORT, PeerStatus};
 use koru_delta::query::{Aggregation, Filter, Query};
 use koru_delta::subscriptions::{ChangeType, Subscription};
 use koru_delta::views::ViewDefinition;

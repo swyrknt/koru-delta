@@ -39,10 +39,10 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use axum::{
+    Json, Router,
     extract::State,
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
@@ -448,15 +448,17 @@ async fn handle_revoke_session(
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;
     // Require authentication
-    let _ = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
-        (
-            e,
-            Json(AuthErrorResponse {
-                error: "Unauthorized".to_string(),
-                code: "UNAUTHORIZED".to_string(),
-            }),
-        )
-    });
+    let _ = require_auth_context(&headers, &auth_guard)
+        .await
+        .map_err(|e| {
+            (
+                e,
+                Json(AuthErrorResponse {
+                    error: "Unauthorized".to_string(),
+                    code: "UNAUTHORIZED".to_string(),
+                }),
+            )
+        });
 
     // Revoke the session
     match auth_guard.revoke_session(&request.session_id) {
@@ -473,15 +475,17 @@ async fn handle_grant_capability(
 ) -> Result<Json<CapabilityResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;
     // Require authentication
-    let (_identity, _) = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
-        (
-            e,
-            Json(AuthErrorResponse {
-                error: "Unauthorized".to_string(),
-                code: "UNAUTHORIZED".to_string(),
-            }),
-        )
-    })?;
+    let (_identity, _) = require_auth_context(&headers, &auth_guard)
+        .await
+        .map_err(|e| {
+            (
+                e,
+                Json(AuthErrorResponse {
+                    error: "Unauthorized".to_string(),
+                    code: "UNAUTHORIZED".to_string(),
+                }),
+            )
+        })?;
 
     // Get identity secret key (in production, this would come from secure storage)
     // For now, we return error as we can't sign without the secret key
@@ -524,15 +528,17 @@ async fn handle_revoke_capability(
 ) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;
     // Require authentication
-    let _ = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
-        (
-            e,
-            Json(AuthErrorResponse {
-                error: "Unauthorized".to_string(),
-                code: "UNAUTHORIZED".to_string(),
-            }),
-        )
-    })?;
+    let _ = require_auth_context(&headers, &auth_guard)
+        .await
+        .map_err(|e| {
+            (
+                e,
+                Json(AuthErrorResponse {
+                    error: "Unauthorized".to_string(),
+                    code: "UNAUTHORIZED".to_string(),
+                }),
+            )
+        })?;
 
     // Get the capability
     // NOTE: This is a placeholder - full implementation needs capability lookup
@@ -553,15 +559,17 @@ async fn handle_authorize(
 ) -> Result<Json<AuthorizeResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;
     // Require authentication
-    let (identity, _) = require_auth_context(&headers, &auth_guard).await.map_err(|e| {
-        (
-            e,
-            Json(AuthErrorResponse {
-                error: "Unauthorized".to_string(),
-                code: "UNAUTHORIZED".to_string(),
-            }),
-        )
-    })?;
+    let (identity, _) = require_auth_context(&headers, &auth_guard)
+        .await
+        .map_err(|e| {
+            (
+                e,
+                Json(AuthErrorResponse {
+                    error: "Unauthorized".to_string(),
+                    code: "UNAUTHORIZED".to_string(),
+                }),
+            )
+        })?;
 
     // Check authorization
     let authorized = auth_guard.check_permission(
@@ -584,22 +592,26 @@ async fn handle_list_capabilities(
 ) -> Result<Json<Vec<Capability>>, (StatusCode, Json<AuthErrorResponse>)> {
     let auth_guard = auth.read().await;
     // Get identity key from headers (may be unauthenticated)
-    let ctx = extract_auth_context(&headers, &auth_guard).await.map_err(|e| {
-        (
-            e,
-            Json(AuthErrorResponse {
-                error: "Unauthorized".to_string(),
-                code: "UNAUTHORIZED".to_string(),
-            }),
-        )
-    })?;
+    let ctx = extract_auth_context(&headers, &auth_guard)
+        .await
+        .map_err(|e| {
+            (
+                e,
+                Json(AuthErrorResponse {
+                    error: "Unauthorized".to_string(),
+                    code: "UNAUTHORIZED".to_string(),
+                }),
+            )
+        })?;
     let identity_key = match ctx.identity_key() {
         Some(key) => key,
         None => return Ok(Json(vec![])),
     };
 
     // Get capabilities
-    let capabilities = auth_guard.get_capabilities(identity_key).map_err(auth_error)?;
+    let capabilities = auth_guard
+        .get_capabilities(identity_key)
+        .map_err(auth_error)?;
 
     Ok(Json(capabilities))
 }

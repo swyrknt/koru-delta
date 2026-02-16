@@ -30,9 +30,9 @@
 use super::types::{Vector, VectorSearchResult};
 use crate::types::FullKey;
 use dashmap::DashMap;
+use rand::SeedableRng;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::StdRng;
-use rand::SeedableRng;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 /// Configuration for HNSW index.

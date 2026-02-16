@@ -301,7 +301,10 @@ impl ReconciliationAgent {
         conflict_id: String,
         resolution: ConflictResolution,
     ) -> Distinction {
-        let action = ReconciliationAction::ResolveConflict { conflict_id, resolution };
+        let action = ReconciliationAction::ResolveConflict {
+            conflict_id,
+            resolution,
+        };
         self.apply_action(action)
     }
 
@@ -342,8 +345,6 @@ impl LocalCausalAgent for ReconciliationAgent {
         new_root
     }
 }
-
-
 
 impl Default for ReconciliationAgent {
     fn default() -> Self {
@@ -459,7 +460,7 @@ mod tests {
         #[test]
         fn test_reconciliation_agent_implements_lca_trait() {
             let agent = setup_agent();
-            
+
             // Verify trait is implemented
             let _root = agent.get_current_root();
         }
@@ -485,7 +486,10 @@ mod tests {
             let new_root = agent.start_sync_synthesized("peer-1".to_string());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -497,7 +501,10 @@ mod tests {
             let new_root = agent.exchange_roots_synthesized([1u8; 32]);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after exchange roots synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after exchange roots synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -506,10 +513,14 @@ mod tests {
             let mut agent = setup_agent();
             let root_before = agent.local_root().id().to_string();
 
-            let new_root = agent.apply_delta_synthesized(vec!["dist1".to_string(), "dist2".to_string()]);
+            let new_root =
+                agent.apply_delta_synthesized(vec!["dist1".to_string(), "dist2".to_string()]);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after apply delta synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after apply delta synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -524,7 +535,10 @@ mod tests {
             );
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after resolve conflict synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after resolve conflict synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -536,7 +550,10 @@ mod tests {
             let new_root = agent.complete_sync_synthesized("peer-1".to_string());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after complete sync synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after complete sync synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -548,7 +565,10 @@ mod tests {
             let new_root = agent.get_sync_status_synthesized();
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after get sync status synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after get sync status synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -561,7 +581,10 @@ mod tests {
             let new_root = agent.apply_action(action);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after apply_action");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after apply_action"
+            );
             assert_eq!(new_root.id(), root_after);
         }
     }

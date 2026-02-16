@@ -90,8 +90,8 @@ impl HttpServer {
 
 /// Create the Axum router with all routes.
 fn create_router(db: Arc<KoruDelta>) -> axum::Router {
-    use axum::routing::{delete, get, post, put};
     use axum::Router;
+    use axum::routing::{delete, get, post, put};
 
     Router::new()
         // Key-value operations

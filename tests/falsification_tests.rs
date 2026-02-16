@@ -20,8 +20,8 @@ use koru_delta::subscriptions::{ChangeType, Subscription};
 use koru_delta::views::ViewDefinition;
 use serde_json::json;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::time::Duration as StdDuration;
 use tokio::time::sleep;
 

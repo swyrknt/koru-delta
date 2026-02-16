@@ -42,7 +42,7 @@ pub mod workspace;
 
 pub use cold::{ArchiveAgent, ArchiveConfig, ArchiveStats, ConsolidationResult, Pattern};
 pub use deep::{
-    CausalTopology, EssenceAgent, EssenceConfig, EssenceStats, EpochSummary, ExpressionResult,
+    CausalTopology, EpochSummary, EssenceAgent, EssenceConfig, EssenceStats, ExpressionResult,
     Genome, ReferencePattern,
 };
 pub use hot::{Evicted, TemperatureAgent, TemperatureConfig, TemperatureStats};

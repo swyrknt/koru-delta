@@ -265,8 +265,8 @@ impl PerspectiveAgent {
         }
 
         // Synthesize form view action
-        let query_json = serde_json::to_value(&definition.query)
-            .unwrap_or_else(|_| serde_json::json!({}));
+        let query_json =
+            serde_json::to_value(&definition.query).unwrap_or_else(|_| serde_json::json!({}));
         let action = PerspectiveAction::FormView {
             query_json: query_json.clone(),
             name: name.clone(),
@@ -516,8 +516,6 @@ impl LocalCausalAgent for PerspectiveAgent {
         new_root
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -813,5 +811,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

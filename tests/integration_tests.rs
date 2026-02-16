@@ -3,7 +3,7 @@
 /// These tests verify end-to-end functionality of the database,
 /// including all major features and edge cases.
 use chrono::Utc;
-use koru_delta::{json, DeltaError, KoruDelta};
+use koru_delta::{DeltaError, KoruDelta, json};
 use std::time::Duration;
 use tokio::time::sleep;
 

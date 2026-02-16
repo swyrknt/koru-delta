@@ -56,11 +56,10 @@
 
 // HashSet removed - not used in process model
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
-
 
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::network::NodeId;
@@ -134,7 +133,10 @@ pub struct NetworkDistinction {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum NetworkContent {
     /// A peer announcement (I'm here)
-    PeerPresence { node_id: String, address: SocketAddr },
+    PeerPresence {
+        node_id: String,
+        address: SocketAddr,
+    },
 
     /// A data write (store this)
     DataWrite { key: FullKey, value_hash: String },
@@ -143,13 +145,19 @@ pub enum NetworkContent {
     QueryRequest { query_hash: String },
 
     /// A query response (I have this)
-    QueryResponse { query_hash: String, result_hash: String },
+    QueryResponse {
+        query_hash: String,
+        result_hash: String,
+    },
 
     /// A capability grant (you may do this)
     CapabilityGrant { grantee: String, permission: String },
 
     /// Custom application content
-    Custom { content_type: String, data_hash: String },
+    Custom {
+        content_type: String,
+        data_hash: String,
+    },
 }
 
 /// Context for a synthesis operation.
@@ -320,7 +328,9 @@ impl NetworkProcess {
         let content_distinction = content.to_canonical_structure(self.field.engine_arc());
         let context_distinction = context.to_canonical_structure(self.field.engine_arc());
 
-        let with_content = self.field.synthesize(&self.local_root, &content_distinction);
+        let with_content = self
+            .field
+            .synthesize(&self.local_root, &content_distinction);
         let new_root = self.field.synthesize(&with_content, &context_distinction);
 
         // Update local root
@@ -469,8 +479,6 @@ impl NetworkProcess {
         }
     }
 }
-
-
 
 impl Canonicalizable for NetworkContent {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
@@ -709,7 +717,12 @@ mod tests {
         // First synthesis: parent is initial local root
         assert!(dist1.context.causal_parents.contains(&initial_root_id));
         // Second synthesis: parent is the result of first synthesis
-        assert!(dist2.context.causal_parents.contains(&dist1.distinction.id().to_string()));
+        assert!(
+            dist2
+                .context
+                .causal_parents
+                .contains(&dist1.distinction.id().to_string())
+        );
     }
 
     #[test]

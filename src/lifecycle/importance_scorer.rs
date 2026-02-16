@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use chrono::Timelike;
 
 use crate::causal_graph::DistinctionId;
-use crate::lifecycle::access_tracker::{AccessPattern, AccessTracker};
 use crate::lifecycle::ScoreFactor;
+use crate::lifecycle::access_tracker::{AccessPattern, AccessTracker};
 
 /// Importance score for a distinction
 #[derive(Debug, Clone)]

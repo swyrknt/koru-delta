@@ -47,7 +47,7 @@ use crate::vector::{Vector, VectorSearchOptions};
 use crate::{DeltaError, HistoryEntry, KoruDelta, VersionedValue, ViewDefinition};
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
-use storage::{is_indexeddb_supported, IndexedDbStorage};
+use storage::{IndexedDbStorage, is_indexeddb_supported};
 use wasm_bindgen::prelude::*;
 
 /// WASM-friendly wrapper around KoruDelta
@@ -274,8 +274,7 @@ impl KoruDeltaWasm {
         let json_content: JsonValue = serde_wasm_bindgen::from_value(content)
             .map_err(|e| JsValue::from_str(&format!("Invalid content: {}", e)))?;
 
-        let meta = metadata
-            .and_then(|m| serde_wasm_bindgen::from_value(m).ok());
+        let meta = metadata.and_then(|m| serde_wasm_bindgen::from_value(m).ok());
 
         self.db
             .put_similar(namespace, key, json_content, meta)
@@ -609,7 +608,7 @@ impl KoruDeltaWasm {
             .iter()
             .map(|v| v.as_f64().unwrap_or(0.0) as f32)
             .collect();
-        
+
         let vec = Vector::new(vec_data, model.as_deref().unwrap_or("default"));
 
         self.db
@@ -641,7 +640,7 @@ impl KoruDeltaWasm {
             .iter()
             .map(|v| v.as_f64().unwrap_or(0.0) as f32)
             .collect();
-        
+
         let query_vec = Vector::new(query_data, "query");
 
         let options = VectorSearchOptions {
@@ -868,7 +867,7 @@ impl KoruDeltaWasm {
         bio: Option<String>,
     ) -> Result<JsValue, JsValue> {
         use crate::auth::mine_identity;
-        
+
         let user_data = IdentityUserData {
             display_name,
             bio,
@@ -883,7 +882,11 @@ impl KoruDeltaWasm {
 
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"id".into(), &JsValue::from_str(&identity.public_key))?;
-        js_sys::Reflect::set(&obj, &"secretKey".into(), &JsValue::from_str(&hex::encode(&secret_key)))?;
+        js_sys::Reflect::set(
+            &obj,
+            &"secretKey".into(),
+            &JsValue::from_str(&hex::encode(&secret_key)),
+        )?;
         js_sys::Reflect::set(
             &obj,
             &"createdAt".into(),
@@ -938,10 +941,7 @@ impl KoruDeltaWasm {
                 Ok(obj.into())
             }
             Ok(None) => Ok(JsValue::NULL),
-            Err(e) => Err(JsValue::from_str(&format!(
-                "Failed to get identity: {}",
-                e
-            ))),
+            Err(e) => Err(JsValue::from_str(&format!("Failed to get identity: {}", e))),
         }
     }
 
@@ -1040,15 +1040,14 @@ impl KoruDeltaWasm {
         let json_content: JsonValue = serde_wasm_bindgen::from_value(content)
             .map_err(|e| JsValue::from_str(&format!("Invalid content: {}", e)))?;
 
-        let meta = metadata
-            .and_then(|m| serde_wasm_bindgen::from_value(m).ok());
+        let meta = metadata.and_then(|m| serde_wasm_bindgen::from_value(m).ok());
 
         // First store with semantic embedding
         self.db
             .put_similar(namespace, key, json_content.clone(), meta.clone())
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to store similar content: {}", e)))?;
-        
+
         // Then set TTL by re-putting with TTL
         self.db
             .put_with_ttl(namespace, key, json_content, ttl_seconds)
@@ -1085,7 +1084,7 @@ impl KoruDeltaWasm {
             .get_ttl_remaining(namespace, key)
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to get TTL: {}", e)))?;
-        
+
         match ttl {
             Some(seconds) => Ok(JsValue::from_f64(seconds as f64)),
             None => Ok(JsValue::NULL),
@@ -1098,7 +1097,7 @@ impl KoruDeltaWasm {
     #[wasm_bindgen(js_name = listExpiringSoon)]
     pub async fn list_expiring_soon_js(&self, within_seconds: u64) -> Result<JsValue, JsValue> {
         let expiring = self.db.list_expiring_soon(within_seconds).await;
-        
+
         let js_array = js_sys::Array::new();
         for item in expiring {
             let obj = js_sys::Object::new();
@@ -1111,7 +1110,7 @@ impl KoruDeltaWasm {
             )?;
             js_array.push(&obj);
         }
-        
+
         Ok(js_array.into())
     }
 
@@ -1148,7 +1147,7 @@ impl KoruDeltaWasm {
             .get_connection_path(namespace, key_a, key_b)
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to get connection path: {}", e)))?;
-        
+
         match path {
             Some(path_vec) => {
                 let js_array = js_sys::Array::new();
@@ -1175,35 +1174,39 @@ impl KoruDeltaWasm {
             .get_highly_connected(namespace.as_deref(), k)
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to get highly connected: {}", e)))?;
-        
+
         let js_array = js_sys::Array::new();
         for dist in results {
             let obj = js_sys::Object::new();
-            js_sys::Reflect::set(&obj, &"namespace".into(), &JsValue::from_str(&dist.namespace))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"namespace".into(),
+                &JsValue::from_str(&dist.namespace),
+            )?;
             js_sys::Reflect::set(&obj, &"key".into(), &JsValue::from_str(&dist.key))?;
             js_sys::Reflect::set(
                 &obj,
                 &"connectionScore".into(),
                 &JsValue::from_f64(dist.connection_score as f64),
             )?;
-            
+
             // Convert parents to JS array
             let parents_array = js_sys::Array::new();
             for parent in &dist.parents {
                 parents_array.push(&JsValue::from_str(parent));
             }
             js_sys::Reflect::set(&obj, &"parents".into(), &parents_array)?;
-            
+
             // Convert children to JS array
             let children_array = js_sys::Array::new();
             for child in &dist.children {
                 children_array.push(&JsValue::from_str(child));
             }
             js_sys::Reflect::set(&obj, &"children".into(), &children_array)?;
-            
+
             js_array.push(&obj);
         }
-        
+
         Ok(js_array.into())
     }
 
@@ -1222,13 +1225,21 @@ impl KoruDeltaWasm {
             .find_similar_unconnected_pairs(namespace.as_deref(), k, threshold)
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to find pairs: {}", e)))?;
-        
+
         let js_array = js_sys::Array::new();
         for pair in pairs {
             let obj = js_sys::Object::new();
-            js_sys::Reflect::set(&obj, &"namespaceA".into(), &JsValue::from_str(&pair.namespace_a))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"namespaceA".into(),
+                &JsValue::from_str(&pair.namespace_a),
+            )?;
             js_sys::Reflect::set(&obj, &"keyA".into(), &JsValue::from_str(&pair.key_a))?;
-            js_sys::Reflect::set(&obj, &"namespaceB".into(), &JsValue::from_str(&pair.namespace_b))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"namespaceB".into(),
+                &JsValue::from_str(&pair.namespace_b),
+            )?;
             js_sys::Reflect::set(&obj, &"keyB".into(), &JsValue::from_str(&pair.key_b))?;
             js_sys::Reflect::set(
                 &obj,
@@ -1237,7 +1248,7 @@ impl KoruDeltaWasm {
             )?;
             js_array.push(&obj);
         }
-        
+
         Ok(js_array.into())
     }
 
@@ -1255,22 +1266,34 @@ impl KoruDeltaWasm {
             .random_walk_combinations(n, steps)
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to generate combinations: {}", e)))?;
-        
+
         let js_array = js_sys::Array::new();
         for combo in combinations {
             let obj = js_sys::Object::new();
-            js_sys::Reflect::set(&obj, &"startNamespace".into(), &JsValue::from_str(&combo.start_namespace))?;
-            js_sys::Reflect::set(&obj, &"startKey".into(), &JsValue::from_str(&combo.start_key))?;
-            js_sys::Reflect::set(&obj, &"endNamespace".into(), &JsValue::from_str(&combo.end_namespace))?;
+            js_sys::Reflect::set(
+                &obj,
+                &"startNamespace".into(),
+                &JsValue::from_str(&combo.start_namespace),
+            )?;
+            js_sys::Reflect::set(
+                &obj,
+                &"startKey".into(),
+                &JsValue::from_str(&combo.start_key),
+            )?;
+            js_sys::Reflect::set(
+                &obj,
+                &"endNamespace".into(),
+                &JsValue::from_str(&combo.end_namespace),
+            )?;
             js_sys::Reflect::set(&obj, &"endKey".into(), &JsValue::from_str(&combo.end_key))?;
-            
+
             // Convert path to JS array
             let path_array = js_sys::Array::new();
             for step in &combo.path {
                 path_array.push(&JsValue::from_str(step));
             }
             js_sys::Reflect::set(&obj, &"path".into(), &path_array)?;
-            
+
             js_sys::Reflect::set(
                 &obj,
                 &"noveltyScore".into(),
@@ -1278,7 +1301,7 @@ impl KoruDeltaWasm {
             )?;
             js_array.push(&obj);
         }
-        
+
         Ok(js_array.into())
     }
 }
@@ -1303,26 +1326,34 @@ impl WorkspaceHandle {
     pub async fn put_js(&self, key: &str, value: JsValue) -> Result<JsValue, JsValue> {
         let json_value: JsonValue = serde_wasm_bindgen::from_value(value)
             .map_err(|e| JsValue::from_str(&format!("Invalid JSON value: {}", e)))?;
-        
-        let versioned = self.db.put(&self.namespace, key, json_value).await
+
+        let versioned = self
+            .db
+            .put(&self.namespace, key, json_value)
+            .await
             .map_err(|e| JsValue::from_str(&format!("Failed to store value: {}", e)))?;
-        
+
         versioned_to_js(&versioned)
     }
 
     /// Retrieve a value from the workspace
     #[wasm_bindgen(js_name = get)]
     pub async fn get_js(&self, key: &str) -> Result<JsValue, JsValue> {
-        let versioned = self.db.get(&self.namespace, key).await
+        let versioned = self
+            .db
+            .get(&self.namespace, key)
+            .await
             .map_err(|e| JsValue::from_str(&format!("Failed to retrieve value: {}", e)))?;
-        
+
         versioned_to_js(&versioned)
     }
 
     /// Delete a key from the workspace
     #[wasm_bindgen(js_name = delete)]
     pub async fn delete_js(&self, key: &str) -> Result<(), JsValue> {
-        self.db.delete(&self.namespace, key).await
+        self.db
+            .delete(&self.namespace, key)
+            .await
             .map_err(|e| JsValue::from_str(&format!("Failed to delete: {}", e)))?;
         Ok(())
     }

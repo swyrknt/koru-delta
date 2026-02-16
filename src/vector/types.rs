@@ -106,27 +106,30 @@ impl Vector {
     pub fn synthesize(content: &serde_json::Value, _dimensions: usize) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         const DIMS: usize = 128; // Canonical distinction dimension
         let mut data = vec![0.0f32; DIMS];
-        
+
         // Content addressing: hash of canonical form
         let content_bytes = serde_json::to_vec(content).unwrap_or_default();
-        
+
         // Distribute content hash across first 32 dimensions
         for (i, byte) in content_bytes.iter().take(64).enumerate() {
             let dim = i % 32;
             data[dim] += (*byte as f32) / 255.0;
         }
-        
+
         // Structural patterns: JSON depth and type distribution
         fn analyze_structure(value: &serde_json::Value, depth: usize, stats: &mut [f32; 16]) {
             match value {
                 serde_json::Value::Null => stats[0] += 1.0,
                 serde_json::Value::Bool(_) => stats[1] += 1.0,
                 serde_json::Value::Number(n) => {
-                    if n.is_i64() { stats[2] += 1.0; }
-                    else { stats[3] += 1.0; }
+                    if n.is_i64() {
+                        stats[2] += 1.0;
+                    } else {
+                        stats[3] += 1.0;
+                    }
                 }
                 serde_json::Value::String(s) => {
                     stats[4] += 1.0;
@@ -149,15 +152,15 @@ impl Vector {
                 }
             }
         }
-        
+
         let mut structure_stats = [0.0f32; 16];
         analyze_structure(content, 0, &mut structure_stats);
-        
+
         // Copy structure stats to dims 32-48
         for i in 0..16 {
             data[32 + i] = (structure_stats[i] / 10.0).min(1.0);
         }
-        
+
         // Field name patterns (dims 48-80)
         if let Some(obj) = content.as_object() {
             for (i, (key, _)) in obj.iter().take(32).enumerate() {
@@ -167,14 +170,14 @@ impl Vector {
                 data[48 + i] = ((hash % 256) as f32) / 255.0;
             }
         }
-        
+
         // Causal fingerprint (dims 80-128)
         // Based on content hash - creates natural clustering
         for i in 0..48 {
             let byte_idx = i % content_bytes.len().max(1);
             data[80 + i] = (content_bytes[byte_idx] as f32) / 255.0;
         }
-        
+
         // Normalize to unit sphere
         let magnitude: f32 = data.iter().map(|x| x * x).sum::<f32>().sqrt();
         if magnitude > 0.0 {
@@ -182,7 +185,7 @@ impl Vector {
                 *val /= magnitude;
             }
         }
-        
+
         Self::new(data, "distinction-synthesis-v1")
     }
 

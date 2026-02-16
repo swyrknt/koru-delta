@@ -8,8 +8,8 @@
 //!
 //! Run: cargo run --example snsw_demo --release
 
-use koru_delta::vector::snsw::{SearchTier, SynthesisGraph};
 use koru_delta::vector::Vector;
+use koru_delta::vector::snsw::{SearchTier, SynthesisGraph};
 use std::collections::HashMap;
 use std::time::Instant;
 

@@ -438,12 +438,12 @@ impl LineageAgent {
         let engine = self.field.engine_arc();
         let action_distinction = action.to_canonical_structure(engine);
         let new_root = engine.synthesize(&self.local_root, &action_distinction);
-        
+
         // Update family_tree - synthesize this action into the lineage synthesis
         let current_family = self.family_tree.read().unwrap().clone();
         let new_family = engine.synthesize(&current_family, &action_distinction);
         *self.family_tree.write().unwrap() = new_family;
-        
+
         new_root
     }
 }
@@ -484,8 +484,6 @@ impl LocalCausalAgent for LineageAgent {
         new_root
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -672,5 +670,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

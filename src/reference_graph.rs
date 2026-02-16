@@ -35,7 +35,7 @@
 use dashmap::DashMap;
 use std::collections::HashSet;
 
-use crate::causal_graph::{LineageAgent, DistinctionId};
+use crate::causal_graph::{DistinctionId, LineageAgent};
 
 /// The reference graph tracking which distinctions reference which.
 ///

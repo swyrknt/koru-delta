@@ -61,7 +61,9 @@ use crate::engine::{FieldHandle, SharedEngine};
 use crate::error::DeltaResult;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::lifecycle::{LifecycleAgent, LifecycleConfig};
-use crate::memory::{ArchiveAgent, ChronicleAgent, EssenceAgent, TemperatureAgent, TemperatureConfig};
+use crate::memory::{
+    ArchiveAgent, ChronicleAgent, EssenceAgent, TemperatureAgent, TemperatureConfig,
+};
 use crate::query::{HistoryQuery, Query, QueryExecutor, QueryResult};
 use crate::roots::RootType;
 use crate::runtime::sync::RwLock;
@@ -69,7 +71,9 @@ use crate::runtime::{DefaultRuntime, Runtime, WatchReceiver, WatchSender};
 use crate::storage::CausalStorage;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::subscriptions::{ChangeEvent, Subscription, SubscriptionAgent, SubscriptionId};
-use crate::types::{ConnectedDistinction, FullKey, HistoryEntry, RandomCombination, UnconnectedPair, VersionedValue};
+use crate::types::{
+    ConnectedDistinction, FullKey, HistoryEntry, RandomCombination, UnconnectedPair, VersionedValue,
+};
 use crate::vector::{Vector, VectorIndex, VectorSearchOptions, VectorSearchResult};
 use crate::views::{PerspectiveAgent, ViewDefinition, ViewInfo};
 
@@ -312,7 +316,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Load from WAL if exists
         let storage = if persistence::exists(&path).await {
             info!("Loading existing database from WAL");
-            let storage = persistence::load_from_wal(&path, Arc::clone(shared_engine.inner())).await?;
+            let storage =
+                persistence::load_from_wal(&path, Arc::clone(shared_engine.inner())).await?;
             let key_count = storage.key_count();
             info!(keys = key_count, "Database loaded from WAL");
             storage
@@ -352,7 +357,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleAgent::with_config(&shared_engine, LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleAgent::with_config(
+            &shared_engine,
+            LifecycleConfig::default(),
+        ));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -438,7 +446,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleAgent::with_config(&shared_engine, LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleAgent::with_config(
+            &shared_engine,
+            LifecycleConfig::default(),
+        ));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -741,7 +752,10 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
         // Initialize lifecycle manager (non-WASM only)
         #[cfg(not(target_arch = "wasm32"))]
-        let lifecycle = Arc::new(LifecycleAgent::with_config(&shared_engine, LifecycleConfig::default()));
+        let lifecycle = Arc::new(LifecycleAgent::with_config(
+            &shared_engine,
+            LifecycleConfig::default(),
+        ));
 
         // Shutdown channel using runtime
         let (shutdown_tx, shutdown_rx) = runtime.watch_channel(false);
@@ -867,19 +881,21 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ) -> DeltaResult<VersionedValue> {
         let namespace = namespace.into();
         let key = key.into();
-        
+
         // Store the value first
         let result = self.put(&namespace, &key, value).await?;
-        
+
         // Add to causal graph with parent links
         let full_key = format!("{}:{}", namespace, key);
         let parent_ids: Vec<String> = parent_keys
             .into_iter()
             .map(|pk| format!("{}:{}", namespace, pk))
             .collect();
-        
-        self.storage.causal_graph().add_with_parents(full_key, parent_ids);
-        
+
+        self.storage
+            .causal_graph()
+            .add_with_parents(full_key, parent_ids);
+
         debug!(namespace = %namespace, key = %key, "Causal links established");
         Ok(result)
     }
@@ -913,7 +929,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// ];
     /// let results = db.put_batch(items).await?;
     /// ```
-    /// 
+    ///
     /// For simpler usage with owned strings, see `put_batch_values`.
     pub async fn put_batch<T: Serialize>(
         &self,
@@ -1035,13 +1051,13 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             .into_iter()
             .map(|(key, value)| (namespace.clone(), key, value))
             .collect();
-        
+
         // Convert to the format expected by storage
         let mut converted = Vec::with_capacity(batch.len());
         for (ns, key, value) in batch {
             converted.push((ns, key, value));
         }
-        
+
         self.storage.put_batch(converted)
     }
 
@@ -1400,11 +1416,14 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // Merge user metadata with TTL metadata
         let mut ttl_metadata = metadata.unwrap_or(serde_json::Value::Null);
         if let Some(obj) = ttl_metadata.as_object_mut() {
-            obj.insert("__ttl".to_string(), serde_json::json!({
-                "ttl_ticks": ttl_ticks,
-                "created_at_ticks": self.current_tick(),
-                "expires_at_ticks": self.current_tick() + ttl_ticks,
-            }));
+            obj.insert(
+                "__ttl".to_string(),
+                serde_json::json!({
+                    "ttl_ticks": ttl_ticks,
+                    "created_at_ticks": self.current_tick(),
+                    "expires_at_ticks": self.current_tick() + ttl_ticks,
+                }),
+            );
         } else {
             ttl_metadata = serde_json::json!({
                 "__ttl": {
@@ -1416,7 +1435,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         }
 
         // Use put_similar which handles embedding
-        self.put_similar(&namespace, &key, content, Some(ttl_metadata)).await
+        self.put_similar(&namespace, &key, content, Some(ttl_metadata))
+            .await
     }
 
     /// Remove all expired values.
@@ -1469,17 +1489,19 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         match self.get(namespace, key).await {
             Ok(versioned) => {
                 let value = versioned.value();
-                
+
                 // Check for TTL in metadata
                 if let Some(metadata) = value.get("__metadata") {
                     if let Some(ttl_info) = metadata.get("__ttl") {
-                        if let Some(expires_at) = ttl_info.get("expires_at_ticks").and_then(|v| v.as_u64()) {
+                        if let Some(expires_at) =
+                            ttl_info.get("expires_at_ticks").and_then(|v| v.as_u64())
+                        {
                             let current = self.current_tick();
                             return Ok(Some(expires_at.saturating_sub(current)));
                         }
                     }
                 }
-                
+
                 Ok(None)
             }
             Err(_) => Ok(None),
@@ -1511,7 +1533,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             // Check if this was a prediction (has prediction metadata)
             if let Ok(versioned) = self.get(&namespace, &key).await {
                 let value = versioned.value();
-                
+
                 // Check for prediction marker in metadata
                 let is_prediction = value
                     .get("__metadata")
@@ -1547,7 +1569,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     async fn add_to_ttl_index(&self, namespace: &str, key: &str, ttl_ticks: u64) {
         let expires_at = self.current_tick() + ttl_ticks;
         let full_key = format!("{}:{}", namespace, key);
-        
+
         // Store in the TTL namespace for efficient lookup
         let ttl_record = serde_json::json!({
             "namespace": namespace,
@@ -1555,11 +1577,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             "expires_at": expires_at,
         });
 
-        let _ = self.storage.put(
-            "__ttl_index",
-            &full_key,
-            ttl_record,
-        );
+        let _ = self.storage.put("__ttl_index", &full_key, ttl_record);
     }
 
     /// Get all expired items from TTL index.
@@ -1573,7 +1591,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             if let Ok(value) = self.storage.get("__ttl_index", &full_key) {
                 if let Some(expires_at) = value.value().get("expires_at").and_then(|v| v.as_u64()) {
                     if current_tick >= expires_at {
-                        if let Some(namespace) = value.value().get("namespace").and_then(|v| v.as_str()) {
+                        if let Some(namespace) =
+                            value.value().get("namespace").and_then(|v| v.as_str())
+                        {
                             if let Some(key) = value.value().get("key").and_then(|v| v.as_str()) {
                                 expired.push((namespace.to_string(), key.to_string()));
                             }
@@ -1597,7 +1617,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             if let Ok(value) = self.storage.get("__ttl_index", &full_key) {
                 if let Some(expires_at) = value.value().get("expires_at").and_then(|v| v.as_u64()) {
                     if expires_at <= threshold {
-                        if let Some(namespace) = value.value().get("namespace").and_then(|v| v.as_str()) {
+                        if let Some(namespace) =
+                            value.value().get("namespace").and_then(|v| v.as_str())
+                        {
                             if let Some(key) = value.value().get("key").and_then(|v| v.as_str()) {
                                 let remaining = expires_at.saturating_sub(current_tick);
                                 items.push((namespace.to_string(), key.to_string(), remaining));
@@ -1620,11 +1642,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
                 if let Some(expires_at) = value.value().get("expires_at").and_then(|v| v.as_u64()) {
                     if current_tick >= expires_at {
                         // Remove from TTL index (store tombstone)
-                        let _ = self.storage.put(
-                            "__ttl_index",
-                            &full_key,
-                            serde_json::Value::Null,
-                        );
+                        let _ = self
+                            .storage
+                            .put("__ttl_index", &full_key, serde_json::Value::Null);
                     }
                 }
             }
@@ -1680,8 +1700,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let full_key_b = format!("{}:{}", namespace, key_b);
 
         // Check if keys exist in storage
-        if self.storage.get(namespace, key_a).is_err() || 
-           self.storage.get(namespace, key_b).is_err() {
+        if self.storage.get(namespace, key_a).is_err()
+            || self.storage.get(namespace, key_b).is_err()
+        {
             return Ok(false);
         }
 
@@ -1770,8 +1791,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         let full_key_b = format!("{}:{}", namespace, key_b);
 
         // Check if keys exist in storage
-        if self.storage.get(namespace, key_a).is_err() || 
-           self.storage.get(namespace, key_b).is_err() {
+        if self.storage.get(namespace, key_a).is_err()
+            || self.storage.get(namespace, key_b).is_err()
+        {
             return Ok(None);
         }
 
@@ -1790,7 +1812,8 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         // BFS with path tracking
         let mut visited = std::collections::HashSet::new();
         let mut queue = std::collections::VecDeque::new();
-        let mut parent_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut parent_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
 
         queue.push_back(full_key_a.clone());
         visited.insert(full_key_a.clone());
@@ -1798,7 +1821,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         while let Some(current) = queue.pop_front() {
             if current == full_key_b {
                 // Reconstruct path
-                let mut path = vec![key_b.to_string()];  // Return just the key part for readability
+                let mut path = vec![key_b.to_string()]; // Return just the key part for readability
                 let mut current_node = full_key_b.clone();
 
                 while let Some(parent) = parent_map.get(&current_node) {
@@ -1890,7 +1913,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             parents: Vec<String>,
             children: Vec<String>,
         }
-        
+
         let mut scored_distinctions: Vec<ScoredDistinction> = Vec::new();
 
         for node in all_nodes {
@@ -1952,7 +1975,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ///
     /// This method uses the vector index for efficient similarity search,
     /// then filters out pairs that are already causally connected.
-    /// The result is a list of pairs that are similar but disconnected - 
+    /// The result is a list of pairs that are similar but disconnected -
     /// prime candidates for synthesis.
     ///
     /// # Algorithm (ALIS Optimized)
@@ -2036,7 +2059,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             // If we found a vector, use it to find similar items
             if let Some(first_result) = query_vector.first() {
                 let query_vec = &first_result.vector;
-                
+
                 // Search for similar vectors
                 let similar = self.vector_index.search(
                     query_vec,
@@ -2127,14 +2150,12 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         }
 
         // Check if a is an ancestor of b or vice versa
-        let ancestors_b: std::collections::HashSet<_> = 
-            graph.ancestors(b).into_iter().collect();
+        let ancestors_b: std::collections::HashSet<_> = graph.ancestors(b).into_iter().collect();
         if ancestors_b.contains(a) {
             return true;
         }
 
-        let ancestors_a: std::collections::HashSet<_> = 
-            graph.ancestors(a).into_iter().collect();
+        let ancestors_a: std::collections::HashSet<_> = graph.ancestors(a).into_iter().collect();
         if ancestors_a.contains(b) {
             return true;
         }
@@ -2177,7 +2198,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// // Generate 5 random walks of 10 steps each
     /// let combinations = db.random_walk_combinations(5, 10).await?;
     /// for combo in combinations {
-    ///     println!("{} -> {} (novelty: {:.2})", 
+    ///     println!("{} -> {} (novelty: {:.2})",
     ///         combo.start_key, combo.end_key, combo.novelty_score);
     /// }
     /// ```
@@ -2210,7 +2231,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         for _ in 0..n {
             // Pick random starting node
             let start_node = all_nodes.choose(&mut rng).cloned().unwrap_or_default();
-            
+
             // Parse start node
             let parts: Vec<&str> = start_node.split(':').collect();
             if parts.len() < 2 {
@@ -2227,7 +2248,7 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
             for _ in 0..steps {
                 // Get neighbors (parents + children)
                 let mut neighbors: Vec<String> = Vec::new();
-                
+
                 if let Some(parents) = graph.get_parents(&current) {
                     neighbors.extend(parents.iter().cloned());
                 }
@@ -2247,10 +2268,14 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
 
                 // Pick random neighbor
                 let next = neighbors.choose(&mut rng).cloned().unwrap_or_default();
-                
+
                 // Don't go back immediately (avoid oscillation)
                 if path.last() == Some(&next) && neighbors.len() > 1 {
-                    let filtered: Vec<_> = neighbors.iter().filter(|&n| n != &current).cloned().collect();
+                    let filtered: Vec<_> = neighbors
+                        .iter()
+                        .filter(|&n| n != &current)
+                        .cloned()
+                        .collect();
                     if let Some(alt) = filtered.choose(&mut rng) {
                         path.push(current.clone());
                         current = alt.clone();
@@ -2340,13 +2365,13 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ) -> DeltaResult<VersionedValue> {
         let namespace = namespace.into();
         let key = key.into();
-        
+
         // Serialize content for embedding generation
         let content_json = serde_json::to_value(&content)?;
-        
+
         // Synthesize distinction-based embedding
         let vector = crate::vector::Vector::synthesize(&content_json, 128);
-        
+
         // Store using the underlying embed method
         self.embed(&namespace, &key, vector, metadata).await
     }
@@ -2378,10 +2403,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     ) -> DeltaResult<Vec<crate::vector::VectorSearchResult>> {
         let query_json = serde_json::to_value(&query_content)?;
         let query_vector = crate::vector::Vector::synthesize(&query_json, 128);
-        
-        let options = crate::vector::VectorSearchOptions::new()
-            .top_k(top_k);
-        
+
+        let options = crate::vector::VectorSearchOptions::new().top_k(top_k);
+
         self.embed_search(namespace, &query_vector, options).await
     }
 
@@ -2848,7 +2872,9 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
         action: StorageAction,
     ) -> DeltaResult<Distinction> {
         // Validate the action
-        action.validate().map_err(|e| crate::error::DeltaError::InvalidData { reason: e })?;
+        action
+            .validate()
+            .map_err(|e| crate::error::DeltaError::InvalidData { reason: e })?;
 
         // Synthesize: ΔNew = ΔLocal_Root ⊕ ΔAction
         let action_distinction = action.to_canonical_structure(self.field.engine());
@@ -2868,9 +2894,15 @@ impl<R: Runtime> KoruDeltaGeneric<R> {
     /// This performs the actual storage operation based on the action type.
     async fn execute_storage_action(&self, action: &StorageAction) -> DeltaResult<()> {
         match action {
-            StorageAction::Store { namespace, key, value_json } => {
+            StorageAction::Store {
+                namespace,
+                key,
+                value_json,
+            } => {
                 // Store via the existing put mechanism
-                let _ = self.put(namespace.clone(), key.clone(), value_json.clone()).await?;
+                let _ = self
+                    .put(namespace.clone(), key.clone(), value_json.clone())
+                    .await?;
             }
             StorageAction::Retrieve { namespace, key } => {
                 // Retrieve is handled by get, but we don't need the value here
@@ -3196,8 +3228,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_lca_local_causal_agent_trait() {
-        use koru_lambda_core::LocalCausalAgent;
         use crate::actions::StorageAction;
+        use koru_lambda_core::LocalCausalAgent;
 
         let mut db = create_test_db().await;
         let engine = Arc::new(DistinctionEngine::new());
@@ -3229,7 +3261,11 @@ mod tests {
 
         // Should have distinctions (12 roots are created during initialization,
         // each synthesized from d0/d1, so there should be many distinctions)
-        assert!(stats.distinction_count >= 12, "Expected at least 12 distinctions (roots), got {}", stats.distinction_count);
+        assert!(
+            stats.distinction_count >= 12,
+            "Expected at least 12 distinctions (roots), got {}",
+            stats.distinction_count
+        );
     }
 
     #[tokio::test]
@@ -3301,7 +3337,9 @@ mod tests {
         // Should appear in expiring soon list
         let expiring = db.list_expiring_soon(10).await;
         assert!(!expiring.is_empty());
-        let found = expiring.iter().any(|(ns, key, _)| ns == "test" && key == "key1");
+        let found = expiring
+            .iter()
+            .any(|(ns, key, _)| ns == "test" && key == "key1");
         assert!(found, "Key should be in expiring list");
 
         // Wait for expiration
@@ -3313,7 +3351,9 @@ mod tests {
 
         // Should no longer be in expiring list
         let expiring_after = db.list_expiring_soon(10).await;
-        let still_exists = expiring_after.iter().any(|(ns, key, _)| ns == "test" && key == "key1");
+        let still_exists = expiring_after
+            .iter()
+            .any(|(ns, key, _)| ns == "test" && key == "key1");
         assert!(!still_exists, "Key should be removed after cleanup");
     }
 
@@ -3322,9 +3362,15 @@ mod tests {
         let db = create_test_db().await;
 
         // Store items with different TTLs
-        db.put_with_ttl("test", "short", json!({}), 5).await.unwrap();
-        db.put_with_ttl("test", "long", json!({}), 100).await.unwrap();
-        db.put_with_ttl("other", "medium", json!({}), 50).await.unwrap();
+        db.put_with_ttl("test", "short", json!({}), 5)
+            .await
+            .unwrap();
+        db.put_with_ttl("test", "long", json!({}), 100)
+            .await
+            .unwrap();
+        db.put_with_ttl("other", "medium", json!({}), 50)
+            .await
+            .unwrap();
 
         // List items expiring within 10 seconds
         let expiring = db.list_expiring_soon(10).await;
@@ -3344,7 +3390,7 @@ mod tests {
         db.put("graph", "A", json!({"next": "B"})).await.unwrap();
         db.put("graph", "B", json!({"next": "C"})).await.unwrap();
         db.put("graph", "C", json!({})).await.unwrap();
-        
+
         // Note: In the actual implementation, causality is tracked through
         // the causal graph when using put_with_parents or through synthesis
         // For this test, we're checking the API exists and returns a result
@@ -3364,11 +3410,9 @@ mod tests {
         }
 
         // Get highly connected (should return results even if empty)
-        let results: Vec<ConnectedDistinction> = db
-            .get_highly_connected(Some("test"), 3)
-            .await
-            .unwrap();
-        
+        let results: Vec<ConnectedDistinction> =
+            db.get_highly_connected(Some("test"), 3).await.unwrap();
+
         // Results should be a vector (may be empty if no causal graph connections)
         assert!(results.len() <= 5);
     }
@@ -3407,10 +3451,7 @@ mod tests {
         }
 
         // Generate random walk combinations
-        let combinations: Vec<RandomCombination> = db
-            .random_walk_combinations(3, 5)
-            .await
-            .unwrap();
+        let combinations: Vec<RandomCombination> = db.random_walk_combinations(3, 5).await.unwrap();
 
         // Should return a vector
         assert!(combinations.len() <= 3);
@@ -3439,7 +3480,9 @@ mod tests {
 
         // Step 2: Verify it appears in expiring soon list
         let expiring = db.list_expiring_soon(100).await;
-        let found = expiring.iter().any(|(ns, key, _)| ns == "predictions" && key == "weather");
+        let found = expiring
+            .iter()
+            .any(|(ns, key, _)| ns == "predictions" && key == "weather");
         assert!(found, "Prediction should be in expiring list");
 
         // Step 3: Store observations
@@ -3451,12 +3494,18 @@ mod tests {
             .unwrap();
 
         // Step 4: Get highly connected distinctions
-        let connected = db.get_highly_connected(Some("observations"), 5).await.unwrap();
+        let connected = db
+            .get_highly_connected(Some("observations"), 5)
+            .await
+            .unwrap();
         // Should not panic, returns vector
         let _ = connected.len();
 
         // Step 5: Find synthesis candidates
-        let pairs = db.find_similar_unconnected_pairs(None, 5, 0.6).await.unwrap();
+        let pairs = db
+            .find_similar_unconnected_pairs(None, 5, 0.6)
+            .await
+            .unwrap();
         // Should not panic, returns vector
         let _ = pairs.len();
 

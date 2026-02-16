@@ -25,8 +25,8 @@
 //! their operations with KoruDelta's internal state.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use koru_lambda_core::{Canonicalizable, Distinction};
 
@@ -400,9 +400,10 @@ impl KoruOrchestrator {
         }
 
         // Synthesize all roots together
-        let combined_root = roots.iter().skip(1).fold(roots[0].clone(), |acc, root| {
-            engine.synthesize(&acc, root)
-        });
+        let combined_root = roots
+            .iter()
+            .skip(1)
+            .fold(roots[0].clone(), |acc, root| engine.synthesize(&acc, root));
 
         // Synthesize with action
         let action_distinction = action.to_canonical_structure(engine);
@@ -498,11 +499,7 @@ impl AgentRegistry {
     pub fn find_by_capability(&self, capability: AgentCapability) -> Vec<&AgentInfo> {
         self.capabilities
             .get(&capability)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.agents.get(id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.agents.get(id)).collect())
             .unwrap_or_default()
     }
 }
@@ -721,7 +718,8 @@ mod tests {
 
         orch.register_agent(agent);
 
-        let found = orch.find_agents_by_capability(AgentCapability::Custom("my_feature".to_string()));
+        let found =
+            orch.find_agents_by_capability(AgentCapability::Custom("my_feature".to_string()));
         assert_eq!(found.len(), 1);
     }
 }

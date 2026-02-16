@@ -239,7 +239,9 @@ impl VectorAgent {
 
         // Include key in synthesis
         let key_distinction = bytes_to_distinction(key.as_bytes(), &self.engine);
-        let combined = self.engine.synthesize(&vector_distinction, &key_distinction);
+        let combined = self
+            .engine
+            .synthesize(&vector_distinction, &key_distinction);
 
         // Include model in synthesis
         let model_distinction = bytes_to_distinction(model.as_bytes(), &self.engine);

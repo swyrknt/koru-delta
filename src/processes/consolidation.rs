@@ -32,8 +32,8 @@ use crate::memory::{ArchiveAgent, ChronicleAgent, TemperatureAgent};
 use crate::roots::RootType;
 use crate::types::{FullKey, VectorClock, VersionedValue};
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Sleep agent configuration.
 #[derive(Debug, Clone)]
@@ -179,7 +179,12 @@ impl SleepAgent {
     /// # LCA Pattern
     ///
     /// Consolidation synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔConsolidate_Action`
-    pub fn handle_hot_eviction(&self, warm: &ChronicleAgent, key: FullKey, versioned: VersionedValue) {
+    pub fn handle_hot_eviction(
+        &self,
+        warm: &ChronicleAgent,
+        key: FullKey,
+        versioned: VersionedValue,
+    ) {
         // Synthesize consolidate action
         let action = SleepAction::Consolidate {
             from_tier: "hot".to_string(),
@@ -381,8 +386,6 @@ pub struct ConsolidationStats {
     pub warm_to_cold: u64,
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -531,5 +534,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

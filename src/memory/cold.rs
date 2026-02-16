@@ -37,15 +37,15 @@ use crate::actions::ArchiveAction;
 use crate::causal_graph::DistinctionId;
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::roots::RootType;
-use crate::types::{FullKey, VersionedValue};
 #[cfg(test)]
 use crate::types::VectorClock;
+use crate::types::{FullKey, VersionedValue};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Archive agent configuration.
 #[derive(Debug, Clone)]
@@ -483,10 +483,6 @@ pub struct ArchiveStats {
     pub total_distinctions: usize,
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -693,5 +689,4 @@ mod tests {
         agent.update_local_root(new_root.clone());
         assert_eq!(agent.get_current_root().id(), new_root.id());
     }
-
 }

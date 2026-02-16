@@ -111,39 +111,36 @@ pub mod http;
 
 // Public exports from sub-modules
 pub use capability::{
-    authorize, check_permission, create_capability, create_revocation, CapabilityManager,
+    CapabilityManager, authorize, check_permission, create_capability, create_revocation,
 };
 pub use identity::{
-    mine_identity, sign_message,
-    sign_message_base58, verify_identity_pow, verify_signature, DEFAULT_DIFFICULTY, MAX_DIFFICULTY,
-    MIN_DIFFICULTY,
+    DEFAULT_DIFFICULTY, MAX_DIFFICULTY, MIN_DIFFICULTY, mine_identity, sign_message,
+    sign_message_base58, verify_identity_pow, verify_signature,
 };
 #[cfg(not(target_arch = "wasm32"))]
-pub use identity::{
-    estimate_hash_rate, estimate_mining_time_ms, mine_identity_sync,
-};
+pub use identity::{estimate_hash_rate, estimate_mining_time_ms, mine_identity_sync};
 pub use manager::{IdentityAgent, IdentityConfig, IdentityStats};
 pub use session::{
-    create_session_token, derive_session_keys, validate_session_token, SessionAgent,
-    DEFAULT_SESSION_TTL_SECONDS, MAX_SESSION_TTL_SECONDS,
+    DEFAULT_SESSION_TTL_SECONDS, MAX_SESSION_TTL_SECONDS, SessionAgent, create_session_token,
+    derive_session_keys, validate_session_token,
 };
-pub use storage::{AuthStorageAdapter, AUTH_NAMESPACE};
+pub use storage::{AUTH_NAMESPACE, AuthStorageAdapter};
 pub use types::{
     AuthError, Capability, CapabilityRef, Challenge, Identity, IdentityUserData, Permission,
     ResourcePattern, Revocation, Session,
 };
 pub use verification::{
-    create_challenge_response, verify_challenge_response, ChallengeStore,
-    DEFAULT_CHALLENGE_TTL_SECONDS,
+    ChallengeStore, DEFAULT_CHALLENGE_TTL_SECONDS, create_challenge_response,
+    verify_challenge_response,
 };
 
 // HTTP exports (requires http feature)
 #[cfg(all(not(target_arch = "wasm32"), feature = "http"))]
 pub use http::{
-    auth_layer, auth_routes, extract_auth_context, protected_routes, require_auth_context,
     AuthContext, AuthorizeRequest, AuthorizeResponse, CapabilityInfo, CapabilityResponse,
     ChallengeRequest, ChallengeResponse, GrantCapabilityRequest, RegisterRequest, RegisterResponse,
     SessionInfo, SessionResponse, ValidateSessionRequest, ValidateSessionResponse, VerifyRequest,
+    auth_layer, auth_routes, extract_auth_context, protected_routes, require_auth_context,
 };
 
 use crate::engine::SharedEngine;

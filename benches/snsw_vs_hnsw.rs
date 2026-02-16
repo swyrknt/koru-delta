@@ -9,12 +9,12 @@
 //! - Recall@K: Fraction of true nearest neighbors found
 //! - Memory usage: Relative memory consumption
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use koru_delta::vector::{HnswConfig, HnswIndex, SynthesisGraph, Vector};
-use rand::rngs::StdRng;
-use rand::seq::SliceRandom;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
 
 /// Generate deterministic random vectors for reproducible benchmarks
 fn generate_vectors(count: usize, dim: usize, seed: u64) -> Vec<Vector> {
@@ -22,7 +22,7 @@ fn generate_vectors(count: usize, dim: usize, seed: u64) -> Vec<Vector> {
 
     (0..count)
         .map(|i| {
-            let data: Vec<f32> = (0..dim).map(|_| rng.gen::<f32>() * 2.0 - 1.0).collect();
+            let data: Vec<f32> = (0..dim).map(|_| rng.r#gen::<f32>() * 2.0 - 1.0).collect();
             // Use different models to simulate real-world usage
             let model = match i % 3 {
                 0 => "text-embedding-3-small",

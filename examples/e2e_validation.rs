@@ -5,9 +5,7 @@
 //!
 //! Run with: cargo run --example e2e_validation
 
-use koru_delta::{
-    json, KoruDelta,
-};
+use koru_delta::{KoruDelta, json};
 use std::time::Instant;
 
 #[tokio::main]
@@ -44,24 +42,25 @@ async fn main() {
     // 1.1 Simple put/get
     print!("   1.1 Put/Get single value... ");
     let start = Instant::now();
-    match db.put("users", "alice", json!({"name": "Alice", "age": 30})).await {
-        Ok(_) => {
-            match db.get("users", "alice").await {
-                Ok(v) => {
-                    if v.value()["name"] == "Alice" && v.value()["age"] == 30 {
-                        println!("✅ ({:?})", start.elapsed());
-                        passed += 1;
-                    } else {
-                        println!("❌ Data mismatch");
-                        failed += 1;
-                    }
-                }
-                Err(e) => {
-                    println!("❌ Get failed: {}", e);
+    match db
+        .put("users", "alice", json!({"name": "Alice", "age": 30}))
+        .await
+    {
+        Ok(_) => match db.get("users", "alice").await {
+            Ok(v) => {
+                if v.value()["name"] == "Alice" && v.value()["age"] == 30 {
+                    println!("✅ ({:?})", start.elapsed());
+                    passed += 1;
+                } else {
+                    println!("❌ Data mismatch");
                     failed += 1;
                 }
             }
-        }
+            Err(e) => {
+                println!("❌ Get failed: {}", e);
+                failed += 1;
+            }
+        },
         Err(e) => {
             println!("❌ Put failed: {}", e);
             failed += 1;
@@ -126,23 +125,21 @@ async fn main() {
         }
     });
     match db.put("complex", "data", complex.clone()).await {
-        Ok(_) => {
-            match db.get("complex", "data").await {
-                Ok(v) => {
-                    if v.value() == &complex {
-                        println!("✅ ({:?})", start.elapsed());
-                        passed += 1;
-                    } else {
-                        println!("❌ Data corruption");
-                        failed += 1;
-                    }
-                }
-                Err(e) => {
-                    println!("❌ Get failed: {}", e);
+        Ok(_) => match db.get("complex", "data").await {
+            Ok(v) => {
+                if v.value() == &complex {
+                    println!("✅ ({:?})", start.elapsed());
+                    passed += 1;
+                } else {
+                    println!("❌ Data corruption");
                     failed += 1;
                 }
             }
-        }
+            Err(e) => {
+                println!("❌ Get failed: {}", e);
+                failed += 1;
+            }
+        },
         Err(e) => {
             println!("❌ Put failed: {}", e);
             failed += 1;
@@ -157,23 +154,21 @@ async fn main() {
         .collect::<serde_json::Map<String, serde_json::Value>>()
         .into();
     match db.put("large", "data", large_data.clone()).await {
-        Ok(_) => {
-            match db.get("large", "data").await {
-                Ok(v) => {
-                    if v.value() == &large_data {
-                        println!("✅ ({:?})", start.elapsed());
-                        passed += 1;
-                    } else {
-                        println!("❌ Data corruption");
-                        failed += 1;
-                    }
-                }
-                Err(e) => {
-                    println!("❌ Get failed: {}", e);
+        Ok(_) => match db.get("large", "data").await {
+            Ok(v) => {
+                if v.value() == &large_data {
+                    println!("✅ ({:?})", start.elapsed());
+                    passed += 1;
+                } else {
+                    println!("❌ Data corruption");
                     failed += 1;
                 }
             }
-        }
+            Err(e) => {
+                println!("❌ Get failed: {}", e);
+                failed += 1;
+            }
+        },
         Err(e) => {
             println!("❌ Put failed: {}", e);
             failed += 1;
@@ -292,10 +287,17 @@ async fn main() {
     let namespaces = db.list_namespaces().await;
     // Should have: users, ns0-4, complex, large, empty, version, plus more
     if namespaces.len() >= 8 {
-        println!("✅ (found {} namespaces, {:?})", namespaces.len(), start.elapsed());
+        println!(
+            "✅ (found {} namespaces, {:?})",
+            namespaces.len(),
+            start.elapsed()
+        );
         passed += 1;
     } else {
-        println!("❌ Expected at least 8 namespaces, found {}", namespaces.len());
+        println!(
+            "❌ Expected at least 8 namespaces, found {}",
+            namespaces.len()
+        );
         failed += 1;
     }
 
@@ -304,7 +306,9 @@ async fn main() {
     let start = Instant::now();
     // Put some keys
     for i in 0..10 {
-        db.put("list_test", &format!("key{}", i), json!(i)).await.unwrap();
+        db.put("list_test", &format!("key{}", i), json!(i))
+            .await
+            .unwrap();
     }
     let keys = db.list_keys("list_test").await;
     if keys.len() == 10 {
@@ -320,28 +324,36 @@ async fn main() {
     let start = Instant::now();
     // Populate data
     for i in 0..100 {
-        db.put("query_test", &format!("item{}", i), json!({
-            "category": i % 10,
-            "value": i * 10
-        })).await.unwrap();
+        db.put(
+            "query_test",
+            &format!("item{}", i),
+            json!({
+                "category": i % 10,
+                "value": i * 10
+            }),
+        )
+        .await
+        .unwrap();
     }
-    
+
     // Query with a filter using Query struct
-    use koru_delta::query::{Query, Filter};
+    use koru_delta::query::{Filter, Query};
     let query = Query {
-        filters: vec![
-            Filter::eq("category", 5)
-        ],
+        filters: vec![Filter::eq("category", 5)],
         limit: Some(10),
         ..Default::default()
     };
-    
+
     let results = db.query("query_test", query).await;
-    
+
     match results {
         Ok(items) => {
             if items.records.len() == 10 {
-                println!("✅ (found {} items, {:?})", items.records.len(), start.elapsed());
+                println!(
+                    "✅ (found {} items, {:?})",
+                    items.records.len(),
+                    start.elapsed()
+                );
                 passed += 1;
             } else {
                 println!("❌ Expected 10 items, found {}", items.records.len());
@@ -377,7 +389,9 @@ async fn main() {
     // 4.2 Delete and verify
     print!("   4.2 Delete operation... ");
     let start = Instant::now();
-    db.put("delete_test", "todelete", json!({"data": "value"})).await.unwrap();
+    db.put("delete_test", "todelete", json!({"data": "value"}))
+        .await
+        .unwrap();
     if let Err(e) = db.delete("delete_test", "todelete").await {
         println!("❌ Delete failed: {}", e);
         failed += 1;
@@ -413,7 +427,9 @@ async fn main() {
     for i in 0..100 {
         let db_clone = db.clone();
         handles.push(tokio::spawn(async move {
-            db_clone.put("concurrent", &format!("key{}", i), json!({"id": i})).await
+            db_clone
+                .put("concurrent", &format!("key{}", i), json!({"id": i}))
+                .await
         }));
     }
     let mut all_ok = true;
@@ -441,17 +457,19 @@ async fn main() {
     print!("   5.2 Concurrent reads/writes... ");
     let start = Instant::now();
     let mut handles = vec![];
-    
+
     // Spawn writers
     for i in 0..10 {
         let db_clone = db.clone();
         handles.push(tokio::spawn(async move {
             for j in 0..10 {
-                let _ = db_clone.put("rw_test", "shared", json!({"writer": i, "iter": j})).await;
+                let _ = db_clone
+                    .put("rw_test", "shared", json!({"writer": i, "iter": j}))
+                    .await;
             }
         }));
     }
-    
+
     // Spawn readers
     for _ in 0..10 {
         let db_clone = db.clone();
@@ -461,7 +479,7 @@ async fn main() {
             }
         }));
     }
-    
+
     let mut rw_ok = true;
     for handle in handles {
         if let Err(e) = handle.await {
@@ -501,10 +519,19 @@ async fn main() {
     println!("\n╔══════════════════════════════════════════════════════════════╗");
     println!("║                      VALIDATION SUMMARY                      ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║  ✅ Passed: {:3}                                              ║", passed);
-    println!("║  ❌ Failed: {:3}                                              ║", failed);
+    println!(
+        "║  ✅ Passed: {:3}                                              ║",
+        passed
+    );
+    println!(
+        "║  ❌ Failed: {:3}                                              ║",
+        failed
+    );
     println!("║  ─────────────────────────────────────────────────────────   ║");
-    println!("║  Total:    {:3}                                               ║", passed + failed);
+    println!(
+        "║  Total:    {:3}                                               ║",
+        passed + failed
+    );
     println!("╚══════════════════════════════════════════════════════════════╝");
 
     if failed > 0 {

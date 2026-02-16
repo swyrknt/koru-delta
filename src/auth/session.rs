@@ -324,8 +324,6 @@ impl LocalCausalAgent for SessionAgent {
     }
 }
 
-
-
 impl Default for SessionAgent {
     fn default() -> Self {
         let field = SharedEngine::new();
@@ -611,7 +609,7 @@ mod tests {
         #[test]
         fn test_session_agent_implements_lca_trait() {
             let agent = setup_agent();
-            
+
             // Verify trait is implemented
             let _root = agent.get_current_root();
         }
@@ -635,14 +633,14 @@ mod tests {
             let mut agent = setup_agent();
             let root_before = agent.local_root().id().to_string();
 
-            let (session, _keys, new_root) = agent.create_session_synthesized(
-                "test_identity",
-                "test_challenge",
-                vec![],
-            );
+            let (session, _keys, new_root) =
+                agent.create_session_synthesized("test_identity", "test_challenge", vec![]);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
             assert_eq!(session.identity_key, "test_identity");
         }
@@ -650,13 +648,10 @@ mod tests {
         #[test]
         fn test_validate_session_synthesizes() {
             let mut agent = setup_agent();
-            
+
             // First create a session
-            let (session, _keys, _) = agent.create_session_synthesized(
-                "test_identity",
-                "test_challenge",
-                vec![],
-            );
+            let (session, _keys, _) =
+                agent.create_session_synthesized("test_identity", "test_challenge", vec![]);
 
             let root_before = agent.local_root().id().to_string();
 
@@ -664,20 +659,20 @@ mod tests {
             assert!(result.is_ok());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after validation synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after validation synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
         #[test]
         fn test_invalidate_session_synthesizes() {
             let mut agent = setup_agent();
-            
+
             // First create a session
-            let (session, _keys, _) = agent.create_session_synthesized(
-                "test_identity",
-                "test_challenge",
-                vec![],
-            );
+            let (session, _keys, _) =
+                agent.create_session_synthesized("test_identity", "test_challenge", vec![]);
 
             let root_before = agent.local_root().id().to_string();
 
@@ -685,7 +680,10 @@ mod tests {
             assert!(result.is_ok());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after invalidation synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after invalidation synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -693,7 +691,7 @@ mod tests {
         fn test_cleanup_expired_synthesizes() {
             let field = SharedEngine::new();
             let mut agent = SessionAgent::with_ttl(&field, 0); // 0 second TTL
-            
+
             // Create some sessions
             for i in 0..3 {
                 agent.create_session_synthesized(&format!("identity_{}", i), "challenge", vec![]);
@@ -706,7 +704,10 @@ mod tests {
             assert_eq!(removed, 3);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after cleanup synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after cleanup synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -714,7 +715,7 @@ mod tests {
         fn test_revoke_all_for_identity_synthesizes() {
             let mut agent = setup_agent();
             let identity_key = "test_identity";
-            
+
             // Create multiple sessions for same identity
             for i in 0..3 {
                 agent.create_session_synthesized(identity_key, &format!("challenge{}", i), vec![]);
@@ -728,7 +729,10 @@ mod tests {
             assert_eq!(removed, 3);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after revoke all synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after revoke all synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
     }

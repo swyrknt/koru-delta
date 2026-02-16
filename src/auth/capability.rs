@@ -141,7 +141,7 @@ pub fn is_revoked(_capability: &Capability, revocations: &[Revocation]) -> bool 
 }
 
 /// Build a capability reference for storage.
-/// 
+///
 /// Used when persisting capabilities to the field via synthesis.
 pub fn build_capability_ref(capability: &Capability) -> CapabilityRef {
     CapabilityRef {
@@ -433,33 +433,39 @@ mod tests {
         .unwrap();
 
         // Admin includes Read, Write, Admin
-        assert!(authorize(
-            &grantee,
-            "test",
-            "anything",
-            Permission::Read,
-            std::slice::from_ref(&cap),
-            &[]
-        )
-        .is_ok());
-        assert!(authorize(
-            &grantee,
-            "test",
-            "anything",
-            Permission::Write,
-            std::slice::from_ref(&cap),
-            &[]
-        )
-        .is_ok());
-        assert!(authorize(
-            &grantee,
-            "test",
-            "anything",
-            Permission::Admin,
-            std::slice::from_ref(&cap),
-            &[]
-        )
-        .is_ok());
+        assert!(
+            authorize(
+                &grantee,
+                "test",
+                "anything",
+                Permission::Read,
+                std::slice::from_ref(&cap),
+                &[]
+            )
+            .is_ok()
+        );
+        assert!(
+            authorize(
+                &grantee,
+                "test",
+                "anything",
+                Permission::Write,
+                std::slice::from_ref(&cap),
+                &[]
+            )
+            .is_ok()
+        );
+        assert!(
+            authorize(
+                &grantee,
+                "test",
+                "anything",
+                Permission::Admin,
+                std::slice::from_ref(&cap),
+                &[]
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -478,15 +484,17 @@ mod tests {
         .unwrap();
 
         // Initially authorized
-        assert!(authorize(
-            &grantee,
-            "test",
-            "resource",
-            Permission::Read,
-            std::slice::from_ref(&cap),
-            &[]
-        )
-        .is_ok());
+        assert!(
+            authorize(
+                &grantee,
+                "test",
+                "resource",
+                Permission::Read,
+                std::slice::from_ref(&cap),
+                &[]
+            )
+            .is_ok()
+        );
 
         // Create revocation
         let revocation = create_revocation(&cap, &secret_key, Some("Testing".to_string())).unwrap();
@@ -585,24 +593,28 @@ mod tests {
         )
         .unwrap();
 
-        assert!(authorize(
-            &grantee,
-            "users",
-            "alice:profile",
-            Permission::Read,
-            std::slice::from_ref(&cap),
-            &[]
-        )
-        .is_ok());
-        assert!(authorize(
-            &grantee,
-            "users",
-            "alice:settings",
-            Permission::Read,
-            std::slice::from_ref(&cap),
-            &[]
-        )
-        .is_ok());
+        assert!(
+            authorize(
+                &grantee,
+                "users",
+                "alice:profile",
+                Permission::Read,
+                std::slice::from_ref(&cap),
+                &[]
+            )
+            .is_ok()
+        );
+        assert!(
+            authorize(
+                &grantee,
+                "users",
+                "alice:settings",
+                Permission::Read,
+                std::slice::from_ref(&cap),
+                &[]
+            )
+            .is_ok()
+        );
         assert!(matches!(
             authorize(
                 &grantee,

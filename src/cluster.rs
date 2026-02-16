@@ -15,7 +15,7 @@
 /// - Eventually consistent with causal ordering
 /// - Nodes can join/leave at any time
 use crate::error::{DeltaError, DeltaResult};
-use crate::network::{Connection, Listener, Message, NodeId, PeerInfo, PeerStatus, DEFAULT_PORT};
+use crate::network::{Connection, DEFAULT_PORT, Listener, Message, NodeId, PeerInfo, PeerStatus};
 use crate::storage::CausalStorage;
 use crate::types::{FullKey, VectorClock, VersionedValue};
 use chrono::Utc;
@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tokio::time::interval;
 
 /// Configuration for a cluster node.
@@ -523,7 +523,7 @@ impl ClusterNode {
             value: value.clone(),
         };
         let version_id = value.write_id.clone();
-        
+
         for peer in self.state.get_peers() {
             let _node_id = self.node_id.clone();
             let message = message.clone();
@@ -561,7 +561,11 @@ impl ClusterNode {
                                         && ack_key == key
                                         && ack_version == version_id
                                     {
-                                        tracing::trace!("Received ACK from {} for {}", peer.node_id, version_id);
+                                        tracing::trace!(
+                                            "Received ACK from {} for {}",
+                                            peer.node_id,
+                                            version_id
+                                        );
                                         return; // Success!
                                     }
                                 }

@@ -12,7 +12,7 @@
 //! - View operations
 //! - Subscription operations
 
-use koru_delta::{json, KoruDelta};
+use koru_delta::{KoruDelta, json};
 
 /// Test all storage CRUD operations
 #[tokio::test]
@@ -20,18 +20,14 @@ async fn test_storage_crud_operations() {
     let db = KoruDelta::start().await.unwrap();
 
     // Create
-    db.put("test", "key1", json!({"value": 1}))
-        .await
-        .unwrap();
+    db.put("test", "key1", json!({"value": 1})).await.unwrap();
 
     // Read
     let versioned = db.get("test", "key1").await.unwrap();
     assert_eq!(versioned.value()["value"], 1);
 
     // Update
-    db.put("test", "key1", json!({"value": 2}))
-        .await
-        .unwrap();
+    db.put("test", "key1", json!({"value": 2})).await.unwrap();
     let versioned = db.get("test", "key1").await.unwrap();
     assert_eq!(versioned.value()["value"], 2);
 
@@ -178,19 +174,34 @@ async fn test_large_values() {
 async fn test_empty_values() {
     let db = KoruDelta::start().await.unwrap();
 
-    db.put("empty_test", "empty_obj", json!({}))
-        .await
-        .unwrap();
-    db.put("empty_test", "empty_arr", json!([]))
-        .await
-        .unwrap();
-    db.put("empty_test", "null_val", json!(null))
-        .await
-        .unwrap();
+    db.put("empty_test", "empty_obj", json!({})).await.unwrap();
+    db.put("empty_test", "empty_arr", json!([])).await.unwrap();
+    db.put("empty_test", "null_val", json!(null)).await.unwrap();
 
-    assert_eq!(db.get("empty_test", "empty_obj").await.unwrap().value().clone(), json!({}));
-    assert_eq!(db.get("empty_test", "empty_arr").await.unwrap().value().clone(), json!([]));
-    assert_eq!(db.get("empty_test", "null_val").await.unwrap().value().clone(), json!(null));
+    assert_eq!(
+        db.get("empty_test", "empty_obj")
+            .await
+            .unwrap()
+            .value()
+            .clone(),
+        json!({})
+    );
+    assert_eq!(
+        db.get("empty_test", "empty_arr")
+            .await
+            .unwrap()
+            .value()
+            .clone(),
+        json!([])
+    );
+    assert_eq!(
+        db.get("empty_test", "null_val")
+            .await
+            .unwrap()
+            .value()
+            .clone(),
+        json!(null)
+    );
 }
 
 /// Test special characters in keys
@@ -303,8 +314,12 @@ async fn test_namespace_isolation() {
     let db = KoruDelta::start().await.unwrap();
 
     // Same key in different namespaces
-    db.put("ns_a", "shared_key", json!({"ns": "a"})).await.unwrap();
-    db.put("ns_b", "shared_key", json!({"ns": "b"})).await.unwrap();
+    db.put("ns_a", "shared_key", json!({"ns": "a"}))
+        .await
+        .unwrap();
+    db.put("ns_b", "shared_key", json!({"ns": "b"}))
+        .await
+        .unwrap();
 
     let val_a = db.get("ns_a", "shared_key").await.unwrap();
     let val_b = db.get("ns_b", "shared_key").await.unwrap();

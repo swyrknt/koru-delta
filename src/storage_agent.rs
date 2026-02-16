@@ -25,9 +25,7 @@ use crate::error::{DeltaError, DeltaResult};
 use crate::mapper::DocumentMapper;
 use crate::reference_graph::ReferenceGraph;
 use crate::roots::RootType;
-use crate::types::{
-    FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue,
-};
+use crate::types::{FullKey, HistoryEntry, Tombstone, VectorClock, VersionedValue};
 use chrono::Utc;
 use dashmap::DashMap;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
@@ -204,10 +202,7 @@ impl StorageAgent {
     /// Query with a pattern, synthesizing the Query action.
     ///
     /// Formula: `ΔNew = ΔLocal_Root ⊕ ΔQuery`
-    pub fn query(
-        &mut self,
-        pattern: JsonValue,
-    ) -> DeltaResult<Vec<(FullKey, VersionedValue)>> {
+    pub fn query(&mut self, pattern: JsonValue) -> DeltaResult<Vec<(FullKey, VersionedValue)>> {
         // Synthesize the Query action
         let action = StorageAction::Query {
             pattern_json: pattern.clone(),
@@ -237,11 +232,7 @@ impl StorageAgent {
     }
 
     /// Check if a key exists.
-    pub fn contains_key(
-        &self,
-        namespace: impl Into<String>,
-        key: impl Into<String>,
-    ) -> bool {
+    pub fn contains_key(&self, namespace: impl Into<String>, key: impl Into<String>) -> bool {
         let full_key = FullKey::new(namespace, key);
         self.current_state.contains_key(&full_key)
     }
@@ -332,18 +323,17 @@ impl StorageAgent {
     }
 
     /// Check if a key has a tombstone.
-    pub fn has_tombstone(
-        &self,
-        namespace: impl Into<String>,
-        key: impl Into<String>,
-    ) -> bool {
+    pub fn has_tombstone(&self, namespace: impl Into<String>, key: impl Into<String>) -> bool {
         let full_key = FullKey::new(namespace, key);
         self.tombstones.contains_key(&full_key)
     }
 
     /// Get all tombstones.
     pub fn get_all_tombstones(&self) -> Vec<Tombstone> {
-        self.tombstones.iter().map(|entry| entry.value().clone()).collect()
+        self.tombstones
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 
     /// Insert a tombstone directly (for persistence replay).
@@ -424,11 +414,7 @@ impl StorageAgent {
     }
 
     /// Apply a Retrieve action.
-    fn apply_retrieve(
-        &self,
-        namespace: &str,
-        key: &str,
-    ) -> DeltaResult<VersionedValue> {
+    fn apply_retrieve(&self, namespace: &str, key: &str) -> DeltaResult<VersionedValue> {
         let full_key = FullKey::new(namespace, key);
 
         // Check for tombstone first
@@ -450,11 +436,7 @@ impl StorageAgent {
     }
 
     /// Apply a History action.
-    fn apply_history(
-        &self,
-        namespace: &str,
-        key: &str,
-    ) -> DeltaResult<Vec<HistoryEntry>> {
+    fn apply_history(&self, namespace: &str, key: &str) -> DeltaResult<Vec<HistoryEntry>> {
         let full_key = FullKey::new(namespace, key);
 
         // Get current version
@@ -464,7 +446,7 @@ impl StorageAgent {
                 return Err(DeltaError::KeyNotFound {
                     namespace: namespace.to_string(),
                     key: key.to_string(),
-                })
+                });
             }
         };
 
@@ -491,11 +473,7 @@ impl StorageAgent {
     }
 
     /// Apply a Delete action.
-    fn apply_delete(
-        &self,
-        namespace: &str,
-        key: &str,
-    ) -> DeltaResult<Tombstone> {
+    fn apply_delete(&self, namespace: &str, key: &str) -> DeltaResult<Tombstone> {
         let full_key = FullKey::new(namespace, key);
 
         // Create tombstone
@@ -515,10 +493,7 @@ impl StorageAgent {
     }
 
     /// Apply a Query action.
-    fn apply_query(
-        &self,
-        _pattern: &JsonValue,
-    ) -> DeltaResult<Vec<(FullKey, VersionedValue)>> {
+    fn apply_query(&self, _pattern: &JsonValue) -> DeltaResult<Vec<(FullKey, VersionedValue)>> {
         // Basic implementation: return all entries
         // TODO: Implement actual pattern matching
         let results: Vec<(FullKey, VersionedValue)> = self
@@ -562,8 +537,6 @@ impl LocalCausalAgent for StorageAgent {
 // BACKWARD COMPATIBILITY
 // ============================================================================
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -577,7 +550,7 @@ mod tests {
     #[test]
     fn test_storage_agent_implements_lca_trait() {
         let agent = setup_agent();
-        
+
         // Verify trait is implemented
         let _root = agent.get_current_root();
     }
@@ -591,15 +564,20 @@ mod tests {
         assert!(result.is_ok());
 
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after synthesis");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after synthesis"
+        );
     }
 
     #[test]
     fn test_get_synthesizes() {
         let mut agent = setup_agent();
-        
+
         // First put a value
-        agent.put("test", "key1", json!({"data": "value1"})).unwrap();
+        agent
+            .put("test", "key1", json!({"data": "value1"}))
+            .unwrap();
         let root_before = agent.local_root().id().to_string();
 
         // Then get it
@@ -607,35 +585,48 @@ mod tests {
         assert!(result.is_ok());
 
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after get synthesis");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after get synthesis"
+        );
     }
 
     #[test]
     fn test_delete_synthesizes() {
         let mut agent = setup_agent();
-        
-        agent.put("test", "key1", json!({"data": "value1"})).unwrap();
+
+        agent
+            .put("test", "key1", json!({"data": "value1"}))
+            .unwrap();
         let root_before = agent.local_root().id().to_string();
 
         let result = agent.delete("test", "key1");
         assert!(result.is_ok());
 
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after delete synthesis");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after delete synthesis"
+        );
     }
 
     #[test]
     fn test_history_synthesizes() {
         let mut agent = setup_agent();
-        
-        agent.put("test", "key1", json!({"data": "value1"})).unwrap();
+
+        agent
+            .put("test", "key1", json!({"data": "value1"}))
+            .unwrap();
         let root_before = agent.local_root().id().to_string();
 
         let result = agent.history("test", "key1");
         assert!(result.is_ok());
 
         let root_after = agent.local_root().id().to_string();
-        assert_ne!(root_before, root_after, "Local root should change after history synthesis");
+        assert_ne!(
+            root_before, root_after,
+            "Local root should change after history synthesis"
+        );
     }
 
     #[test]
@@ -643,7 +634,9 @@ mod tests {
         let mut agent = setup_agent();
 
         // Create
-        let versioned = agent.put("test", "key1", json!({"data": "value1"})).unwrap();
+        let versioned = agent
+            .put("test", "key1", json!({"data": "value1"}))
+            .unwrap();
         assert_eq!(versioned.value()["data"], "value1");
 
         // Read
@@ -651,7 +644,9 @@ mod tests {
         assert_eq!(retrieved.value()["data"], "value1");
 
         // Update
-        let versioned2 = agent.put("test", "key1", json!({"data": "value2"})).unwrap();
+        let versioned2 = agent
+            .put("test", "key1", json!({"data": "value2"}))
+            .unwrap();
         assert_eq!(versioned2.value()["data"], "value2");
 
         // History
@@ -666,21 +661,23 @@ mod tests {
     #[test]
     fn test_contains_key() {
         let mut agent = setup_agent();
-        
+
         assert!(!agent.contains_key("test", "key1"));
-        
-        agent.put("test", "key1", json!({"data": "value1"})).unwrap();
-        
+
+        agent
+            .put("test", "key1", json!({"data": "value1"}))
+            .unwrap();
+
         assert!(agent.contains_key("test", "key1"));
     }
 
     #[test]
     fn test_list_namespaces() {
         let mut agent = setup_agent();
-        
+
         agent.put("ns1", "key1", json!("value1")).unwrap();
         agent.put("ns2", "key1", json!("value2")).unwrap();
-        
+
         let namespaces = agent.list_namespaces();
         assert_eq!(namespaces.len(), 2);
         assert!(namespaces.contains(&"ns1".to_string()));
@@ -690,10 +687,12 @@ mod tests {
     #[test]
     fn test_tombstone_prevents_reappearance() {
         let mut agent = setup_agent();
-        
-        agent.put("test", "key1", json!({"data": "value1"})).unwrap();
+
+        agent
+            .put("test", "key1", json!({"data": "value1"}))
+            .unwrap();
         agent.delete("test", "key1").unwrap();
-        
+
         // Should return error with tombstone info
         let result = agent.get("test", "key1");
         assert!(result.is_err());

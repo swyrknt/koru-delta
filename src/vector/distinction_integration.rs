@@ -108,11 +108,8 @@ impl DistinctionBackedSNSW {
     fn vector_to_distinction(&self, vector: &Vector) -> Distinction {
         // Use the distinction engine to synthesize a distinction
         // from the vector's content (model + data fingerprint)
-        let model_distinction = self
-            .engine
-            .synthesize(self.engine.d0(), &self.vector_fingerprint(vector));
-
-        model_distinction
+        self.engine
+            .synthesize(self.engine.d0(), &self.vector_fingerprint(vector))
     }
 
     /// Create a fingerprint distinction from vector data.
@@ -365,10 +362,12 @@ mod tests {
 
         // Verify we can find the content hash we just inserted
         // by checking it exists in the graph
-        assert!(!snsw
-            .graph()
-            .search(&Vector::new(vec![0.1; 256], "embedding-model"), 1)
-            .unwrap()
-            .is_empty());
+        assert!(
+            !snsw
+                .graph()
+                .search(&Vector::new(vec![0.1; 256], "embedding-model"), 1)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

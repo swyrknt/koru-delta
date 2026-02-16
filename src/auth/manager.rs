@@ -28,19 +28,19 @@ use std::sync::{Arc, RwLock};
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
 
 use crate::actions::IdentityAction;
-use crate::auth::capability::{create_capability, create_revocation, CapabilityManager};
-use crate::auth::identity::verify_identity_pow;
+use crate::auth::capability::{CapabilityManager, create_capability, create_revocation};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::auth::identity::mine_identity_sync;
-use crate::auth::session::{create_session_token, SessionAgent};
+use crate::auth::identity::verify_identity_pow;
+use crate::auth::session::{SessionAgent, create_session_token};
 use crate::auth::storage::AuthStorageAdapter;
-use crate::auth::types::{
-    AuthError, Capability, CapabilityRef, Identity, Permission, ResourcePattern,
-    Revocation, Session,
-};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::auth::types::IdentityUserData;
-use crate::auth::verification::{verify_challenge_response, ChallengeStore};
+use crate::auth::types::{
+    AuthError, Capability, CapabilityRef, Identity, Permission, ResourcePattern, Revocation,
+    Session,
+};
+use crate::auth::verification::{ChallengeStore, verify_challenge_response};
 use crate::engine::{FieldHandle, SharedEngine};
 use crate::roots::RootType;
 use crate::storage::CausalStorage;
@@ -192,7 +192,10 @@ impl IdentityAgent {
     /// Mining synthesizes: `ΔNew = ΔLocal_Root ⊕ ΔMineIdentity_Action`
     /// then the identity is synthesized into the identities distinction.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn create_identity(&self, user_data: IdentityUserData) -> Result<(Identity, Vec<u8>), AuthError> {
+    pub fn create_identity(
+        &self,
+        user_data: IdentityUserData,
+    ) -> Result<(Identity, Vec<u8>), AuthError> {
         // Synthesize mine identity action
         let pow_json = serde_json::json!({
             "difficulty": self.config.identity_difficulty,
@@ -440,7 +443,10 @@ impl IdentityAgent {
         self.storage.store_capability(&capability)?;
 
         // Add to cache
-        self.capabilities.write().unwrap().add_capability(capability.clone());
+        self.capabilities
+            .write()
+            .unwrap()
+            .add_capability(capability.clone());
 
         self.capabilities_granted.fetch_add(1, Ordering::SeqCst);
 
@@ -461,7 +467,10 @@ impl IdentityAgent {
         self.storage.store_revocation(&revocation)?;
 
         // Add to cache
-        self.capabilities.write().unwrap().add_revocation(revocation.clone());
+        self.capabilities
+            .write()
+            .unwrap()
+            .add_revocation(revocation.clone());
 
         Ok(revocation)
     }
@@ -532,7 +541,10 @@ impl IdentityAgent {
         let all_capabilities = self.storage.list_all_capabilities()?;
         let all_revocations = self.storage.list_all_revocations()?;
 
-        self.capabilities.write().unwrap().load(all_capabilities, all_revocations);
+        self.capabilities
+            .write()
+            .unwrap()
+            .load(all_capabilities, all_revocations);
         Ok(())
     }
 

@@ -44,8 +44,8 @@ use dashmap::DashMap;
 use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::broadcast;
 
 /// Default channel capacity for subscription broadcasts.
@@ -475,8 +475,14 @@ impl SubscriptionAgent {
     pub fn subscribe_synthesized(
         &mut self,
         subscription: Subscription,
-    ) -> (SubscriptionId, broadcast::Receiver<ChangeEvent>, Distinction) {
-        let action = SubscriptionAction::Subscribe { subscription: subscription.clone() };
+    ) -> (
+        SubscriptionId,
+        broadcast::Receiver<ChangeEvent>,
+        Distinction,
+    ) {
+        let action = SubscriptionAction::Subscribe {
+            subscription: subscription.clone(),
+        };
         let new_root = self.apply_action(action);
 
         let (id, receiver) = self.subscribe(subscription);
@@ -488,7 +494,9 @@ impl SubscriptionAgent {
         &mut self,
         id: SubscriptionId,
     ) -> (DeltaResult<()>, Distinction) {
-        let action = SubscriptionAction::Unsubscribe { subscription_id: id };
+        let action = SubscriptionAction::Unsubscribe {
+            subscription_id: id,
+        };
         let new_root = self.apply_action(action);
 
         let result = self.unsubscribe(id);
@@ -497,7 +505,9 @@ impl SubscriptionAgent {
 
     /// Notify with synthesis.
     pub fn notify_synthesized(&mut self, event: ChangeEvent) -> Distinction {
-        let action = SubscriptionAction::Notify { event: event.clone() };
+        let action = SubscriptionAction::Notify {
+            event: event.clone(),
+        };
         let new_root = self.apply_action(action);
 
         self.notify(event);
@@ -529,8 +539,6 @@ impl LocalCausalAgent for SubscriptionAgent {
         new_root
     }
 }
-
-
 
 impl Default for SubscriptionAgent {
     fn default() -> Self {
@@ -885,7 +893,7 @@ mod tests {
         #[test]
         fn test_subscription_agent_implements_lca_trait() {
             let agent = setup_agent();
-            
+
             // Verify trait is implemented
             let _root = agent.get_current_root();
         }
@@ -909,17 +917,21 @@ mod tests {
             let mut agent = setup_agent();
             let root_before = agent.local_root().id().to_string();
 
-            let (_id, _receiver, new_root) = agent.subscribe_synthesized(Subscription::collection("users"));
+            let (_id, _receiver, new_root) =
+                agent.subscribe_synthesized(Subscription::collection("users"));
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
         #[test]
         fn test_unsubscribe_synthesizes() {
             let mut agent = setup_agent();
-            
+
             // First subscribe
             let (id, _receiver, _) = agent.subscribe_synthesized(Subscription::collection("users"));
 
@@ -929,24 +941,34 @@ mod tests {
             assert!(result.is_ok());
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after unsubscribe synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after unsubscribe synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
         #[test]
         fn test_notify_synthesizes() {
             let mut agent = setup_agent();
-            
+
             // Subscribe first
             agent.subscribe(Subscription::collection("users"));
 
             let root_before = agent.local_root().id().to_string();
 
-            let event = ChangeEvent::insert("users", "alice", &create_test_value(json!({"name": "Alice"})));
+            let event = ChangeEvent::insert(
+                "users",
+                "alice",
+                &create_test_value(json!({"name": "Alice"})),
+            );
             let new_root = agent.notify_synthesized(event);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after notify synthesis");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after notify synthesis"
+            );
             assert_eq!(new_root.id(), root_after);
         }
 
@@ -959,7 +981,10 @@ mod tests {
             let new_root = agent.apply_action(action);
 
             let root_after = agent.local_root().id().to_string();
-            assert_ne!(root_before, root_after, "Local root should change after apply_action");
+            assert_ne!(
+                root_before, root_after,
+                "Local root should change after apply_action"
+            );
             assert_eq!(new_root.id(), root_after);
         }
     }

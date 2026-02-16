@@ -8,9 +8,9 @@
 //!
 //! Run with: cargo run --example cluster_demo
 
+use koru_delta::DeltaResult;
 use koru_delta::cluster::{ClusterConfig, ClusterNode};
 use koru_delta::storage::CausalStorage;
-use koru_delta::DeltaResult;
 use koru_lambda_core::DistinctionEngine;
 use serde_json::json;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
