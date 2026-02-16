@@ -13,14 +13,14 @@ This checklist aligns all remaining components to follow the LCA (Local Causal A
 
 ### Current State
 - **18 agents** fully implement `LocalCausalAgent` trait ✅
-- **3 agents** still have `RwLock<Distinction>` and need trait implementation ⚠️
-- **Goal:** 100% trait implementation across all interactive components
+- **3 agents** pending trait implementation ⚠️
+- **Philosophy:** ALL agents implement the trait. No exceptions. Consistency is the law.
 
 **Agents with Trait (18):**
-StorageAgent, TemperatureAgent, ChronicleAgent, ArchiveAgent, EssenceAgent, SleepAgent, EvolutionAgent, LineageAgent, PerspectiveAgent, SessionAgent, SubscriptionAgent, ProcessAgent, ReconciliationAgent, LifecycleAgent, WorkspaceAgent, VectorAgent, NetworkProcess, KoruDelta Core
+StorageAgent, TemperatureAgent, ChronicleAgent, ArchiveAgent, EssenceAgent, SleepAgent, EvolutionAgent, LineageAgent, PerspectiveAgent, SessionAgent, SubscriptionAgent, ProcessAgent, ReconciliationAgent, LifecycleAgent, WorkspaceAgent, VectorAgent, NetworkProcess
 
 **Agents Pending (3):**
-IdentityAgent (AuthManager), KoruOrchestrator, NetworkAgent (legacy)
+IdentityAgent (AuthManager), KoruOrchestrator, KoruDelta Core
 
 ### Alignment Strategy
 1. Add `local_root: Distinction` field
@@ -644,13 +644,20 @@ impl LocalCausalAgent for NetworkProcess {
 
 ---
 
-### B.5 KoruDelta Core - Verify Trait ✅ VERIFIED
+### B.5 KoruDelta Core - Implement Trait
 
 **File:** `src/core.rs`
 
-**Status:** Has bare `local_root: Distinction` but does NOT implement `LocalCausalAgent` trait. Uses internal synthesis methods instead (coordinator pattern).
+**Current:** Has bare `local_root: Distinction`, uses internal `synthesize_storage_action()` method
+**Target:** `impl LocalCausalAgent for KoruDeltaGeneric<R>`
 
-**Note:** KoruDelta is a coordinator/entry point, not a trait-implementing agent. It follows the LCA pattern internally but doesn't implement the trait by design.
+**Rationale:** ALL components implement the trait. No exceptions. Consistency is the law.
+
+**Tasks:**
+- [ ] Expose existing `synthesize_storage_action()` through trait
+- [ ] Implement `LocalCausalAgent` trait with `StorageAction` as `ActionData`
+- [ ] Ensure `get_current_root()` returns `&Distinction`
+- [ ] All existing tests pass
 
 ---
 
