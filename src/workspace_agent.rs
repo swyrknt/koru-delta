@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use chrono::{DateTime, Utc};
-use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::{Deserialize, Serialize};
 
 use crate::actions::WorkspaceAction;
@@ -159,7 +159,7 @@ pub struct WorkspaceAgent {
     memories: RwLock<HashMap<String, Vec<SynthesizedMemory>>>,
 
     /// Current local root for the workspace agent.
-    local_root: RwLock<Distinction>,
+    local_root: Distinction,
 
     /// Operation sequence counter.
     sequence: AtomicU64,
@@ -199,15 +199,15 @@ impl WorkspaceAgent {
             engine,
             workspaces: RwLock::new(HashMap::new()),
             memories: RwLock::new(HashMap::new()),
-            local_root: RwLock::new(workspace_root),
+            local_root: workspace_root,
             sequence: AtomicU64::new(0),
             metrics: RwLock::new(WorkspaceMetrics::default()),
         }
     }
 
     /// Get the current local root.
-    pub fn local_root(&self) -> Distinction {
-        self.local_root.read().unwrap().clone()
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
     }
 
     /// Get current metrics.
@@ -218,7 +218,7 @@ impl WorkspaceAgent {
     /// Synthesize a workspace into the field.
     ///
     /// Formula: ΔNew = ΔLocal_Root ⊕ ΔWorkspace_Config
-    fn synthesize_workspace(&self, metadata: WorkspaceMetadata) -> SynthesizedWorkspace {
+    fn synthesize_workspace(&mut self, metadata: WorkspaceMetadata) -> SynthesizedWorkspace {
         let seq = self.sequence.fetch_add(1, Ordering::SeqCst);
         let local_root = self.local_root();
 
@@ -246,7 +246,7 @@ impl WorkspaceAgent {
         };
 
         // Update the agent's local root
-        *self.local_root.write().unwrap() = distinction;
+        self.local_root = distinction;
 
         // Store the workspace
         self.workspaces
@@ -267,7 +267,7 @@ impl WorkspaceAgent {
 
     /// Create a new workspace.
     pub fn create_workspace(
-        &self,
+        &mut self,
         id: impl Into<String>,
         name: impl Into<String>,
     ) -> SynthesizedWorkspace {
@@ -476,6 +476,31 @@ impl fmt::Display for WorkspaceResult {
 /// Type alias for backward compatibility.
 pub type Workspace = SynthesizedWorkspace;
 
+// LCA Trait Implementation
+impl LocalCausalAgent for WorkspaceAgent {
+    type ActionData = WorkspaceAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: WorkspaceAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        // Canonical LCA pattern: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -489,7 +514,7 @@ mod tests {
 
     #[test]
     fn test_create_workspace() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         let workspace = agent.create_workspace("ws-1", "Test Workspace");
 
@@ -500,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_get_workspace() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Test Workspace");
 
@@ -513,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_remember_and_recall() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Test Workspace");
 
@@ -531,7 +556,7 @@ mod tests {
 
     #[test]
     fn test_workspace_isolation() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Workspace 1");
         agent.create_workspace("ws-2", "Workspace 2");
@@ -555,7 +580,7 @@ mod tests {
 
     #[test]
     fn test_search() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Test Workspace");
 
@@ -572,7 +597,7 @@ mod tests {
 
     #[test]
     fn test_consolidate() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Test Workspace");
 
@@ -585,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_metrics() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Test Workspace");
         agent.remember("ws-1", "item-1", b"content");
@@ -599,7 +624,7 @@ mod tests {
 
     #[test]
     fn test_execute_remember() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Test Workspace");
 
@@ -618,7 +643,7 @@ mod tests {
 
     #[test]
     fn test_execute_recall() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.create_workspace("ws-1", "Test Workspace");
         agent.remember("ws-1", "item-1", b"content");
@@ -637,7 +662,7 @@ mod tests {
 
     #[test]
     fn test_workspace_has_unique_local_root() {
-        let (agent, _engine) = setup_agent();
+        let (mut agent, _engine) = setup_agent();
 
         let ws1 = agent.create_workspace("ws-1", "Workspace 1");
         let ws2 = agent.create_workspace("ws-2", "Workspace 2");
@@ -652,7 +677,7 @@ mod tests {
 
     #[test]
     fn test_memories_synthesize_from_workspace_local_root() {
-        let (agent, _engine) = setup_agent();
+        let (mut agent, _engine) = setup_agent();
 
         let ws = agent.create_workspace("ws-1", "Test Workspace");
         let memory = agent.remember("ws-1", "item-1", b"content").unwrap();

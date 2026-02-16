@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use chrono::{DateTime, Utc};
-use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine};
+use koru_lambda_core::{Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent};
 use serde::{Deserialize, Serialize};
 
 use crate::actions::VectorAction;
@@ -171,7 +171,7 @@ pub struct VectorAgent {
     vectors: RwLock<HashMap<String, SynthesizedVector>>,
 
     /// Current local root for the vector agent.
-    local_root: RwLock<Distinction>,
+    local_root: Distinction,
 
     /// Operation sequence counter.
     sequence: AtomicU64,
@@ -204,15 +204,15 @@ impl VectorAgent {
         Self {
             engine,
             vectors: RwLock::new(HashMap::new()),
-            local_root: RwLock::new(vector_root),
+            local_root: vector_root,
             sequence: AtomicU64::new(0),
             metrics: RwLock::new(VectorMetrics::default()),
         }
     }
 
     /// Get the current local root.
-    pub fn local_root(&self) -> Distinction {
-        self.local_root.read().unwrap().clone()
+    pub fn local_root(&self) -> &Distinction {
+        &self.local_root
     }
 
     /// Get current metrics.
@@ -224,7 +224,7 @@ impl VectorAgent {
     ///
     /// Formula: ΔNew = ΔLocal_Root ⊕ ΔVector_Data ⊕ ΔKey
     pub fn index(
-        &self,
+        &mut self,
         key: impl Into<String>,
         vector: Vec<f32>,
         model: impl Into<String>,
@@ -232,7 +232,7 @@ impl VectorAgent {
         let key = key.into();
         let model = model.into();
         let seq = self.sequence.fetch_add(1, Ordering::SeqCst);
-        let local_root = self.local_root();
+        let local_root = self.local_root.clone();
 
         // Synthesize the vector data
         let vector_distinction = vector_to_distinction(&vector, &self.engine);
@@ -262,7 +262,7 @@ impl VectorAgent {
         };
 
         // Update local root
-        *self.local_root.write().unwrap() = distinction;
+        self.local_root = distinction;
 
         // Store the vector
         self.vectors
@@ -375,7 +375,7 @@ impl VectorAgent {
     /// Execute a vector action.
     ///
     /// This is the main entry point for vector operations.
-    pub fn execute(&self, action: VectorAction) -> VectorResult {
+    pub fn execute(&mut self, action: VectorAction) -> VectorResult {
         match action {
             VectorAction::Embed {
                 data_json,
@@ -429,6 +429,31 @@ impl fmt::Display for VectorResult {
     }
 }
 
+// LCA Trait Implementation
+impl LocalCausalAgent for VectorAgent {
+    type ActionData = VectorAction;
+
+    fn get_current_root(&self) -> &Distinction {
+        &self.local_root
+    }
+
+    fn update_local_root(&mut self, new_root: Distinction) {
+        self.local_root = new_root;
+    }
+
+    fn synthesize_action(
+        &mut self,
+        action: VectorAction,
+        engine: &Arc<DistinctionEngine>,
+    ) -> Distinction {
+        // Canonical LCA pattern: ΔNew = ΔLocal_Root ⊕ ΔAction
+        let action_distinction = action.to_canonical_structure(engine);
+        let new_root = engine.synthesize(&self.local_root, &action_distinction);
+        self.local_root = new_root.clone();
+        new_root
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -442,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_index_vector() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         let vector = vec![0.1, 0.2, 0.3, 0.4];
         let indexed = agent.index("doc1", vector.clone(), "text-embedding-3-small");
@@ -454,7 +479,7 @@ mod tests {
 
     #[test]
     fn test_get_vector() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         let vector = vec![0.1, 0.2, 0.3];
         agent.index("doc1", vector, "model");
@@ -486,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_search() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         // Index some vectors
         agent.index("doc1", vec![1.0, 0.0, 0.0], "model");
@@ -504,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_search_with_threshold() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.index("doc1", vec![1.0, 0.0, 0.0], "model");
         agent.index("doc2", vec![0.0, 1.0, 0.0], "model");
@@ -544,7 +569,7 @@ mod tests {
 
     #[test]
     fn test_metrics() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.index("doc1", vec![0.1, 0.2], "model");
         agent.embed(b"data", "model");
@@ -558,7 +583,7 @@ mod tests {
 
     #[test]
     fn test_execute_embed() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         let action = VectorAction::Embed {
             data_json: serde_json::json!({"text": "hello"}),
@@ -575,7 +600,7 @@ mod tests {
 
     #[test]
     fn test_execute_search() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         agent.index("doc1", vec![1.0, 0.0], "model");
 
@@ -594,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_execute_index() {
-        let (agent, _) = setup_agent();
+        let (mut agent, _) = setup_agent();
 
         let action = VectorAction::Index {
             vector: vec![0.1, 0.2, 0.3],
@@ -614,9 +639,9 @@ mod tests {
 
     #[test]
     fn test_vector_synthesizes_distinction() {
-        let (agent, _engine) = setup_agent();
+        let (mut agent, _engine) = setup_agent();
 
-        let local_root_before = agent.local_root();
+        let local_root_before = agent.local_root().clone();
 
         let vector = agent.index("doc1", vec![0.1, 0.2, 0.3], "model");
 
@@ -631,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_vectors_are_content_addressed() {
-        let (agent, _engine) = setup_agent();
+        let (mut agent, _engine) = setup_agent();
 
         // Indexing the same vector twice creates distinct distinctions
         // because sequence is included in synthesis
